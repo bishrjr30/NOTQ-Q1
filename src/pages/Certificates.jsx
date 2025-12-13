@@ -1,13 +1,15 @@
 // src/pages/Certificates.jsx
 
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Award, Lock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import CertificateCard from "@/components/CertificateCard";
 import { motion } from "framer-motion";
+
+// 🧩 استعمال طبقة الـ entities بدل الاتصال المباشر بـ Supabase
+import { Student, Certificate } from "@/api/entities";
 
 export default function CertificatesPage() {
   const [certificates, setCertificates] = useState([]);
@@ -26,37 +28,24 @@ export default function CertificatesPage() {
         return;
       }
 
-      // 1) جلب بيانات الطالب من Supabase
-      const { data: studentData, error: studentError } = await supabase
-        .from("students")
-        .select("*")
-        .eq("id", studentId)
-        .single();
-
-      if (studentError || !studentData) {
-        console.error("Error loading student:", studentError);
-        // لو حاب تضيف توجيه معيّن هنا
-        setLoading(false);
-        return;
-      }
-
+      // 1) جلب بيانات الطالب عبر entities
+      const studentData = await Student.get(studentId);
       setStudent(studentData);
 
       // 2) جلب شهادات هذا الطالب فقط
-      const { data: myCerts, error: certError } = await supabase
-        .from("certificates")
-        .select("*")
-        .eq("student_id", studentId)
-        .order("date_earned", { ascending: false });
+      let myCerts = await Certificate.list({ student_id: studentId });
 
-      if (certError) {
-        console.error("Error loading certificates:", certError);
-        setCertificates([]);
-      } else {
-        setCertificates(myCerts || []);
-        // 3) التحقق من الشهادات المستحقة وإنشاؤها إن لزم
-        await checkAndAwardCertificates(studentData, myCerts || []);
-      }
+      // ترتيب الشهادات من الأحدث للأقدم
+      myCerts = (myCerts || []).sort(
+        (a, b) =>
+          new Date(b.date_earned || 0).getTime() -
+          new Date(a.date_earned || 0).getTime()
+      );
+
+      setCertificates(myCerts);
+
+      // 3) التحقق من الشهادات المستحقة وإنشاؤها إن لزم
+      await checkAndAwardCertificates(studentData, myCerts);
     } catch (e) {
       console.error("Load data failed:", e);
     } finally {
@@ -72,7 +61,7 @@ export default function CertificatesPage() {
     const totalExercises = student.total_exercises || 0;
     const averageScore = student.average_score || 0;
 
-    // Rule 1: First Exercise
+    // 🎖 1) أول تمرين
     if (
       totalExercises >= 1 &&
       !existingCerts.find((c) => c.title === "بداية البطل")
@@ -86,7 +75,7 @@ export default function CertificatesPage() {
       });
     }
 
-    // Rule 2: 10 Exercises
+    // 🏅 2) عشرة تمارين
     if (
       totalExercises >= 10 &&
       !existingCerts.find((c) => c.title === "قارئ مثابر")
@@ -100,7 +89,7 @@ export default function CertificatesPage() {
       });
     }
 
-    // Rule 3: High Score
+    // 🥇 3) متوسّط درجات عالي
     if (
       averageScore >= 90 &&
       totalExercises >= 5 &&
@@ -117,35 +106,30 @@ export default function CertificatesPage() {
     }
 
     if (newCerts.length > 0) {
-      // إدخال الشهادات الجديدة
-      const { error: insertError } = await supabase
-        .from("certificates")
-        .insert(newCerts);
-
-      if (insertError) {
-        console.error("Error inserting new certificates:", insertError);
-        return;
+      // إنشاء الشهادات الجديدة
+      for (const cert of newCerts) {
+        await Certificate.create(cert);
       }
 
-      // إعادة تحميل شهادات الطالب بعد الإضافة
-      const { data: updatedCerts, error: reloadError } = await supabase
-        .from("certificates")
-        .select("*")
-        .eq("student_id", student.id)
-        .order("date_earned", { ascending: false });
+      // إعادة تحميل الشهادات بعد الإضافة
+      let updatedCerts = await Certificate.list({ student_id: student.id });
+      updatedCerts = (updatedCerts || []).sort(
+        (a, b) =>
+          new Date(b.date_earned || 0).getTime() -
+          new Date(a.date_earned || 0).getTime()
+      );
 
-      if (!reloadError && updatedCerts) {
-        setCertificates(updatedCerts);
-      }
+      setCertificates(updatedCerts);
     }
   };
 
-  if (loading)
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
         جارٍ التحميل...
       </div>
     );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
