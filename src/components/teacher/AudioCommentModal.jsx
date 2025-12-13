@@ -1,4 +1,6 @@
-import React, { useState, useRef } from 'react';
+// src/components/teacher/AudioCommentModal.jsx
+
+import React, { useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,48 +9,65 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Mic, Square, Play, Send, Trash2 } from 'lucide-react';
-import { UploadFile } from '@/api/integrations';
-import { Recording } from '@/api/entities';
+import { Mic, Square, Play, Send, Trash2 } from "lucide-react";
+import { UploadFile } from "@/api/integrations";
+import { Recording } from "@/api/entities";
 
-export default function AudioCommentModal({ isOpen, onClose, recording, onCommentSent }) {
+export default function AudioCommentModal({
+  isOpen,
+  onClose,
+  recording,
+  onCommentSent,
+}) {
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  
+
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
   const startRecording = async () => {
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("متصفحك لا يدعم التسجيل الصوتي.");
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      const supportedMimeTypes = ['audio/mp4', 'audio/wav', 'audio/webm;codecs=opus'];
-      const supportedType = supportedMimeTypes.find(type => MediaRecorder.isTypeSupported(type));
-      
+
+      const supportedMimeTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/wav",
+      ];
+      const supportedType = supportedMimeTypes.find((type) =>
+        MediaRecorder.isTypeSupported(type)
+      );
+
       const options = supportedType ? { mimeType: supportedType } : {};
       mediaRecorderRef.current = new MediaRecorder(stream, options);
       audioChunksRef.current = [];
 
       mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) { 
+        if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const mimeType = mediaRecorderRef.current.mimeType || 'audio/webm';
+        const mimeType = mediaRecorderRef.current.mimeType || "audio/webm";
         const blob = new Blob(audioChunksRef.current, { type: mimeType });
         setAudioBlob(blob);
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorderRef.current.start();
       setIsRecording(true);
     } catch (error) {
-      console.error('Error accessing microphone:', error);
-      alert('لم يتمكن من الوصول للميكروفون.');
+      console.error("Error accessing microphone:", error);
+      alert("لم يتمكن من الوصول للميكروفون. يرجى التأكد من منح الإذن.");
     }
   };
 
@@ -60,13 +79,17 @@ export default function AudioCommentModal({ isOpen, onClose, recording, onCommen
   };
 
   const playRecording = () => {
-    if (audioBlob) {
-      const url = URL.createObjectURL(audioBlob);
-      const audio = new Audio(url);
-      setIsPlaying(true);
-      audio.play();
-      audio.onended = () => setIsPlaying(false);
-    }
+    if (!audioBlob) return;
+
+    const url = URL.createObjectURL(audioBlob);
+    const audio = new Audio(url);
+    setIsPlaying(true);
+    audio.play();
+    audio.onended = () => setIsPlaying(false);
+    audio.onerror = () => {
+      setIsPlaying(false);
+      alert("حدث خطأ أثناء تشغيل التسجيل.");
+    };
   };
 
   const deleteRecording = () => {
@@ -78,26 +101,44 @@ export default function AudioCommentModal({ isOpen, onClose, recording, onCommen
 
     setIsSending(true);
     try {
-      const mimeType = audioBlob.type;
-      const extension = mimeType.split('/')[1]?.split(';')[0] || 'webm';
-      const file = new File([audioBlob], `teacher_comment.${extension}`, { type: mimeType });
-      
-      const { file_url } = await UploadFile({ file });
-      
-      await Recording.update(recording.id, { 
-        teacher_audio_comment: file_url 
+      const mimeType = audioBlob.type || "audio/webm";
+      const extension = mimeType.split("/")[1]?.split(";")[0] || "webm";
+
+      const file = new File(
+        [audioBlob],
+        `teacher_comment_${recording.id}.${extension}`,
+        { type: mimeType }
+      );
+
+      // ✅ رفع التعليق الصوتي إلى Supabase عبر UploadFile
+      const { file_url } = await UploadFile({
+        file,
+        bucket: "recordings", // تأكد أن عندك bucket بهذا الاسم في Supabase
+        folder: `teacher_comments/${recording.id}`,
       });
-      
-      onCommentSent(recording.id, file_url, 'audio');
+
+      if (!file_url) {
+        throw new Error("فشل في رفع التعليق الصوتي.");
+      }
+
+      // ✅ حفظ رابط التعليق الصوتي في جدول Recording (سيُعرّف في entities.js مع Supabase)
+      await Recording.update(recording.id, {
+        teacher_audio_comment: file_url,
+      });
+
+      if (onCommentSent) {
+        onCommentSent(recording.id, file_url, "audio");
+      }
+
       onClose();
       setAudioBlob(null);
     } catch (error) {
       console.error("Failed to send audio comment:", error);
-      if (error.message && error.message.includes('limit')) {
-        alert("عذراً، لقد وصلت للحد الأقصى من الملفات المسموح بها هذا الشهر.");
-      } else {
-        alert("فشل إرسال التعليق الصوتي. يرجى المحاولة مرة أخرى.");
-      }
+      const msg =
+        error?.message && error.message.includes("limit")
+          ? "عذراً، يبدو أن هناك مشكلة في حد التخزين أو الاستخدام. يرجى المحاولة لاحقاً أو مراجعة المسؤول."
+          : "فشل إرسال التعليق الصوتي. يرجى المحاولة مرة أخرى.";
+      alert(msg);
     } finally {
       setIsSending(false);
     }
@@ -111,7 +152,7 @@ export default function AudioCommentModal({ isOpen, onClose, recording, onCommen
         <DialogHeader>
           <DialogTitle className="arabic-text">إرسال تعليق صوتي</DialogTitle>
         </DialogHeader>
-        
+
         <div className="py-6 space-y-6">
           {!audioBlob ? (
             <div className="text-center space-y-4">
@@ -133,13 +174,17 @@ export default function AudioCommentModal({ isOpen, onClose, recording, onCommen
                 </Button>
               </div>
               <p className="text-lg font-medium text-slate-900 arabic-text">
-                {isRecording ? "جارٍ التسجيل..." : "اضغط للبدء في تسجيل تعليقك"}
+                {isRecording
+                  ? "جارٍ التسجيل..."
+                  : "اضغط للبدء في تسجيل تعليقك"}
               </p>
             </div>
           ) : (
             <div className="space-y-4">
               <div className="bg-blue-50 rounded-lg p-4 text-center">
-                <p className="text-blue-900 arabic-text mb-3">تم التسجيل بنجاح</p>
+                <p className="text-blue-900 arabic-text mb-3">
+                  تم التسجيل بنجاح
+                </p>
                 <div className="flex justify-center gap-3">
                   <Button
                     onClick={playRecording}
@@ -150,11 +195,7 @@ export default function AudioCommentModal({ isOpen, onClose, recording, onCommen
                     <Play className="w-4 h-4 ml-1" />
                     {isPlaying ? "يتم التشغيل..." : "استمع"}
                   </Button>
-                  <Button
-                    onClick={deleteRecording}
-                    variant="outline"
-                    size="sm"
-                  >
+                  <Button onClick={deleteRecording} variant="outline" size="sm">
                     <Trash2 className="w-4 h-4 ml-1" />
                     حذف
                   </Button>
@@ -169,8 +210,18 @@ export default function AudioCommentModal({ isOpen, onClose, recording, onCommen
             إلغاء
           </Button>
           {audioBlob && (
-            <Button onClick={sendAudioComment} disabled={isSending} className="arabic-text">
-              {isSending ? 'جارٍ الإرسال...' : <><Send className="w-4 h-4 ml-2" /> إرسال</>}
+            <Button
+              onClick={sendAudioComment}
+              disabled={isSending}
+              className="arabic-text"
+            >
+              {isSending ? (
+                "جارٍ الإرسال..."
+              ) : (
+                <>
+                  <Send className="w-4 h-4 ml-2" /> إرسال
+                </>
+              )}
             </Button>
           )}
         </DialogFooter>
