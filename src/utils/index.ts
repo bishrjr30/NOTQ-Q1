@@ -1,17 +1,20 @@
 // src/utils/index.ts
 
 export function createPageUrl(pageName: string) {
+  if (!pageName) return "/";
+
+  const raw = String(pageName).trim();
+
   // لو أصلاً جاينا مسار كامل مثل "/StudentDashboard" نرجعه كما هو
-  if (pageName.startsWith("/")) {
-    return pageName;
-  }
+  if (raw.startsWith("/")) return raw;
 
   // نفصل بين اسم الصفحة والاستعلام إن وجد
-  const [namePart, queryPart] = pageName.split("?");
+  const [namePartRaw, queryPart] = raw.split("?");
+  const namePart = namePartRaw.trim();
 
-  // نستخدم الاسم كما هو (بنفس الكيسنج) ليتطابق مع مسارات <Route path="/Name">
-  const path = `/${namePart}`;
+  // (احتياط) لو صار في فراغات داخل الاسم
+  const safeName = namePart.replace(/\s+/g, "-");
 
-  // نرجّع المسار مع الـ query لو موجود
+  const path = `/${safeName}`;
   return queryPart ? `${path}?${queryPart}` : path;
 }
