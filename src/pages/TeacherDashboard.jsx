@@ -1,20 +1,57 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { 
+  Student, 
+  Recording, 
+  Lesson, 
+  StudentGroup, 
+  Exercise, 
+  SystemSetting, 
+  InvokeLLM 
+} from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, TrendingUp, Award, Volume2, MessageSquare, CheckCircle, Trash2, AlertTriangle, Mic, RefreshCw, BookOpen, Play, UserX, Image, Video, ExternalLink, Plus, FolderPlus, Activity, Zap, Settings, Trophy } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+import { 
+  Tabs, TabsContent, TabsList, TabsTrigger 
+} from "@/components/ui/tabs";
+import {
+  BarChart3,
+  BookOpen,
+  CheckCircle,
+  Download,
+  Edit,
+  Eye,
+  Filter,
+  ListChecks,
+  Loader2,
+  Mic,
+  Plus,
+  Search,
+  Trash2,
+  Users,
+  Volume2,
+  Star,
+  Award,
+  AlertTriangle,
+  BarChart2,
+  Settings,
+  MessageCircle,
+  RefreshCw,
+  ArrowLeft,
+  Calendar,
+  FileSpreadsheet
+} from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
-import AudioPlayerModal from "../components/teacher/AudioPlayerModal";
-import CommentModal from "../components/teacher/CommentModal";
-import DeleteConfirmDialog from "../components/teacher/DeleteConfirmDialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import AudioCommentModal from "../components/teacher/AudioCommentModal";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -30,1276 +67,1744 @@ function SettingsTab() {
 
   const loadSettings = async () => {
     try {
-      const settings = await base44.entities.SystemSetting.list();
+      const settings = await SystemSetting.list();
       const keySetting = settings.find(s => s.key === "openai_api_key");
-      if (keySetting) setApiKey(keySetting.value);
+      if (keySetting) setApiKey(keySetting.value || "");
     } catch (e) {
       console.error("Failed to load settings", e);
     }
   };
 
-  const saveSettings = async () => {
+  const handleSave = async () => {
     setIsLoading(true);
     try {
-      const settings = await base44.entities.SystemSetting.list();
+      const settings = await SystemSetting.list();
       const existing = settings.find(s => s.key === "openai_api_key");
 
       if (existing) {
-        await base44.entities.SystemSetting.update(existing.id, { value: apiKey });
+        await SystemSetting.update(existing.id, { value: apiKey });
       } else {
-        await base44.entities.SystemSetting.create({
+        await SystemSetting.create({
           key: "openai_api_key",
           value: apiKey,
-          description: "OpenAI API Key for Audio Analysis"
+          description: "OpenAI API Key for audio transcription and analysis"
         });
       }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
-      alert("فشل حفظ الإعدادات");
+      console.error("Failed to save settings", e);
+      alert("حدث خطأ أثناء حفظ الإعدادات");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-      <CardHeader>
-        <CardTitle className="text-xl font-bold text-slate-900 arabic-text flex items-center gap-2">
-          <Settings className="w-6 h-6" />
-          إعدادات الذكاء الاصطناعي
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <h3 className="font-bold text-yellow-800 mb-2 arabic-text">⚠️ هام جداً لضمان عمل التحليل</h3>
-          <p className="text-yellow-700 arabic-text text-sm">
-            لضمان حصول الطلاب على تحليل دقيق ومضمون 100%، يرجى إدخال مفتاح OpenAI API الخاص بك (Your Own Key).
-            <br />
-            المفاتيح المجانية قد تتوقف عن العمل وتسبب أخطاء في التحليل.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="arabic-text text-lg">إعدادات النظام المتقدمة</span>
+            <Settings className="w-5 h-5 text-slate-500" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-right arabic-text text-sm leading-relaxed">
+            <p className="font-semibold text-slate-800 mb-1">🔐 مفتاح OpenAI API</p>
+            <p className="text-slate-600">
+              هذا المفتاح يُستخدم لتحويل الصوت إلى نص وتحليل النطق في صفحة <strong>التدريب الخاص</strong>. 
+              يتم تخزينه في قاعدة البيانات بشكل آمن ولا يظهر للطلاب أو أولياء الأمور.
+            </p>
+          </div>
 
-        <div className="space-y-2">
-          <Label className="arabic-text">OpenAI API Key (sk-...)</Label>
-          <div className="flex gap-2">
+          <div className="space-y-2">
+            <Label className="arabic-text font-semibold text-right block text-slate-700">
+              مفتاح OpenAI API
+            </Label>
             <Input 
-              type="password" 
-              value={apiKey} 
+              type="password"
+              value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="sk-..."
-              className="font-mono"
+              className="font-mono text-sm"
             />
-            <Button onClick={saveSettings} disabled={isLoading} className="arabic-text min-w-[100px]">
-              {isLoading ? "جاري الحفظ..." : "حفظ"}
-            </Button>
+            <p className="text-xs text-slate-400 arabic-text text-right">
+              تأكد من أن خطتك في OpenAI تسمح باستخدام Whisper و GPT-4o.
+            </p>
           </div>
-          {saved && <p className="text-green-600 text-sm arabic-text font-bold">✅ تم حفظ المفتاح بنجاح</p>}
-        </div>
-      </CardContent>
-    </Card>
+
+          <Button 
+            onClick={handleSave}
+            disabled={isLoading}
+            className="arabic-text w-full md:w-auto"
+          >
+            {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            حفظ الإعدادات
+          </Button>
+
+          {saved && (
+            <p className="text-xs text-green-600 arabic-text text-right">
+              ✅ تم حفظ الإعدادات بنجاح.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-export default function TeacherDashboard() {
+function StudentsTab({ onSelectStudent }) {
   const [students, setStudents] = useState([]);
-  const [recordings, setRecordings] = useState([]);
-  const [lessons, setLessons] = useState([]);
+  const [filterGrade, setFilterGrade] = useState("");
+  const [searchName, setSearchName] = useState("");
   const [groups, setGroups] = useState([]);
-  const [newGroupData, setNewGroupData] = useState({ name: "", description: "" });
-  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
-  const [selectedStudentsForGroup, setSelectedStudentsForGroup] = useState([]);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [emergencyLoading, setEmergencyLoading] = useState(null);
-
-  // Mock Radar Data for Class Overview
-  const radarData = [
-    { subject: 'الحروف الحلقية', A: 85, fullMark: 100 },
-    { subject: 'المدود', A: 65, fullMark: 100 },
-    { subject: 'الشدة', A: 40, fullMark: 100 },
-    { subject: 'اللام الشمسية', A: 90, fullMark: 100 },
-    { subject: 'التنوين', A: 70, fullMark: 100 },
-    { subject: 'مخارج الحروف', A: 55, fullMark: 100 },
-  ];
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [lastRefresh, setLastRefresh] = useState(Date.now());
-  const [error, setError] = useState(null);
-
-  // State for modals
-  const [audioModalState, setAudioModalState] = useState({ isOpen: false, url: '', studentName: '' });
-  const [commentModalState, setCommentModalState] = useState({ isOpen: false, recording: null });
-  const [deleteModalState, setDeleteModalState] = useState({
-    isOpen: false,
-    type: '',
-    recordingId: null,
-    lessonId: null,
-    studentId: null, // Added studentId to state
-    isDeleting: false
-  });
-  const [audioCommentModalState, setAudioCommentModalState] = useState({ isOpen: false, recording: null });
-
-  const TEACHER_PASSWORD = "teacher123";
-
-  // Format UAE time
-  const formatUAETime = (date) => {
-    return new Intl.DateTimeFormat('ar-AE', {
-      timeZone: 'Asia/Dubai',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    }).format(date);
-  };
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState("all");
+  const [isLoading, setIsLoading] = useState(false);
+  const [expandedStudentId, setExpandedStudentId] = useState(null);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      loadData();
-      const interval = setInterval(() => {
-        loadData(true);
-      }, 30000);
-      return () => clearInterval(interval);
-    } else {
-      setIsLoading(false);
-    }
-  }, [isAuthenticated]);
+    loadData();
+  }, []);
 
-  const loadData = async (isBackground = false) => {
-    if (isBackground !== true) setIsLoading(true);
-    setError(null);
+  const loadData = async () => {
+    setIsLoading(true);
     try {
-      const studentsData = await base44.entities.Student.list("-last_activity");
-      setStudents(studentsData || []);
-
-      const recordingsData = await base44.entities.Recording.list("-created_date", 100);
-      setRecordings(recordingsData || []);
-
-      const lessonsData = await base44.entities.Lesson.list("-created_date");
-      setLessons(lessonsData || []);
-
-      const groupsData = await base44.entities.StudentGroup.list();
-      setGroups(groupsData || []);
-
-      setLastRefresh(Date.now());
+      const [studentList, groupList] = await Promise.all([
+        Student.list("-last_activity"),
+        StudentGroup.list()
+      ]);
+      setStudents(studentList);
+      setGroups(groupList);
     } catch (error) {
-      console.error("Failed to load data:", error);
-      setError(`فشل في تحميل البيانات: ${error.message}`);
+      console.error("Failed to load students or groups", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleLogin = () => {
-    if (password === TEACHER_PASSWORD) {
-      setIsAuthenticated(true);
-    } else {
-      alert("كلمة المرور غير صحيحة");
+  const filteredStudents = students.filter((s) => {
+    let ok = true;
+    if (filterGrade) ok = ok && s.grade === filterGrade;
+    if (searchName.trim()) {
+      ok =
+        ok &&
+        (s.name || "")
+          .toLowerCase()
+          .includes(searchName.trim().toLowerCase());
+    }
+    if (selectedGroupFilter !== "all") {
+      ok =
+        ok &&
+        s.group_id &&
+        selectedGroupFilter === s.group_id;
+    }
+    return ok;
+  });
+
+  const getLastActiveText = (dateStr) => {
+    if (!dateStr) return "لا يوجد";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "تاريخ غير معروف";
+    return d.toLocaleDateString("ar-AE");
+  };
+
+  const getLevelBadgeColor = (level) => {
+    switch (level) {
+      case "متقدم":
+        return "bg-emerald-100 text-emerald-800";
+      case "متوسط":
+        return "bg-blue-100 text-blue-800";
+      default:
+        return "bg-slate-100 text-slate-800";
     }
   };
 
-  const handleCommentSent = (recordingId, newComment, type = 'text') => {
-    setRecordings(prev =>
-      prev.map(r => r.id === recordingId ? {
-        ...r,
-        ...(type === 'text' ? { teacher_comment: newComment } : { teacher_audio_comment: newComment })
-      } : r)
-    );
-    setTimeout(() => loadData(), 1000);
+  const gradeLevels = [
+    "الروضة",
+    "الصف الأول",
+    "الصف الثاني",
+    "الصف الثالث",
+    "الصف الرابع",
+    "الصف الخامس",
+    "الصف السادس",
+    "الصف السابع",
+    "الصف الثامن",
+    "الصف التاسع",
+    "الصف العاشر",
+    "الصف الحادي عشر",
+    "الصف الثاني عشر",
+  ];
+
+  const getGroupName = (groupId) => {
+    if (!groupId) return "غير منضم لمجموعة";
+    const group = groups.find((g) => g.id === groupId);
+    return group ? group.name : "مجموعة غير معروفة";
   };
 
-  const handleScoreUpdate = async (recordingId, score) => {
+  return (
+    <div className="space-y-6">
+      {/* Filters */}
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="arabic-text text-lg flex items-center gap-2">
+              <Filter className="w-5 h-5 text-slate-500" />
+              تصفية الطلاب
+            </span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => {
+                setFilterGrade("");
+                setSearchName("");
+                setSelectedGroupFilter("all");
+              }}
+              className="arabic-text text-xs text-slate-500"
+            >
+              إعادة ضبط
+              <RefreshCw className="w-3 h-3 mr-1" />
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid md:grid-cols-3 gap-4 items-end">
+          <div className="space-y-1 text-right">
+            <Label className="arabic-text text-sm text-slate-700">
+              البحث بالاسم
+            </Label>
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <Input
+                placeholder="اكتب اسم الطالب..."
+                value={searchName}
+                onChange={(e) => setSearchName(e.target.value)}
+                className="pr-3 pl-9 text-right arabic-text"
+              />
+            </div>
+          </div>
+          <div className="space-y-1 text-right">
+            <Label className="arabic-text text-sm text-slate-700">
+              الصف الدراسي
+            </Label>
+            <Select value={filterGrade} onValueChange={setFilterGrade}>
+              <SelectTrigger className="text-right arabic-text">
+                <SelectValue placeholder="جميع الصفوف" />
+              </SelectTrigger>
+              <SelectContent>
+                {gradeLevels.map((g) => (
+                  <SelectItem key={g} value={g} className="arabic-text">
+                    {g}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1 text-right">
+            <Label className="arabic-text text-sm text-slate-700">
+              المجموعة
+            </Label>
+            <Select
+              value={selectedGroupFilter}
+              onValueChange={setSelectedGroupFilter}
+            >
+              <SelectTrigger className="text-right arabic-text">
+                <SelectValue placeholder="كل المجموعات" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="arabic-text">
+                  كل المجموعات
+                </SelectItem>
+                {groups.map((g) => (
+                  <SelectItem key={g.id} value={g.id} className="arabic-text">
+                    {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Students list */}
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="arabic-text text-lg flex items-center gap-2">
+              <Users className="w-5 h-5 text-slate-500" />
+              قائمة الطلاب ({filteredStudents.length})
+            </span>
+            {isLoading && (
+              <span className="flex items-center gap-2 text-xs text-slate-500 arabic-text">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                يتم تحميل البيانات...
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {filteredStudents.length === 0 && !isLoading ? (
+            <div className="text-center py-8 text-slate-500 arabic-text">
+              لا يوجد طلاب مطابقون للبحث الحالي.
+            </div>
+          ) : null}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-right border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    الاسم
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    الصف
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    المجموعة
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    آخر نشاط
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    مستوى النطق
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    تمارين
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    المتوسط
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    تفاصيل
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStudents.map((s) => (
+                  <React.Fragment key={s.id}>
+                    <tr className="border-b border-slate-100 hover:bg-slate-50/60 transition">
+                      <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text whitespace-nowrap">
+                        {s.name}
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
+                        {s.grade}
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                          {getGroupName(s.group_id)}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
+                        {getLastActiveText(s.last_activity)}
+                      </td>
+                      <td className="py-2 px-3">
+                        <span
+                          className={cn(
+                            "inline-flex items-center px-2 py-1 rounded-full text-xs arabic-text",
+                            getLevelBadgeColor(s.level || "مبتدئ")
+                          )}
+                        >
+                          <Star className="w-3 h-3 ml-1" />
+                          {s.level || "مبتدئ"}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-700 text-center">
+                        {s.total_exercises || 0}
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-700 text-center">
+                        {s.average_score ? `${s.average_score}%` : "-"}
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-700 text-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => 
+                            setExpandedStudentId(
+                              expandedStudentId === s.id ? null : s.id
+                            )
+                          }
+                          className="arabic-text text-xs"
+                        >
+                          {expandedStudentId === s.id
+                            ? "إخفاء"
+                            : "عرض"}
+                        </Button>
+                      </td>
+                    </tr>
+                    {expandedStudentId === s.id && (
+                      <tr className="bg-slate-50/50 border-b border-slate-100">
+                        <td colSpan={8} className="p-3">
+                          <div className="flex flex-wrap gap-2 items-center justify-between">
+                            <div className="flex flex-wrap gap-2">
+                              <Badge className="bg-emerald-100 text-emerald-800 arabic-text">
+                                حروف متقنة:{" "}
+                                {s.mastered_letters &&
+                                s.mastered_letters.length > 0
+                                  ? s.mastered_letters.join("، ")
+                                  : "لا يوجد"}
+                              </Badge>
+                              <Badge className="bg-orange-100 text-orange-800 arabic-text">
+                                يحتاج تدريب:{" "}
+                                {s.needs_practice_letters &&
+                                s.needs_practice_letters.length > 0
+                                  ? s.needs_practice_letters.join("، ")
+                                  : "لا يوجد"}
+                              </Badge>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onSelectStudent(s)}
+                                className="arabic-text text-xs"
+                              >
+                                سجل الطالب
+                              </Button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function GroupsTab() {
+  const [groups, setGroups] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [groupFilter, setGroupFilter] = useState("all");
+
+  const { toast } = useToast();
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setIsLoading(true);
     try {
-      await base44.entities.Recording.update(recordingId, { score: parseInt(score) });
-      setRecordings(prev =>
-        prev.map(r => r.id === recordingId ? { ...r, score: parseInt(score) } : r)
-      );
-    } catch (error) {
-      console.error("Failed to update score:", error);
-      alert("فشل في تحديث الدرجة.");
-    }
-  };
-
-  const handleDeleteStudent = async (studentId) => {
-    setDeleteModalState(prev => ({ ...prev, isDeleting: true }));
-
-    try {
-      // حذف جميع تسجيلات الطالب أولاً
-      const studentRecordings = recordings.filter(r => r.student_id === studentId);
-      for (const recording of studentRecordings) {
-        await base44.entities.Recording.delete(recording.id);
-      }
-      
-      // حذف الطالب
-      await base44.entities.Student.delete(studentId);
-      setStudents(prev => prev.filter(s => s.id !== studentId));
-      setDeleteModalState({ isOpen: false, type: '', recordingId: null, lessonId: null, studentId: null, isDeleting: false });
-      
-      // إعادة تحميل البيانات
-      loadData();
-    } catch (error) {
-      console.error("Failed to delete student:", error);
-      alert("فشل في حذف الطالب. يرجى المحاولة مرة أخرى.");
-      setDeleteModalState(prev => ({ ...prev, isDeleting: false }));
-    }
-  };
-
-  const handleDeleteSingle = async (recordingId) => {
-    setDeleteModalState(prev => ({ ...prev, isDeleting: true }));
-
-    try {
-      await base44.entities.Recording.delete(recordingId);
-      setRecordings(prev => prev.filter(r => r.id !== recordingId));
-      setDeleteModalState({ isOpen: false, type: '', recordingId: null, lessonId: null, studentId: null, isDeleting: false });
-    } catch (error) {
-      console.error("Failed to delete recording:", error);
-      alert("فشل في حذف التسجيل. يرجى المحاولة مرة أخرى.");
-      setDeleteModalState(prev => ({ ...prev, isDeleting: false }));
-    }
-  };
-
-  const handleDeleteLesson = async (lessonId) => {
-    setDeleteModalState(prev => ({ ...prev, isDeleting: true }));
-
-    try {
-      await base44.entities.Lesson.delete(lessonId);
-      setLessons(prev => prev.filter(l => l.id !== lessonId));
-      setDeleteModalState({ isOpen: false, type: '', recordingId: null, lessonId: null, studentId: null, isDeleting: false });
-    } catch (error) {
-      console.error("Failed to delete lesson:", error);
-      alert("فشل في حذف الدرس. يرجى المحاولة مرة أخرى.");
-      setDeleteModalState(prev => ({ ...prev, isDeleting: false }));
-    }
-  };
-
-  const handleDeleteAll = async () => {
-    setDeleteModalState(prev => ({ ...prev, isDeleting: true }));
-
-    try {
-      for (const recording of recordings) {
-        await base44.entities.Recording.delete(recording.id);
-      }
-      setRecordings([]);
-      setDeleteModalState({ isOpen: false, type: '', recordingId: null, lessonId: null, studentId: null, isDeleting: false });
-    } catch (error) {
-      console.error("Failed to delete all recordings:", error);
-      alert("فشل في حذف التسجيلات. يرجى المحاولة مرة أخرى.");
-      setDeleteModalState(prev => ({ ...prev, isDeleting: false }));
+      const [groupList, studentList] = await Promise.all([
+        StudentGroup.list(),
+        Student.list("-name"),
+      ]);
+      setGroups(groupList);
+      setStudents(studentList);
+    } catch (e) {
+      console.error("Failed to load data", e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleCreateGroup = async () => {
-    if (!newGroupData.name) return;
-
+    if (!newGroupName.trim()) return;
+    setIsLoading(true);
     try {
-      await base44.entities.StudentGroup.create({
-        name: newGroupData.name,
-        description: newGroupData.description,
-        student_ids: selectedStudentsForGroup,
-        teacher_id: "admin" // In real app, this would be the logged in user ID
+      const g = await StudentGroup.create({
+        name: newGroupName.trim(),
       });
-
-      setNewGroupData({ name: "", description: "" });
-      setSelectedStudentsForGroup([]);
-      setIsGroupDialogOpen(false);
-      loadData();
-    } catch (error) {
-      console.error("Failed to create group:", error);
+      setGroups((prev) => [g, ...prev]);
+      setNewGroupName("");
+      toast({
+        title: "تم إنشاء المجموعة",
+        description: "يمكنك الآن إضافة الطلاب إلى هذه المجموعة.",
+      });
+    } catch (e) {
+      console.error("Create group failed", e);
       alert("فشل إنشاء المجموعة");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAssignStudents = async () => {
+    if (!selectedGroupId || selectedStudents.length === 0) return;
+    setIsLoading(true);
+    try {
+      await Promise.all(
+        selectedStudents.map((studentId) =>
+          Student.update(studentId, { group_id: selectedGroupId })
+        )
+      );
+      toast({
+        title: "تم التحديث",
+        description: "تم ربط الطلاب بالمجموعة المحددة.",
+      });
+      await loadData();
+      setSelectedStudents([]);
+    } catch (e) {
+      console.error("Assign students failed", e);
+      alert("فشل في ربط الطلاب بالمجموعة");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleDeleteGroup = async (groupId) => {
-    if (!window.confirm("هل أنت متأكد من حذف هذه المجموعة؟")) return;
+    if (!window.confirm("هل تريد حذف هذه المجموعة؟")) return;
+    setIsLoading(true);
     try {
-      await base44.entities.StudentGroup.delete(groupId);
-      loadData();
-    } catch (error) {
-      console.error("Failed to delete group:", error);
-    }
-  };
-
-  const toggleLeaderboardVisibility = async (student) => {
-    try {
-      const newValue = student.show_on_leaderboard === false ? true : false;
-      await base44.entities.Student.update(student.id, { show_on_leaderboard: newValue });
-      setStudents(prev => prev.map(s => s.id === student.id ? { ...s, show_on_leaderboard: newValue } : s));
+      await StudentGroup.delete(groupId);
+      toast({
+        title: "تم حذف المجموعة",
+      });
+      setGroups((prev) => prev.filter((g) => g.id !== groupId));
     } catch (e) {
-      console.error("Failed to update leaderboard visibility", e);
-      alert("فشل التحديث");
+      console.error("Delete group failed", e);
+      alert("فشل في حذف المجموعة");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleEmergencyDrill = async (student) => {
-        setEmergencyLoading(student.id);
-      try {
-          // Generate targeted content via LLM
-          const prompt = `
-            أنشئ "وصفة علاجية لغوية" سريعة للطالب: ${student.name}.
-            مستواه: ${student.level}.
+  const filteredStudents = students.filter((s) => {
+    if (groupFilter === "all") return true;
+    if (groupFilter === "ungrouped") return !s.group_id;
+    return s.group_id === groupFilter;
+  });
 
-            المطلوب:
-            فقرة قصيرة جداً (30 كلمة) مشكولة بالكامل تشكيلاً تاماً وصحيحاً (100% Fully Vowelized).
-            تركز الفقرة على مخارج الحروف الصعبة والشدة.
-
-            المخرجات JSON:
-            { "text": "النص المشكول هنا" }
-          `;
-
-          const res = await base44.integrations.Core.InvokeLLM({
-              prompt: prompt,
-              response_json_schema: { type: "object", properties: { text: { type: "string" } } }
-          });
-
-          if (res && res.text) {
-               await base44.entities.Exercise.create({
-                  sentence: res.text,
-                  level: student.level,
-                  stage: student.current_stage || 1,
-                  category: "علاج لغوي",
-                  difficulty_points: 20,
-                  word_count: res.text.split(" ").length
-               });
-               alert(`تم إنشاء تمرين علاجي للطالب ${student.name} بنجاح!`);
-          }
-      } catch (e) {
-          console.error(e);
-          alert("حدث خطأ أثناء إنشاء تمرين الطوارئ.");
-      } finally {
-          setEmergencyLoading(null);
-      }
+  const getGroupName = (groupId) => {
+    const group = groups.find((g) => g.id === groupId);
+    return group ? group.name : "غير منضم لمجموعة";
   };
 
-  const getOverallStats = () => {
-    const totalStudents = students.length;
-    const totalRecordings = recordings.length;
-    const averageScore = recordings.length > 0
-      ? Math.round(recordings.filter(r => r.score).reduce((sum, r) => sum + (r.score || 0), 0) / recordings.filter(r => r.score).length)
-      : 0;
-    const activeStudents = students.filter(s => {
-      const lastActivity = new Date(s.last_activity || s.created_date);
-      const daysSinceActivity = (Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24);
-      return daysSinceActivity <= 7;
-    }).length;
-
-    return { totalStudents, totalRecordings, averageScore, activeStudents };
+  const toggleStudentSelection = (id) => {
+    setSelectedStudents((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-slate-50 to-blue-50">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Card className="w-full max-w-md shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
-            <CardHeader className="text-center pb-4">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Users className="w-8 h-8 text-white" />
-              </div>
-              <CardTitle className="text-2xl font-bold text-slate-900 arabic-text">
-                تسجيل دخول المعلم
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="كلمة المرور"
-                  className="text-right arabic-text"
-                  onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                />
-              </div>
-
-              <Button
-                onClick={handleLogin}
-                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-6 rounded-xl arabic-text"
-              >
-                دخول
-              </Button>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center arabic-text">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-slate-600">جارٍ تحميل البيانات...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="max-w-md w-full mx-4">
-          <CardContent className="p-6 text-center">
-            <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-red-600 mb-2 arabic-text">خطأ في التحميل</h3>
-            <p className="text-red-500 mb-4 arabic-text">{error}</p>
-            <Button onClick={loadData} className="arabic-text">
-              <RefreshCw className="w-4 h-4 ml-2" />
-              إعادة المحاولة
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const stats = getOverallStats();
 
   return (
-    <>
-      <AudioPlayerModal
-        isOpen={audioModalState.isOpen}
-        onClose={() => setAudioModalState({ isOpen: false, url: '', studentName: '' })}
-        audioUrl={audioModalState.url}
-        studentName={audioModalState.studentName}
-      />
-      <CommentModal
-        isOpen={commentModalState.isOpen}
-        onClose={() => setCommentModalState({ isOpen: false, recording: null })}
-        recording={commentModalState.recording}
-        onCommentSent={handleCommentSent}
-      />
-      <DeleteConfirmDialog
-        isOpen={deleteModalState.isOpen}
-        onClose={() => setDeleteModalState({ isOpen: false, type: '', recordingId: null, lessonId: null, studentId: null, isDeleting: false })}
-        onConfirm={
-          deleteModalState.type === 'all' 
-            ? handleDeleteAll 
-            : deleteModalState.type === 'lesson'
-              ? () => handleDeleteLesson(deleteModalState.lessonId)
-              : deleteModalState.type === 'student'
-                ? () => handleDeleteStudent(deleteModalState.studentId)
-                : () => handleDeleteSingle(deleteModalState.recordingId)
-        }
-        type={deleteModalState.type}
-        isDeleting={deleteModalState.isDeleting}
-      />
+    <div className="space-y-6">
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="arabic-text text-lg flex items-center gap-2">
+              <Users className="w-5 h-5 text-slate-500" />
+              إدارة المجموعات
+            </span>
+            {isLoading && (
+              <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid md:grid-cols-3 gap-6">
+          <div className="space-y-3 text-right">
+            <Label className="arabic-text text-sm text-slate-700">
+              إنشاء مجموعة جديدة
+            </Label>
+            <Input
+              placeholder="اسم المجموعة (مثلاً: الصف 5/أ)"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              className="text-right arabic-text"
+            />
+            <Button
+              onClick={handleCreateGroup}
+              disabled={!newGroupName.trim() || isLoading}
+              className="arabic-text w-full"
+            >
+              <Plus className="w-4 h-4 ml-1" />
+              إنشاء مجموعة
+            </Button>
+          </div>
 
-      <AudioCommentModal
-        isOpen={audioCommentModalState.isOpen}
-        onClose={() => setAudioCommentModalState({ isOpen: false, recording: null })}
-        recording={audioCommentModalState.recording}
-        onCommentSent={handleCommentSent}
-      />
+          <div className="space-y-3 text-right">
+            <Label className="arabic-text text-sm text-slate-700">
+              اختر مجموعة للربط
+            </Label>
+            <Select
+              value={selectedGroupId}
+              onValueChange={(v) => setSelectedGroupId(v)}
+            >
+              <SelectTrigger className="text-right arabic-text">
+                <SelectValue placeholder="اختر مجموعة" />
+              </SelectTrigger>
+              <SelectContent>
+                {groups.map((g) => (
+                  <SelectItem
+                    key={g.id}
+                    value={g.id}
+                    className="arabic-text"
+                  >
+                    {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={handleAssignStudents}
+              disabled={!selectedGroupId || selectedStudents.length === 0}
+              className="arabic-text w-full"
+            >
+              <CheckCircle className="w-4 h-4 ml-1" />
+              ربط الطلاب المحددين
+            </Button>
+          </div>
 
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900 arabic-text">
-                  لوحة تحكم المعلم 👩‍🏫
-                </h1>
-                <p className="text-slate-600 arabic-text mt-1">
-                  متابعة أداء الطلاب وتقدمهم في تعلّم النطق
-                </p>
-                <p className="text-xs text-slate-400 mt-1">
-                  آخر تحديث (توقيت الإمارات): {formatUAETime(new Date(lastRefresh))}
-                </p>
+          <div className="space-y-3 text-right">
+            <Label className="arabic-text text-sm text-slate-700">
+              تصفية الطلاب حسب المجموعة
+            </Label>
+            <Select
+              value={groupFilter}
+              onValueChange={(v) => setGroupFilter(v)}
+            >
+              <SelectTrigger className="text-right arabic-text">
+                <SelectValue placeholder="كل الطلاب" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="arabic-text">
+                  كل الطلاب
+                </SelectItem>
+                <SelectItem value="ungrouped" className="arabic-text">
+                  بدون مجموعة
+                </SelectItem>
+                {groups.map((g) => (
+                  <SelectItem
+                    key={g.id}
+                    value={g.id}
+                    className="arabic-text"
+                  >
+                    {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+            <Users className="w-5 h-5 text-slate-500" />
+            الطلاب
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-right">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    اختيار
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الاسم
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الصف
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    المجموعة الحالية
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStudents.map((s) => (
+                  <tr
+                    key={s.id}
+                    className="border-b border-slate-100 hover:bg-slate-50/60"
+                  >
+                    <td className="py-2 px-3 text-center">
+                      <Checkbox
+                        checked={selectedStudents.includes(s.id)}
+                        onCheckedChange={() => toggleStudentSelection(s.id)}
+                      />
+                    </td>
+                    <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text whitespace-nowrap">
+                      {s.name}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
+                      {s.grade}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
+                      {getGroupName(s.group_id)}
+                    </td>
+                  </tr>
+                ))}
+                {filteredStudents.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="text-center py-4 text-slate-500 arabic-text"
+                    >
+                      لا يوجد طلاب في هذه التصفية.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-lg bg-red-50/80 border-red-100">
+        <CardContent className="text-right arabic-text text-xs text-red-700 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-1 flex-shrink-0" />
+          <p>
+            ملاحظة: عند حذف مجموعة، لن يتم حذف الطلاب، لكن سيفقدون ارتباطهم
+            بتلك المجموعة.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ExercisesTab() {
+  const [exercises, setExercises] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newText, setNewText] = useState("");
+  const [newGrade, setNewGrade] = useState("");
+  const [newLevel, setNewLevel] = useState("مبتدئ");
+  const [newStage, setNewStage] = useState(1);
+  const [filterGrade, setFilterGrade] = useState("");
+  const [filterLevel, setFilterLevel] = useState("");
+  const [filterStage, setFilterStage] = useState("");
+  const [searchText, setSearchText] = useState("");
+
+  const gradeLevels = [
+    "الروضة",
+    "الصف الأول",
+    "الصف الثاني",
+    "الصف الثالث",
+    "الصف الرابع",
+    "الصف الخامس",
+    "الصف السادس",
+    "الصف السابع",
+    "الصف الثامن",
+    "الصف التاسع",
+    "الصف العاشر",
+    "الصف الحادي عشر",
+    "الصف الثاني عشر",
+  ];
+
+  useEffect(() => {
+    loadExercises();
+  }, []);
+
+  const loadExercises = async () => {
+    setIsLoading(true);
+    try {
+      const list = await Exercise.list("-created_date");
+      setExercises(list);
+    } catch (e) {
+      console.error("Failed to load exercises", e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateExercise = async () => {
+    if (!newTitle.trim() || !newText.trim() || !newGrade) return;
+
+    setIsLoading(true);
+    try {
+      const ex = await Exercise.create({
+        title: newTitle.trim(),
+        text: newText.trim(),
+        grade: newGrade,
+        level: newLevel,
+        stage: parseInt(newStage, 10) || 1,
+        is_active: true,
+      });
+      setExercises((prev) => [ex, ...prev]);
+      setNewTitle("");
+      setNewText("");
+      setNewGrade("");
+      setNewStage(1);
+    } catch (e) {
+      console.error("Create exercise failed", e);
+      alert("فشل في إنشاء التمرين");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteExercise = async (id) => {
+    if (!window.confirm("هل تريد حذف هذا التمرين؟")) return;
+    setIsLoading(true);
+    try {
+      await Exercise.delete(id);
+      setExercises((prev) => prev.filter((x) => x.id !== id));
+    } catch (e) {
+      console.error("Delete exercise failed", e);
+      alert("فشل في حذف التمرين");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const filteredExercises = exercises.filter((ex) => {
+    let ok = true;
+    if (filterGrade) ok = ok && ex.grade === filterGrade;
+    if (filterLevel) ok = ok && ex.level === filterLevel;
+    if (filterStage) ok = ok && ex.stage === parseInt(filterStage, 10);
+    if (searchText.trim()) {
+      const t = searchText.trim().toLowerCase();
+      ok =
+        ok &&
+        ((ex.title || "").toLowerCase().includes(t) ||
+          (ex.text || "").toLowerCase().includes(t));
+    }
+    return ok;
+  });
+
+  const levelOptions = ["مبتدئ", "متوسط", "متقدم"];
+
+  return (
+    <div className="space-y-6">
+      {/* Create Exercise */}
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+            <Plus className="w-5 h-5 text-slate-500" />
+            إنشاء تمرين جديد
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid md:grid-cols-2 gap-6">
+          <div className="space-y-3 text-right">
+            <Label className="arabic-text text-sm text-slate-700">
+              عنوان التمرين
+            </Label>
+            <Input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="مثال: قراءة فقرة عن الصدق"
+              className="text-right arabic-text"
+            />
+
+            <Label className="arabic-text text-sm text-slate-700 mt-3">
+              الصف الدراسي
+            </Label>
+            <Select value={newGrade} onValueChange={setNewGrade}>
+              <SelectTrigger className="text-right arabic-text">
+                <SelectValue placeholder="اختر الصف" />
+              </SelectTrigger>
+              <SelectContent>
+                {gradeLevels.map((g) => (
+                  <SelectItem key={g} value={g} className="arabic-text">
+                    {g}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div className="space-y-1 text-right">
+                <Label className="arabic-text text-sm text-slate-700">
+                  المستوى
+                </Label>
+                <Select value={newLevel} onValueChange={setNewLevel}>
+                  <SelectTrigger className="text-right arabic-text">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {levelOptions.map((lvl) => (
+                      <SelectItem key={lvl} value={lvl} className="arabic-text">
+                        {lvl}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="flex gap-2 flex-wrap">
-                <Link to="/CreateLesson">
-                  <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white arabic-text">
-                    <BookOpen className="w-4 h-4 ml-2" />
-                    شرح درس جديد
-                  </Button>
-                </Link>
-                <Button
-                  onClick={loadData}
-                  variant="outline"
-                  size="sm"
-                  className="arabic-text"
-                  disabled={isLoading}
-                >
-                  <RefreshCw className={`w-4 h-4 ml-1 ${isLoading ? 'animate-spin' : ''}`} />
-                  تحديث
-                </Button>
-                <Button
-                  onClick={() => setIsAuthenticated(false)}
-                  variant="outline"
-                  className="arabic-text"
-                >
-                  تسجيل الخروج
-                </Button>
+              <div className="space-y-1 text-right">
+                <Label className="arabic-text text-sm text-slate-700">
+                  المرحلة
+                </Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={newStage}
+                  onChange={(e) => setNewStage(e.target.value)}
+                  className="text-right arabic-text"
+                />
               </div>
             </div>
-          </motion.div>
+          </div>
 
-          {/* Stats Cards */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="grid md:grid-cols-4 gap-6 mb-8"
-          >
-            <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-blue-100 text-sm arabic-text">إجمالي الطلاب</p>
-                    <p className="text-3xl font-bold">{stats.totalStudents}</p>
-                  </div>
-                  <Users className="w-12 h-12 text-blue-200" />
-                </div>
-              </CardContent>
-            </Card>
+          <div className="space-y-3 text-right">
+            <Label className="arabic-text text-sm text-slate-700">
+              نص التمرين
+            </Label>
+            <Textarea
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              placeholder="اكتب النص الذي سيقرأه الطالب هنا..."
+              className="min-h-[160px] text-right arabic-text"
+            />
+            <Button
+              onClick={handleCreateExercise}
+              disabled={
+                !newTitle.trim() || !newText.trim() || !newGrade || isLoading
+              }
+              className="arabic-text w-full mt-2"
+            >
+              {isLoading && (
+                <Loader2 className="w-4 h-4 ml-1 animate-spin" />
+              )}
+              حفظ التمرين
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-            <Card className="border-0 shadow-lg bg-gradient-to-r from-emerald-500 to-emerald-600 text-white">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-emerald-100 text-sm arabic-text">الطلاب النشطون</p>
-                    <p className="text-3xl font-bold">{stats.activeStudents}</p>
-                  </div>
-                  <TrendingUp className="w-12 h-12 text-emerald-200" />
-                </div>
-              </CardContent>
-            </Card>
+      {/* Filter & List */}
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+            <ListChecks className="w-5 h-5 text-slate-500" />
+            قائمة التمارين ({filteredExercises.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-right">
+          <div className="grid md:grid-cols-4 gap-3">
+            <div className="space-y-1">
+              <Label className="arabic-text text-sm text-slate-700">
+                بحث
+              </Label>
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <Input
+                  placeholder="عنوان أو جزء من النص..."
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  className="pr-3 pl-9 text-right arabic-text"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="arabic-text text-sm text-slate-700">
+                الصف
+              </Label>
+              <Select value={filterGrade} onValueChange={setFilterGrade}>
+                <SelectTrigger className="text-right arabic-text">
+                  <SelectValue placeholder="الكل" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="" className="arabic-text">
+                    الكل
+                  </SelectItem>
+                  {gradeLevels.map((g) => (
+                    <SelectItem key={g} value={g} className="arabic-text">
+                      {g}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="arabic-text text-sm text-slate-700">
+                المستوى
+              </Label>
+              <Select value={filterLevel} onValueChange={setFilterLevel}>
+                <SelectTrigger className="text-right arabic-text">
+                  <SelectValue placeholder="الكل" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="" className="arabic-text">
+                    الكل
+                  </SelectItem>
+                  {levelOptions.map((lvl) => (
+                    <SelectItem key={lvl} value={lvl} className="arabic-text">
+                      {lvl}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="arabic-text text-sm text-slate-700">
+                المرحلة
+              </Label>
+              <Input
+                type="number"
+                value={filterStage}
+                onChange={(e) => setFilterStage(e.target.value)}
+                placeholder="الكل"
+                className="text-right arabic-text"
+              />
+            </div>
+          </div>
 
-            <Card className="border-0 shadow-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-orange-100 text-sm arabic-text">إجمالي التسجيلات</p>
-                    <p className="text-3xl font-bold">{stats.totalRecordings}</p>
-                  </div>
-                  <Volume2 className="w-12 h-12 text-orange-200" />
-                </div>
-              </CardContent>
-            </Card>
+          {/* Exercises Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-right">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    العنوان
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الصف
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    المستوى
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    المرحلة
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    نشط؟
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الإجراءات
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredExercises.map((ex) => (
+                  <tr
+                    key={ex.id}
+                    className="border-b border-slate-100 hover:bg-slate-50/60"
+                  >
+                    <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text">
+                      {ex.title}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-700 arabic-text">
+                      {ex.grade}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-700 arabic-text">
+                      {ex.level}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-700 arabic-text text-center">
+                      {ex.stage}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-center">
+                      <span
+                        className={cn(
+                          "inline-flex items-center px-2 py-1 rounded-full text-xs",
+                          ex.is_active
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-slate-100 text-slate-500"
+                        )}
+                      >
+                        {ex.is_active ? "نعم" : "لا"}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-xs text-center">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDeleteExercise(ex.id)}
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredExercises.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="text-center py-4 text-slate-500 arabic-text"
+                    >
+                      لا توجد تمارين مطابقة للتصفية الحالية.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
-            <Card className="border-0 shadow-lg bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-purple-100 text-sm arabic-text">متوسط الدرجات</p>
-                    <p className="text-3xl font-bold">{stats.averageScore}%</p>
-                  </div>
-                  <Award className="w-12 h-12 text-purple-200" />
-                </div>
-              </CardContent>
-            </Card>
-            </motion.div>
+function RecordingsTab() {
+  const [recordings, setRecordings] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [selectedGrade, setSelectedGrade] = useState("");
+  const [filterScore, setFilterScore] = useState(0);
+  const [onlyWithComments, setOnlyWithComments] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedRecording, setSelectedRecording] = useState(null);
+  const [teacherComment, setTeacherComment] = useState("");
+  const [isSavingComment, setIsSavingComment] = useState(false);
+  const [editScore, setEditScore] = useState("");
+  const [editScoreRecordingId, setEditScoreRecordingId] = useState(null);
 
-            {/* Class Radar Chart */}
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-8">
-             <Card className="border-0 shadow-xl bg-white/90 backdrop-blur">
-                <CardHeader>
-                   <CardTitle className="arabic-text text-xl flex items-center gap-2">
-                      <Activity className="w-6 h-6 text-indigo-600" />
-                      رادار الصف (نقاط القوة والضعف الجماعية)
-                   </CardTitle>
-                </CardHeader>
-                <CardContent>
-                   <div className="h-[300px] w-full flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
-                         <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                            <PolarGrid />
-                            <PolarAngleAxis dataKey="subject" fontFamily="Cairo" fontSize={14} />
-                            <PolarRadiusAxis angle={30} domain={[0, 100]} />
-                            <Radar name="الصف" dataKey="A" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
-                            <Tooltip />
-                         </RadarChart>
-                      </ResponsiveContainer>
-                   </div>
-                   <p className="text-center text-slate-500 text-sm arabic-text mt-4">
-                      يُظهر هذا المخطط متوسط أداء الطلاب في المهارات اللغوية المختلفة
-                   </p>
-                </CardContent>
-             </Card>
-            </motion.div>
+  const gradeLevels = [
+    "الروضة",
+    "الصف الأول",
+    "الصف الثاني",
+    "الصف الثالث",
+    "الصف الرابع",
+    "الصف الخامس",
+    "الصف السادس",
+    "الصف السابع",
+    "الصف الثامن",
+    "الصف التاسع",
+    "الصف العاشر",
+    "الصف الحادي عشر",
+    "الصف الثاني عشر",
+  ];
 
-          {/* Main Content */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Tabs defaultValue="recordings" className="space-y-6">
-              <TabsList className="flex w-full flex-wrap bg-white/60 backdrop-blur-sm h-auto p-1 gap-1">
-                <TabsTrigger value="recordings" className="arabic-text flex-1 min-w-[120px]">التسجيلات ({recordings.length})</TabsTrigger>
-                <TabsTrigger value="lessons" className="arabic-text flex-1 min-w-[100px]">الدروس</TabsTrigger>
-                <TabsTrigger value="students" className="arabic-text flex-1 min-w-[100px]">الطلاب</TabsTrigger>
-                <TabsTrigger value="leaderboard" className="arabic-text flex-1 min-w-[120px]">لوحة الصدارة 🏆</TabsTrigger>
-                <TabsTrigger value="groups" className="arabic-text flex-1 min-w-[100px]">المجموعات</TabsTrigger>
-                <TabsTrigger value="classboard" className="arabic-text flex-1 min-w-[120px]">لوحة الصف</TabsTrigger>
-                <TabsTrigger value="settings" className="arabic-text flex-1 min-w-[100px]">الإعدادات</TabsTrigger>
-              </TabsList>
+  useEffect(() => {
+    loadData();
+  }, []);
 
-              <TabsContent value="recordings">
-                <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xl font-bold text-slate-900 arabic-text">
-                        التسجيلات الصوتية للتقييم
-                      </CardTitle>
-                      {recordings.length > 0 && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => setDeleteModalState({ isOpen: true, type: 'all', recordingId: null, lessonId: null, studentId: null, isDeleting: false })}
-                          className="arabic-text flex items-center gap-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          حذف جميع التسجيلات
-                        </Button>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {recordings.length > 0 ? recordings.map((recording) => {
-                        const student = students.find(s => s.id === recording.student_id);
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const [studentList, recordingList] = await Promise.all([
+        Student.list(),
+        Recording.list("-created_date"),
+      ]);
+      setStudents(studentList);
+      setRecordings(recordingList);
+    } catch (e) {
+      console.error("Failed to load recordings", e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-                        return (
-                          <div key={recording.id} className="border border-slate-200 rounded-lg p-6 hover:shadow-md transition-all bg-white">
-                            <div className="flex items-center justify-between mb-4">
-                              <div className="flex items-center gap-3">
-                                <div className="font-semibold text-lg text-slate-900 arabic-text">
-                                  {student?.name || "طالب غير معروف"}
-                                </div>
-                                <Badge variant="outline" className="arabic-text">
-                                  {student?.level}
-                                </Badge>
-                                <span className="text-sm text-slate-500">
-                                  {formatUAETime(new Date(recording.created_date))}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  value={recording.score || ''}
-                                  onChange={(e) => handleScoreUpdate(recording.id, e.target.value)}
-                                  placeholder="الدرجة"
-                                  className="w-20 text-center"
-                                />
-                                <span className="text-sm font-medium">/ 100</span>
-                              </div>
-                            </div>
+  const getStudentById = (id) => students.find((s) => s.id === id);
 
-                            {recording.feedback && (
-                              <div className="bg-slate-50 rounded-lg p-3 mb-4">
-                                <p className="text-sm text-slate-700 arabic-text">
-                                  <strong>الملاحظات:</strong> {recording.feedback}
-                                </p>
-                              </div>
-                            )}
+  const filteredRecordings = recordings.filter((r) => {
+    let ok = true;
+    if (selectedStudentId) ok = ok && r.student_id === selectedStudentId;
+    if (selectedGrade) {
+      const st = getStudentById(r.student_id);
+      ok = ok && st?.grade === selectedGrade;
+    }
+    if (filterScore > 0) ok = ok && (r.score || 0) >= filterScore;
+    if (onlyWithComments)
+      ok = ok && (r.teacher_comment || r.teacher_audio_comment);
+    return ok;
+  });
 
-                             {recording.teacher_comment && (
-                                <div className="bg-blue-50 rounded-lg p-3 mb-4 border-r-4 border-blue-500">
-                                  <p className="text-sm text-blue-800 arabic-text flex items-start gap-2">
-                                    <MessageSquare className="w-4 h-4 mt-1 flex-shrink-0" />
-                                    <span><strong>تعليقك:</strong> {recording.teacher_comment}</span>
-                                  </p>
-                                </div>
-                              )}
+  const openCommentModal = (recording) => {
+    setSelectedRecording(recording);
+    setTeacherComment(recording.teacher_comment || "");
+  };
 
-                            {recording.teacher_audio_comment && (
-                              <div className="bg-green-50 rounded-lg p-3 mb-4 border-r-4 border-green-500">
-                                <p className="text-sm text-green-800 arabic-text flex items-center gap-2 mb-2">
-                                  <Volume2 className="w-4 h-4" />
-                                  <strong>تعليقك الصوتي:</strong>
-                                </p>
-                                <audio controls className="w-full">
-                                  <source src={recording.teacher_audio_comment} type="audio/webm" />
-                                  <source src={recording.teacher_audio_comment} type="audio/mp4" />
-                                  متصفحك لا يدعم تشغيل الصوت.
-                                </audio>
-                              </div>
-                            )}
+  const saveComment = async () => {
+    if (!selectedRecording) return;
+    setIsSavingComment(true);
+    try {
+      await Recording.update(selectedRecording.id, {
+        teacher_comment: teacherComment,
+      });
+      setRecordings((prev) =>
+        prev.map((r) =>
+          r.id === selectedRecording.id ? { ...r, teacher_comment: teacherComment } : r
+        )
+      );
+      setSelectedRecording(null);
+      setTeacherComment("");
+    } catch (e) {
+      console.error("Failed to save comment", e);
+      alert("فشل في حفظ التعليق");
+    } finally {
+      setIsSavingComment(false);
+    }
+  };
 
-                            <div className="flex items-center gap-3 flex-wrap">
-                              {recording.audio_url === 'pending_upload' ? (
-                                <Button
-                                  size="sm"
-                                  disabled
-                                  className="arabic-text bg-gray-400 cursor-not-allowed"
-                                  title="لم يتم حفظ الملف الصوتي بسبب تجاوز حد الباقة"
-                                >
-                                  <AlertTriangle className="w-4 h-4 ml-1" />
-                                  تسجيل غير محفوظ
-                                </Button>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  className="arabic-text bg-blue-600 hover:bg-blue-700"
-                                  onClick={() => setAudioModalState({ isOpen: true, url: recording.audio_url, studentName: student?.name || '' })}
-                                >
-                                  <Volume2 className="w-4 h-4 ml-1" />
-                                  استمع للتسجيل
-                                </Button>
-                              )}
+  const handleScoreClick = (recording) => {
+    setEditScore(recording.score?.toString() || "");
+    setEditScoreRecordingId(recording.id);
+  };
 
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setCommentModalState({ isOpen: true, recording: recording })}
-                                className="arabic-text border-green-500 text-green-700 hover:bg-green-50"
-                              >
-                                {recording.teacher_comment ? <CheckCircle className="w-4 h-4 ml-1 text-green-600" /> : <MessageSquare className="w-4 h-4 ml-1" />}
-                                {recording.teacher_comment ? 'تعديل التعليق' : 'أضف تعليق'}
-                              </Button>
+  const handleScoreChange = (e) => {
+    setEditScore(e.target.value);
+  };
 
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setAudioCommentModalState({ isOpen: true, recording: recording })}
-                                className="arabic-text border-purple-500 text-purple-700 hover:bg-purple-50"
-                              >
-                                <Mic className="w-4 h-4 ml-1" />
-                                {recording.teacher_audio_comment ? 'تعديل التعليق الصوتي' : 'تعليق صوتي'}
-                              </Button>
+  const handleManualScoreSave = async (recordingId) => {
+    const newScore = parseInt(editScore, 10);
+    if (isNaN(newScore) || newScore < 0 || newScore > 100) {
+      alert("الرجاء إدخال درجة صحيحة بين 0 و 100");
+      return;
+    }
 
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => setDeleteModalState({ isOpen: true, type: 'single', recordingId: recording.id, lessonId: null, studentId: null, isDeleting: false })}
-                                className="arabic-text"
-                              >
-                                <Trash2 className="w-4 h-4 ml-1" />
-                                حذف
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      }) : (
-                        <div className="text-center py-12 text-slate-500 arabic-text">
-                          <AlertTriangle className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                          <h3 className="text-lg font-semibold mb-2">لا توجد تسجيلات جديدة</h3>
-                          <p>لم يرسل الطلاب أي تسجيلات صوتية بعد.</p>
+    try {
+      await Recording.update(recordingId, { score: newScore });
+      setRecordings((prev) =>
+        prev.map((r) =>
+          r.id === recordingId
+            ? {
+                ...r,
+                score: newScore,
+              }
+            : r
+        )
+      );
+      setEditScoreRecordingId(null);
+      setEditScore("");
+    } catch (error) {
+      console.error("Failed to update score", error);
+      alert("حدث خطأ أثناء تحديث الدرجة");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Filters */}
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+            <Filter className="w-5 h-5 text-slate-500" />
+            تصفية التسجيلات
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid md:grid-cols-4 gap-4 text-right">
+          <div className="space-y-1">
+            <Label className="arabic-text text-sm text-slate-700">
+              الطالب
+            </Label>
+            <Select
+              value={selectedStudentId}
+              onValueChange={setSelectedStudentId}
+            >
+              <SelectTrigger className="text-right arabic-text">
+                <SelectValue placeholder="كل الطلاب" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="" className="arabic-text">
+                  كل الطلاب
+                </SelectItem>
+                {students.map((s) => (
+                  <SelectItem key={s.id} value={s.id} className="arabic-text">
+                    {s.name} - {s.grade}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="arabic-text text-sm text-slate-700">
+              الصف
+            </Label>
+            <Select value={selectedGrade} onValueChange={setSelectedGrade}>
+              <SelectTrigger className="text-right arabic-text">
+                <SelectValue placeholder="الكل" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="" className="arabic-text">
+                  الكل
+                </SelectItem>
+                {gradeLevels.map((g) => (
+                  <SelectItem key={g} value={g} className="arabic-text">
+                    {g}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="arabic-text text-sm text-slate-700">
+              أقل درجة
+            </Label>
+            <div className="flex items-center gap-2">
+              <Slider
+                value={[filterScore]}
+                min={0}
+                max={100}
+                step={5}
+                onValueChange={(v) => setFilterScore(v[0])}
+              />
+              <span className="w-10 text-center text-xs font-semibold">
+                {filterScore}%
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="arabic-text text-sm text-slate-700">
+              تعليقات المعلم
+            </Label>
+            <div className="flex items-center gap-2 justify-end">
+              <Switch
+                checked={onlyWithComments}
+                onCheckedChange={setOnlyWithComments}
+              />
+              <span className="text-xs text-slate-700 arabic-text">
+                إظهار التسجيلات التي تحتوي على تعليق فقط
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Recordings list */}
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+            <Mic className="w-5 h-5 text-slate-500" />
+            تسجيلات الطلاب ({filteredRecordings.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {isLoading && (
+            <div className="text-center py-4">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-500" />
+            </div>
+          )}
+          {!isLoading && filteredRecordings.length === 0 && (
+            <div className="text-center py-8 text-slate-500 arabic-text">
+              لا توجد تسجيلات مطابقة للتصفية الحالية.
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-right">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الطالب
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    التاريخ
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الدرجة
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    النص المقروء
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    تعليق المعلم
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الصوت
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRecordings.map((r) => {
+                  const st = getStudentById(r.student_id);
+                  const readText =
+                    r.analysis_details?.original_text ||
+                    r.analysis_details?.text ||
+                    "";
+                  const dateStr = new Date(
+                    r.created_date
+                  ).toLocaleDateString("ar-AE", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  });
+
+                  const scoreColor =
+                    r.score >= 90
+                      ? "bg-emerald-100 text-emerald-800"
+                      : r.score >= 70
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-red-100 text-red-800";
+
+                  return (
+                    <tr
+                      key={r.id}
+                      className="border-b border-slate-100 hover:bg-slate-50/60 align-top"
+                    >
+                      <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text whitespace-nowrap">
+                        {st?.name}
+                        <div className="text-[11px] text-slate-500">
+                          {st?.grade}
                         </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="lessons">
-                <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-                  <CardHeader>
-                    <CardTitle className="text-xl font-bold text-slate-900 arabic-text">
-                      إدارة الدروس المسجلة
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {lessons.length > 0 ? lessons.map((lesson) => (
-                        <div key={lesson.id} className="border border-slate-200 rounded-lg p-6 hover:shadow-md transition-all bg-white">
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex-1">
-                              <h3 className="text-lg font-bold text-slate-900 arabic-text mb-2">
-                                {lesson.title}
-                              </h3>
-                              <div className="flex items-center gap-3 flex-wrap mb-3">
-                                <Badge className="bg-blue-100 text-blue-800 arabic-text">
-                                  {lesson.grade}
-                                </Badge>
-                                {lesson.subject && (
-                                  <Badge className="bg-green-100 text-green-800 arabic-text">
-                                    {lesson.subject}
-                                  </Badge>
-                                )}
-                                {lesson.audio_url && (
-                                  <Badge variant="outline" className="arabic-text">
-                                    {lesson.audio_duration || 0} دقيقة
-                                  </Badge>
-                                )}
-                                {lesson.video_url && (
-                                  <Badge className="bg-purple-100 text-purple-800 arabic-text">
-                                    <Video className="w-3 h-3 ml-1" />
-                                    فيديو
-                                  </Badge>
-                                )}
-                                {lesson.image_url && (
-                                  <Badge className="bg-pink-100 text-pink-800 arabic-text">
-                                    <Image className="w-3 h-3 ml-1" />
-                                    صورة
-                                  </Badge>
-                                )}
-                                {lesson.external_link && (
-                                  <Badge className="bg-orange-100 text-orange-800 arabic-text">
-                                    <ExternalLink className="w-3 h-3 ml-1" />
-                                    رابط خارجي
-                                  </Badge>
-                                )}
-                                <span className="text-sm text-slate-500 flex items-center gap-1">
-                                  <Play className="w-4 h-4" />
-                                  {lesson.views_count || 0} مشاهدة
-                                </span>
-                              </div>
-                              <p className="text-sm text-slate-600 arabic-text mb-2">
-                                <strong>المعلم:</strong> {lesson.teacher_name || "المعلم"}
-                              </p>
-                              <p className="text-xs text-slate-400">
-                                {formatUAETime(new Date(lesson.created_date))}
-                              </p>
-                            </div>
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
+                        {dateStr}
+                      </td>
+                      <td className="py-2 px-3 text-xs text-center">
+                        {editScoreRecordingId === r.id ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <Input
+                              type="number"
+                              value={editScore}
+                              onChange={handleScoreChange}
+                              className="h-8 w-16 text-center text-xs"
+                            />
+                            <Button
+                              size="xs"
+                              className="px-2 py-1 text-xs"
+                              onClick={() => handleManualScoreSave(r.id)}
+                            >
+                              حفظ
+                            </Button>
                           </div>
-
-                          {lesson.content_text && (
-                            <div className="bg-slate-50 rounded-lg p-3 mb-4">
-                              <p className="text-sm text-slate-700 arabic-text line-clamp-3">
-                                {lesson.content_text}
-                              </p>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold cursor-pointer ${scoreColor}`}
+                            onClick={() => handleScoreClick(r)}
+                            title="اضغط لتعديل الدرجة يدويًا"
+                          >
+                            {r.score != null ? `${r.score}%` : "لا يوجد"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-800 arabic-text max-w-sm">
+                        <div className="bg-slate-50 rounded-lg p-2">
+                          <p className="line-clamp-3">{readText}</p>
+                          {r.feedback && (
+                            <p className="mt-1 text-[11px] text-blue-700">
+                              🤖 {r.feedback}
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-800 arabic-text max-w-xs">
+                        <div className="space-y-2">
+                          {r.teacher_comment && (
+                            <div className="bg-emerald-50 rounded p-2 text-[11px] text-emerald-800">
+                              👩‍🏫 {r.teacher_comment}
                             </div>
                           )}
-
-                          <div className="flex items-center gap-3 flex-wrap">
-                            {lesson.audio_url && (
-                              <Button
-                                size="sm"
-                                className="arabic-text bg-blue-600 hover:bg-blue-700"
-                                onClick={() => setAudioModalState({ isOpen: true, url: lesson.audio_url, studentName: `درس: ${lesson.title}` })}
-                              >
-                                <Volume2 className="w-4 h-4 ml-1" />
-                                استمع للشرح
-                              </Button>
-                            )}
-                            
-                            {lesson.external_link && (
-                              <Button
-                                size="sm"
-                                className="arabic-text bg-purple-600 hover:bg-purple-700"
-                                onClick={() => window.open(lesson.external_link, '_blank')}
-                              >
-                                <ExternalLink className="w-4 h-4 ml-1" />
-                                فتح الرابط
-                              </Button>
-                            )}
-
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => setDeleteModalState({ isOpen: true, type: 'lesson', recordingId: null, lessonId: lesson.id, studentId: null, isDeleting: false })}
-                              className="arabic-text"
-                            >
-                              <Trash2 className="w-4 h-4 ml-1" />
-                              حذف الدرس
-                            </Button>
-                          </div>
+                          {r.teacher_audio_comment && (
+                            <audio
+                              controls
+                              src={r.teacher_audio_comment}
+                              className="w-full"
+                            />
+                          )}
+                          <AudioCommentModal recording={r} />
                         </div>
-                      )) : (
-                        <div className="text-center py-12 text-slate-500 arabic-text">
-                          <BookOpen className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                          <h3 className="text-lg font-semibold mb-2">لا توجد دروس مسجلة</h3>
-                          <p className="mb-4">لم تقم بإنشاء أي دروس بعد</p>
-                          <Link to="/CreateLesson">
-                            <Button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white arabic-text">
-                              <BookOpen className="w-4 h-4 ml-2" />
-                              إنشاء درس جديد
-                            </Button>
-                          </Link>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-700">
+                        <audio controls src={r.audio_url} className="w-full" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
-              <TabsContent value="students">
-                <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-                  <CardHeader>
-                    <CardTitle className="text-xl font-bold text-slate-900 arabic-text">
-                      إدارة الطلاب 👨‍🎓
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-right arabic-text">الاسم</TableHead>
-                            <TableHead className="text-right arabic-text">المستوى</TableHead>
-                            <TableHead className="text-right arabic-text">التمارين المكتملة</TableHead>
-                            <TableHead className="text-right arabic-text">متوسط الدرجات</TableHead>
-                            <TableHead className="text-right arabic-text">آخر نشاط</TableHead>
-                            <TableHead className="text-right arabic-text">الحالة</TableHead>
-                            <TableHead className="text-right arabic-text">الإجراءات</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {students.map((student) => {
-                            const lastActivity = new Date(student.last_activity || student.created_date);
-                            const isActive = (Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24) <= 7;
+function EmergencyDrillTab() {
+  const [prompt, setPrompt] = useState(
+    "أريد فقرة قصيرة للصف الثالث عن أهمية الصدق، باللغة العربية الفصحى، مناسبة لتمرين قراءة صوتية."
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const [generatedText, setGeneratedText] = useState("");
+  const [grade, setGrade] = useState("");
+  const [level, setLevel] = useState("مبتدئ");
+  const [stage, setStage] = useState(1);
+  const [title, setTitle] = useState("تمرين طارئ عن الصدق");
 
-                            return (
-                              <TableRow
-                                key={student.id}
-                                className="hover:bg-slate-50 transition-colors"
-                              >
-                                <TableCell className="font-medium arabic-text">
-                                  {student.name}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="arabic-text">
-                                    {student.level}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  {student.total_exercises || 0}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <span className={`font-semibold ${
-                                    (student.average_score || 0) >= 80 ? 'text-green-600' :
-                                    (student.average_score || 0) >= 60 ? 'text-yellow-600' :
-                                    'text-red-600'
-                                  }`}>
-                                    {student.average_score || 0}%
-                                  </span>
-                                </TableCell>
-                                <TableCell className="arabic-text text-sm">
-                                  {formatUAETime(lastActivity)}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge className={isActive
-                                    ? "bg-green-100 text-green-800"
-                                    : "bg-gray-100 text-gray-800"
-                                  }>
-                                    {isActive ? "نشط" : "غير نشط"}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => handleEmergencyDrill(student)}
-                                      disabled={emergencyLoading === student.id}
-                                      className="arabic-text border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
-                                      title="إنشاء تمرين علاجي فوري"
-                                    >
-                                      {emergencyLoading === student.id ? <div className="animate-spin rounded-full h-3 w-3 border-2 border-red-600 mr-1" /> : <Zap className="w-3 h-3 ml-1" />}
-                                      طوارئ
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      onClick={() => setDeleteModalState({ 
-                                        isOpen: true, 
-                                        type: 'student', 
-                                        recordingId: null, 
-                                        lessonId: null, 
-                                        studentId: student.id, 
-                                        isDeleting: false 
-                                      })}
-                                      className="arabic-text"
-                                    >
-                                      <UserX className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-                </TabsContent>
+  const gradeLevels = [
+    "الروضة",
+    "الصف الأول",
+    "الصف الثاني",
+    "الصف الثالث",
+    "الصف الرابع",
+    "الصف الخامس",
+    "الصف السادس",
+    "الصف السابع",
+    "الصف الثامن",
+    "الصف التاسع",
+    "الصف العاشر",
+    "الصف الحادي عشر",
+    "الصف الثاني عشر",
+  ];
 
-                <TabsContent value="leaderboard">
-                  <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-                    <CardHeader>
-                      <CardTitle className="text-xl font-bold text-slate-900 arabic-text flex items-center gap-2">
-                        <Trophy className="w-6 h-6 text-yellow-500" />
-                        إدارة لوحة الصدارة
-                      </CardTitle>
-                      <p className="text-slate-500 text-sm arabic-text">
-                        يمكنك إخفاء الطلاب من لوحة الصدارة العامة في الصفحة الرئيسية.
-                      </p>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="text-right arabic-text">الترتيب (بالنقاط)</TableHead>
-                              <TableHead className="text-right arabic-text">الطالب</TableHead>
-                              <TableHead className="text-right arabic-text">النقاط</TableHead>
-                              <TableHead className="text-center arabic-text">الظهور في اللوحة</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {students
-                              .sort((a, b) => ((b.total_exercises || 0) * 10) - ((a.total_exercises || 0) * 10))
-                              .map((student, idx) => (
-                              <TableRow key={student.id}>
-                                <TableCell className="font-bold text-slate-700">#{idx + 1}</TableCell>
-                                <TableCell className="arabic-text font-medium">{student.name}</TableCell>
-                                <TableCell>{(student.total_exercises || 0) * 10}</TableCell>
-                                <TableCell className="text-center">
-                                  <div className="flex justify-center">
-                                    <Button 
-                                      size="sm" 
-                                      variant={student.show_on_leaderboard !== false ? "default" : "secondary"}
-                                      className={`arabic-text w-24 ${student.show_on_leaderboard !== false ? "bg-green-600 hover:bg-green-700" : "bg-gray-200 text-gray-500"}`}
-                                      onClick={() => toggleLeaderboardVisibility(student)}
-                                    >
-                                      {student.show_on_leaderboard !== false ? "ظاهر ✅" : "مخفي 🚫"}
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return;
+    setIsLoading(true);
+    try {
+      const res = await InvokeLLM({
+        prompt: `
+أنت معلم لغة عربية للمرحلة الابتدائية.
+قم بإنشاء فقرة قراءة عربية فصحى (بدون تشكيل كامل، لكن لغة سليمة) بناءً على طلب المعلم التالي:
+"${prompt}"
 
-                <TabsContent value="groups">
-                <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xl font-bold text-slate-900 arabic-text">
-                        المجموعات الدراسية 👥
-                      </CardTitle>
-                      <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button className="bg-purple-600 hover:bg-purple-700 text-white arabic-text">
-                            <Plus className="w-4 h-4 ml-2" />
-                            مجموعة جديدة
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-h-[80vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle className="text-right arabic-text">إنشاء مجموعة جديدة</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4 py-4">
-                            <div>
-                              <Label className="text-right block mb-2 arabic-text">اسم المجموعة</Label>
-                              <Input 
-                                value={newGroupData.name} 
-                                onChange={(e) => setNewGroupData({...newGroupData, name: e.target.value})}
-                                className="text-right arabic-text" 
-                                placeholder="مثلاً: المتفوقين - الصف الخامس"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-right block mb-2 arabic-text">وصف المجموعة</Label>
-                              <Textarea 
-                                value={newGroupData.description} 
-                                onChange={(e) => setNewGroupData({...newGroupData, description: e.target.value})}
-                                className="text-right arabic-text" 
-                                placeholder="وصف للمجموعة..."
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-right block mb-2 arabic-text">اختر الطلاب</Label>
-                              <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-2">
-                                {students.map(student => (
-                                  <div key={student.id} className="flex items-center justify-end gap-2">
-                                    <Label htmlFor={`student-${student.id}`} className="arabic-text cursor-pointer">
-                                      {student.name} ({student.level})
-                                    </Label>
-                                    <Checkbox 
-                                      id={`student-${student.id}`}
-                                      checked={selectedStudentsForGroup.includes(student.id)}
-                                      onCheckedChange={(checked) => {
-                                        if (checked) {
-                                          setSelectedStudentsForGroup([...selectedStudentsForGroup, student.id]);
-                                        } else {
-                                          setSelectedStudentsForGroup(selectedStudentsForGroup.filter(id => id !== student.id));
-                                        }
-                                      }}
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button onClick={handleCreateGroup} className="w-full arabic-text">إنشاء</Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {groups.map(group => (
-                        <Card key={group.id} className="border border-slate-200 hover:shadow-md transition-all">
-                          <CardHeader className="bg-slate-50 rounded-t-xl pb-3">
-                            <CardTitle className="text-lg arabic-text flex justify-between items-start">
-                              <span>{group.name}</span>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50 h-6 w-6"
-                                onClick={() => handleDeleteGroup(group.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="pt-4">
-                            <p className="text-sm text-slate-600 mb-4 arabic-text">{group.description || "لا يوجد وصف"}</p>
-                            <div className="flex items-center justify-between text-sm text-slate-500">
-                              <span className="flex items-center gap-1">
-                                <Users className="w-4 h-4" />
-                                {group.student_ids?.length || 0} طلاب
-                              </span>
-                              <Badge variant="secondary" className="arabic-text">نشطة</Badge>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                      {groups.length === 0 && (
-                        <div className="col-span-full text-center py-12 text-slate-500">
-                          <FolderPlus className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-                          <p className="arabic-text">لا توجد مجموعات بعد. قم بإنشاء مجموعة لتنظيم طلابك.</p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                  </Card>
-                  </TabsContent>
+ارسل الفقرة النهائية فقط، بدون أي تعليق إضافي.`,
+      });
 
-                  <TabsContent value="leaderboard">
-                    <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-                      <CardHeader>
-                        <CardTitle className="text-xl font-bold text-slate-900 arabic-text flex items-center gap-2">
-                          <Trophy className="w-6 h-6 text-yellow-500" />
-                          إدارة لوحة الصدارة
-                        </CardTitle>
-                        <p className="text-slate-500 text-sm arabic-text">
-                          يمكنك إخفاء الطلاب من لوحة الصدارة العامة في الصفحة الرئيسية.
-                        </p>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="text-right arabic-text">الترتيب (بالنقاط)</TableHead>
-                                <TableHead className="text-right arabic-text">الطالب</TableHead>
-                                <TableHead className="text-right arabic-text">النقاط</TableHead>
-                                <TableHead className="text-center arabic-text">الظهور في اللوحة</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {students
-                                .sort((a, b) => ((b.total_exercises || 0) * 10) - ((a.total_exercises || 0) * 10))
-                                .map((student, idx) => (
-                                <TableRow key={student.id}>
-                                  <TableCell className="font-bold text-slate-700">#{idx + 1}</TableCell>
-                                  <TableCell className="arabic-text font-medium">{student.name}</TableCell>
-                                  <TableCell>{(student.total_exercises || 0) * 10}</TableCell>
-                                  <TableCell className="text-center">
-                                    <div className="flex justify-center">
-                                      <Button 
-                                        size="sm" 
-                                        variant={student.show_on_leaderboard !== false ? "default" : "secondary"}
-                                        className={`arabic-text w-24 ${student.show_on_leaderboard !== false ? "bg-green-600 hover:bg-green-700" : "bg-gray-200 text-gray-500"}`}
-                                        onClick={() => toggleLeaderboardVisibility(student)}
-                                      >
-                                        {student.show_on_leaderboard !== false ? "ظاهر ✅" : "مخفي 🚫"}
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
+      const text = res?.text || res?.content || "";
+      setGeneratedText(text.trim());
+    } catch (e) {
+      console.error("Emergency drill generation failed", e);
+      alert("فشل في توليد النص. تأكد من إعدادات OpenAI API في صفحة الإعدادات.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-                  <TabsContent value="classboard">
-                     <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-                        <CardHeader>
-                           <CardTitle className="text-xl font-bold text-slate-900 arabic-text">لوحة الصف (Class Board) 🏫</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                           <div className="space-y-6">
-                              {/* Class Selection (Mock for now, effectively "All Students") */}
-                              <div className="flex items-center gap-4 mb-6">
-                                 <Label className="arabic-text">اختر الصف:</Label>
-                                 <select className="border rounded p-2 arabic-text w-48">
-                                    <option>الكل</option>
-                                    <option>الصف الأول</option>
-                                    <option>الصف الثاني</option>
-                                    {/* ... more options */}
-                                 </select>
-                              </div>
+  const handleSaveAsExercise = async () => {
+    if (!generatedText.trim() || !grade) {
+      alert("يرجى اختيار الصف وإدخال عنوان مناسب قبل الحفظ.");
+      return;
+    }
 
-                              {/* Announcements */}
-                              <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-                                 <h3 className="font-bold text-blue-900 arabic-text mb-2">📢 إعلان صفّي جديد</h3>
-                                 <div className="flex gap-2">
-                                    <Input className="text-right arabic-text bg-white" placeholder="اكتب إعلاناً للطلاب وأولياء الأمور..." />
-                                    <Button className="arabic-text bg-blue-600 hover:bg-blue-700">إرسال</Button>
-                                 </div>
-                              </div>
+    try {
+      const ex = await Exercise.create({
+        title: title.trim() || "تمرين طارئ",
+        text: generatedText.trim(),
+        grade,
+        level,
+        stage: stage || 1,
+        is_active: true,
+      });
 
-                              {/* Student List */}
-                              <div className="overflow-x-auto">
-                                 <Table>
-                                    <TableHeader>
-                                       <TableRow>
-                                          <TableHead className="text-right arabic-text">اسم الطالب</TableHead>
-                                          <TableHead className="text-right arabic-text">الصف</TableHead>
-                                          <TableHead className="text-center arabic-text">النشاط</TableHead>
-                                          <TableHead className="text-center arabic-text">التمارين المنجزة</TableHead>
-                                       </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                       {students.map(student => (
-                                          <TableRow key={student.id}>
-                                             <TableCell className="font-medium arabic-text">{student.name}</TableCell>
-                                             <TableCell className="arabic-text">{student.grade || '-'}</TableCell>
-                                             <TableCell className="text-center">
-                                                {/* Simple Activity Indicator */}
-                                                <Badge className={
-                                                   (student.total_exercises > 5) ? "bg-green-500" : 
-                                                   (student.total_exercises > 2) ? "bg-yellow-500" : "bg-red-500"
-                                                }>
-                                                   {(student.total_exercises > 5) ? "عالٍ" : (student.total_exercises > 2) ? "متوسط" : "منخفض"}
-                                                </Badge>
-                                             </TableCell>
-                                             <TableCell className="text-center">{student.total_exercises}</TableCell>
-                                          </TableRow>
-                                       ))}
-                                    </TableBody>
-                                 </Table>
-                              </div>
-                           </div>
-                        </CardContent>
-                     </Card>
-                  </TabsContent>
+      alert("تم حفظ التمرين بنجاح، ويمكن للطلاب استخدامه.");
+    } catch (e) {
+      console.error("Failed to save emergency exercise", e);
+      alert("فشل في حفظ التمرين الطارئ.");
+    }
+  };
 
-                  <TabsContent value="settings">
-                  <SettingsTab />
-                  </TabsContent>
-                  </Tabs>
-                  </motion.div>
+  return (
+    <div className="space-y-6">
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-red-500" />
+            توليد تمرين طارئ بالذكاء الاصطناعي
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid md:grid-cols-2 gap-6 text-right">
+          <div className="space-y-3">
+            <Label className="arabic-text text-sm text-slate-700">
+              وصف التمرين المطلوب
+            </Label>
+            <Textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              className="min-h-[180px] text-right arabic-text"
+            />
+            <Button
+              onClick={handleGenerate}
+              disabled={isLoading}
+              className="arabic-text w-full"
+            >
+              {isLoading && (
+                <Loader2 className="w-4 h-4 ml-1 animate-spin" />
+              )}
+              توليد النص
+            </Button>
+            <p className="text-xs text-slate-500 arabic-text">
+              مثال: "فقرة للصف الرابع عن أهمية النظافة الشخصية، جمل قصيرة وواضحة."
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <Label className="arabic-text text-sm text-slate-700">
+              النص الناتج
+            </Label>
+            <Textarea
+              value={generatedText}
+              onChange={(e) => setGeneratedText(e.target.value)}
+              className="min-h-[180px] text-right arabic-text"
+              placeholder="سيظهر هنا النص الذي تم توليده..."
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="arabic-text text-sm text-slate-700">
+                  عنوان التمرين
+                </Label>
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="text-right arabic-text"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="arabic-text text-sm text-slate-700">
+                  الصف
+                </Label>
+                <Select value={grade} onValueChange={setGrade}>
+                  <SelectTrigger className="text-right arabic-text">
+                    <SelectValue placeholder="اختر الصف" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {gradeLevels.map((g) => (
+                      <SelectItem key={g} value={g} className="arabic-text">
+                        {g}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="arabic-text text-sm text-slate-700">
+                  المستوى
+                </Label>
+                <Select value={level} onValueChange={setLevel}>
+                  <SelectTrigger className="text-right arabic-text">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="مبتدئ" className="arabic-text">
+                      مبتدئ
+                    </SelectItem>
+                    <SelectItem value="متوسط" className="arabic-text">
+                      متوسط
+                    </SelectItem>
+                    <SelectItem value="متقدم" className="arabic-text">
+                      متقدم
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="arabic-text text-sm text-slate-700">
+                  المرحلة
+                </Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={stage}
+                  onChange={(e) => setStage(parseInt(e.target.value, 10))}
+                  className="text-right arabic-text"
+                />
+              </div>
+            </div>
+
+            <Button
+              onClick={handleSaveAsExercise}
+              disabled={!generatedText.trim() || !grade}
+              className="arabic-text w-full bg-emerald-600 hover:bg-emerald-700"
+            >
+              <CheckCircle className="w-4 h-4 ml-1" />
+              حفظ كتمرين جاهز للطلاب
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default function TeacherDashboard() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 py-6 px-3 md:px-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col md:flex-row items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navigate(createPageUrl("Home"))}
+              className="rounded-full bg-white/80"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <div className="text-right">
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 arabic-text">
+                لوحة تحكم المعلم 👩‍🏫
+              </h1>
+              <p className="text-sm text-slate-600 arabic-text">
+                إدارة الطلاب، التمارين، المجموعات، والتسجيلات الصوتية
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className="bg-indigo-100 text-indigo-800 arabic-text">
+              <Users className="w-3 h-3 ml-1" />
+              معلم اللغة العربية - مرحلة أساسية
+            </Badge>
+            <Badge className="bg-emerald-100 text-emerald-800 arabic-text">
+              <Mic className="w-3 h-3 ml-1" />
+              منصة تحليل النطق الذكي
+            </Badge>
+          </div>
+        </motion.div>
+
+        {/* Tabs */}
+        <Tabs defaultValue="students" className="space-y-4">
+          <TabsList className="bg-white shadow-md rounded-2xl p-1 grid grid-cols-5">
+            <TabsTrigger
+              value="students"
+              className="arabic-text text-xs md:text-sm"
+            >
+              <Users className="w-4 h-4 ml-1" />
+              الطلاب
+            </TabsTrigger>
+            <TabsTrigger
+              value="groups"
+              className="arabic-text text-xs md:text-sm"
+            >
+              <ListChecks className="w-4 h-4 ml-1" />
+              المجموعات
+            </TabsTrigger>
+            <TabsTrigger
+              value="exercises"
+              className="arabic-text text-xs md:text-sm"
+            >
+              <BookOpen className="w-4 h-4 ml-1" />
+              التمارين
+            </TabsTrigger>
+            <TabsTrigger
+              value="recordings"
+              className="arabic-text text-xs md:text-sm"
+            >
+              <Mic className="w-4 h-4 ml-1" />
+              التسجيلات
+            </TabsTrigger>
+            <TabsTrigger
+              value="emergency"
+              className="arabic-text text-xs md:text-sm"
+            >
+              <AlertTriangle className="w-4 h-4 ml-1" />
+              تمرين طارئ
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="students">
+            <StudentsTab
+              onSelectStudent={(s) =>
+                navigate(createPageUrl(`StudentDashboard?studentId=${s.id}`))
+              }
+            />
+          </TabsContent>
+
+          <TabsContent value="groups">
+            <GroupsTab />
+          </TabsContent>
+
+          <TabsContent value="exercises">
+            <ExercisesTab />
+          </TabsContent>
+
+          <TabsContent value="recordings">
+            <RecordingsTab />
+          </TabsContent>
+
+          <TabsContent value="emergency">
+            <EmergencyDrillTab />
+          </TabsContent>
+        </Tabs>
+
+        {/* Settings Section */}
+        <div className="mt-4">
+          <SettingsTab />
         </div>
       </div>
-    </>
+    </div>
   );
 }
