@@ -1,5 +1,7 @@
+// src/pages/Certificates.jsx
+
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Award, Lock } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -24,81 +26,137 @@ export default function CertificatesPage() {
         return;
       }
 
-      const [studentData, allCerts] = await Promise.all([
-        base44.entities.Student.get(studentId),
-        base44.entities.Certificate.list()
-      ]);
+      // 1) جلب بيانات الطالب من Supabase
+      const { data: studentData, error: studentError } = await supabase
+        .from("students")
+        .select("*")
+        .eq("id", studentId)
+        .single();
+
+      if (studentError || !studentData) {
+        console.error("Error loading student:", studentError);
+        // لو حاب تضيف توجيه معيّن هنا
+        setLoading(false);
+        return;
+      }
 
       setStudent(studentData);
-      
-      // Filter for this student
-      const myCerts = allCerts.filter(c => c.student_id === studentId);
-      setCertificates(myCerts);
 
-      // Check for new achievements (Simple Logic Simulation)
-      await checkAndAwardCertificates(studentData, myCerts);
+      // 2) جلب شهادات هذا الطالب فقط
+      const { data: myCerts, error: certError } = await supabase
+        .from("certificates")
+        .select("*")
+        .eq("student_id", studentId)
+        .order("date_earned", { ascending: false });
 
+      if (certError) {
+        console.error("Error loading certificates:", certError);
+        setCertificates([]);
+      } else {
+        setCertificates(myCerts || []);
+        // 3) التحقق من الشهادات المستحقة وإنشاؤها إن لزم
+        await checkAndAwardCertificates(studentData, myCerts || []);
+      }
     } catch (e) {
-      console.error(e);
+      console.error("Load data failed:", e);
     } finally {
       setLoading(false);
     }
   };
 
   const checkAndAwardCertificates = async (student, existingCerts) => {
+    if (!student) return;
+
     const newCerts = [];
-    
+
+    const totalExercises = student.total_exercises || 0;
+    const averageScore = student.average_score || 0;
+
     // Rule 1: First Exercise
-    if (student.total_exercises >= 1 && !existingCerts.find(c => c.title === "بداية البطل")) {
+    if (
+      totalExercises >= 1 &&
+      !existingCerts.find((c) => c.title === "بداية البطل")
+    ) {
       newCerts.push({
         student_id: student.id,
         title: "بداية البطل",
         description: "أكملت تمرينك الأول بنجاح! بداية موفقة.",
         type: "special",
-        date_earned: new Date().toISOString()
+        date_earned: new Date().toISOString(),
       });
     }
 
     // Rule 2: 10 Exercises
-    if (student.total_exercises >= 10 && !existingCerts.find(c => c.title === "قارئ مثابر")) {
+    if (
+      totalExercises >= 10 &&
+      !existingCerts.find((c) => c.title === "قارئ مثابر")
+    ) {
       newCerts.push({
         student_id: student.id,
         title: "قارئ مثابر",
         description: "أكملت 10 تمارين! استمر في التقدم.",
         type: "streak",
-        date_earned: new Date().toISOString()
+        date_earned: new Date().toISOString(),
       });
     }
 
     // Rule 3: High Score
-    if (student.average_score >= 90 && student.total_exercises >= 5 && !existingCerts.find(c => c.title === "نطق ذهبي")) {
-        newCerts.push({
-          student_id: student.id,
-          title: "نطق ذهبي",
-          description: "حققت متوسط درجات ممتاز (فوق 90%) في 5 تمارين على الأقل.",
-          type: "score",
-          date_earned: new Date().toISOString()
-        });
+    if (
+      averageScore >= 90 &&
+      totalExercises >= 5 &&
+      !existingCerts.find((c) => c.title === "نطق ذهبي")
+    ) {
+      newCerts.push({
+        student_id: student.id,
+        title: "نطق ذهبي",
+        description:
+          "حققت متوسط درجات ممتاز (فوق 90%) في 5 تمارين على الأقل.",
+        type: "score",
+        date_earned: new Date().toISOString(),
+      });
     }
 
     if (newCerts.length > 0) {
-      for (const cert of newCerts) {
-        await base44.entities.Certificate.create(cert);
+      // إدخال الشهادات الجديدة
+      const { error: insertError } = await supabase
+        .from("certificates")
+        .insert(newCerts);
+
+      if (insertError) {
+        console.error("Error inserting new certificates:", insertError);
+        return;
       }
-      // Reload to show new certs
-      const updatedCerts = await base44.entities.Certificate.list();
-      setCertificates(updatedCerts.filter(c => c.student_id === student.id));
+
+      // إعادة تحميل شهادات الطالب بعد الإضافة
+      const { data: updatedCerts, error: reloadError } = await supabase
+        .from("certificates")
+        .select("*")
+        .eq("student_id", student.id)
+        .order("date_earned", { ascending: false });
+
+      if (!reloadError && updatedCerts) {
+        setCertificates(updatedCerts);
+      }
     }
   };
 
-  if (loading) return <div className="flex justify-center items-center h-screen">جارٍ التحميل...</div>;
+  if (loading)
+    return (
+      <div className="flex justify-center items-center h-screen">
+        جارٍ التحميل...
+      </div>
+    );
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center gap-4 mb-8">
           <Link to={createPageUrl("StudentDashboard")}>
-            <Button variant="outline" size="icon" className="rounded-full shadow-lg">
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full shadow-lg"
+            >
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
@@ -118,8 +176,12 @@ export default function CertificatesPage() {
             <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-10 h-10 text-gray-400" />
             </div>
-            <h3 className="text-xl font-bold text-slate-700 arabic-text mb-2">لا توجد شهادات بعد</h3>
-            <p className="text-slate-500 arabic-text">أكمل التمارين لتحصل على شهاداتك الأولى!</p>
+            <h3 className="text-xl font-bold text-slate-700 arabic-text mb-2">
+              لا توجد شهادات بعد
+            </h3>
+            <p className="text-slate-500 arabic-text">
+              أكمل التمارين لتحصل على شهاداتك الأولى!
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
