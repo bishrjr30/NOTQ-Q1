@@ -1,5 +1,6 @@
+// src/pages/Exercise.jsx
+
 import React, { useState, useEffect, useRef } from "react";
-import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,17 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+
+// ✅ Supabase entities
+import {
+  Exercise as ExerciseEntity,
+  Student,
+  Recording,
+  SystemSetting,
+} from "@/api/entities";
+
+// ✅ تكامل الذكاء الاصطناعي + رفع الملفات (OpenAI + Supabase Storage)
+import { UploadFile, InvokeLLM } from "@/api/integrations";
 
 export default function ExercisePage() {
   const navigate = useNavigate();
@@ -55,7 +67,7 @@ export default function ExercisePage() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
-  // تحميل التمرين + الطالب بناءً على الـ URL أو localStorage
+  // تحميل التمرين + الطالب
   useEffect(() => {
     const load = async () => {
       try {
@@ -76,16 +88,16 @@ export default function ExercisePage() {
           return;
         }
 
-        const exerciseData = await base44.entities.Exercise.get(exerciseId);
+        // ✅ من Supabase عبر entities
+        const exerciseData = await ExerciseEntity.get(exerciseId);
         setExercise(exerciseData);
 
         if (!finalStudentId) {
-          // لو ما في طالب، نعيده لصفحة البداية / الإعداد
           navigate(createPageUrl("StudentOnboarding"));
           return;
         }
 
-        const studentData = await base44.entities.Student.get(finalStudentId);
+        const studentData = await Student.get(finalStudentId);
         setStudent(studentData);
       } catch (err) {
         console.error("Failed to load exercise:", err);
@@ -195,10 +207,11 @@ export default function ExercisePage() {
     setError(null);
 
     try {
-      // 0. جلب مفتاح OpenAI من الإعدادات (بدون تخزين مفتاح حقيقي في الكود)
+      // ✅ جلب مفتاح OpenAI من env أو من جدول system_settings في Supabase
       let OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || "";
+
       try {
-        const settings = await base44.entities.SystemSetting.list();
+        const settings = await SystemSetting.list();
         const keySetting = settings.find(
           (s) => s.key === "openai_api_key" && typeof s.value === "string"
         );
@@ -206,15 +219,10 @@ export default function ExercisePage() {
           OPENAI_API_KEY = keySetting.value;
         }
       } catch (e) {
-        console.warn("Could not load system key, using default placeholder");
+        console.warn("Could not load system key, using default env key if any");
       }
 
-      // ...existing code...
-      if (
-        !OPENAI_API_KEY ||
-        OPENAI_API_KEY === import.meta.env.VITE_OPENAI_API_KEY
-      ) {
-// ...existing code...
+      if (!OPENAI_API_KEY) {
         throw new Error(
           "لم يتم إعداد مفتاح OpenAI API. يرجى من المعلم إضافة المفتاح في الإعدادات."
         );
@@ -241,8 +249,13 @@ export default function ExercisePage() {
 
       setAnalysisProgress(20);
 
-      // 1. رفع الملف
-      const uploadResult = await base44.integrations.Core.UploadFile({ file });
+      // 1️⃣ رفع الملف إلى Supabase Storage عبر UploadFile
+      const uploadResult = await UploadFile({
+        file,
+        bucket: "recordings",
+        folder: `student_recordings/${student.id}`,
+      });
+
       if (!uploadResult || !uploadResult.file_url) {
         throw new Error("فشل في رفع الملف الصوتي.");
       }
@@ -250,7 +263,7 @@ export default function ExercisePage() {
 
       setAnalysisProgress(40);
 
-      // 2. التحويل إلى نص بـ Whisper
+      // 2️⃣ تحويل الصوت إلى نص (Whisper)
       const audioFile = new File([audioBlob], "recording.webm", {
         type: "audio/webm",
       });
@@ -286,7 +299,7 @@ export default function ExercisePage() {
 
       setAnalysisProgress(70);
 
-      // 3. التحليل بـ GPT-4o
+      // 3️⃣ التحليل بـ GPT-4o (chat completions)
       const analysisResponse = await fetch(
         "https://api.openai.com/v1/chat/completions",
         {
@@ -302,44 +315,43 @@ export default function ExercisePage() {
                 role: "system",
                 content: `أنت خبير لغوي متخصص في اللغة العربية الفصحى وأحكام التجويد ومخارج الحروف. مهمتك تقييم تسجيل الطالب بدقة لغوية عالية:
 
-              الحالات:
-              1. صمت/غير مفهوم -> 0.0، تعليق: "لم نسمع قراءة..."
-              2. نص مختلف -> 0.0، تعليق: "النص المقروء مختلف..."
-              3. محاولة قراءة -> تقييم دقيق (مثلاً 87.5) بناءً على:
-                 - صحة المخارج وصفات الحروف (30%)
-                 - الالتزام بقواعد النحو وتشكيل أواخر الكلمات (30%)
-                 - مطابقة الكلمات (30%)
-                 - الطلاقة والأداء (10%)
+الحالات:
+1. صمت/غير مفهوم -> 0.0، تعليق: "لم نسمع قراءة..."
+2. نص مختلف -> 0.0، تعليق: "النص المقروء مختلف..."
+3. محاولة قراءة -> تقييم دقيق (مثلاً 87.5) بناءً على:
+   - صحة المخارج وصفات الحروف (30%)
+   - الالتزام بقواعد النحو وتشكيل أواخر الكلمات (30%)
+   - مطابقة الكلمات (30%)
+   - الطلاقة والأداء (10%)
 
-              التعليق (Feedback) - يجب أن يكون باللغة العربية الفصحى ومشكولاً بالكامل (Full Tashkeel):
-              1. ابدأ بمدح نقطة قوة محددة.
-              2. ثم حدد خطأً لغوياً أو نحوياً وصححه.
-              3. اختم بنصيحة لغوية للتحسين.
-              `,
+التعليق (Feedback) - يجب أن يكون باللغة العربية الفصحى ومشكولاً بالكامل (Full Tashkeel):
+1. ابدأ بمدح نقطة قوة محددة.
+2. ثم حدد خطأً لغوياً أو نحوياً وصححه.
+3. اختم بنصيحة لغوية للتحسين.`,
               },
               {
                 role: "user",
                 content: `
-                النص الأصلي المطلوب قراءته: "${exercise.sentence}"
-                النص الذي سمعه النظام (Whisper): "${transcribedText}"
+النص الأصلي المطلوب قراءته: "${exercise.sentence}"
+النص الذي سمعه النظام (Whisper): "${transcribedText}"
 
-                قم بالتحليل وإخراج JSON فقط:
-                {
-                  "score": number (float, e.g. 85.5),
-                  "status": "valid" | "silence" | "wrong_text",
-                  "feedback": "string (Arabic, Full Tashkeel)",
-                  "analysis_details": {
-                    "word_match_score": number,
-                    "pronunciation_score": number,
-                    "tashkeel_score": number,
-                    "fluency_score": number,
-                    "rhythm": "string",
-                    "tone": "string",
-                    "breathing": "string",
-                    "suggestions": "string"
-                  }
-                }
-              `,
+قم بالتحليل وإخراج JSON فقط:
+{
+  "score": number (float, e.g. 85.5),
+  "status": "valid" | "silence" | "wrong_text",
+  "feedback": "string (Arabic, Full Tashkeel)",
+  "analysis_details": {
+    "word_match_score": number,
+    "pronunciation_score": number,
+    "tashkeel_score": number,
+    "fluency_score": number,
+    "rhythm": "string",
+    "tone": "string",
+    "breathing": "string",
+    "suggestions": "string"
+  }
+}
+`,
               },
             ],
             response_format: { type: "json_object" },
@@ -368,6 +380,7 @@ export default function ExercisePage() {
       setLastAnalysis(aiAnalysis);
       setAnalysisProgress(90);
 
+      // 4️⃣ حفظ التسجيل والنتيجة في جدول recordings
       const recordingData = {
         student_id: student.id,
         exercise_id: exercise.id,
@@ -381,11 +394,12 @@ export default function ExercisePage() {
         },
       };
 
-      await base44.entities.Recording.create(recordingData);
+      await Recording.create(recordingData);
 
       setAnalysisProgress(100);
 
-      await base44.entities.Student.update(student.id, {
+      // 5️⃣ تحديث بيانات الطالب
+      await Student.update(student.id, {
         last_activity: new Date().toISOString(),
         total_exercises: (student.total_exercises || 0) + 1,
         total_minutes: (student.total_minutes || 0) + 1,
@@ -424,10 +438,10 @@ export default function ExercisePage() {
 
   const loadNextExercise = async () => {
     try {
-      const allExercises = await base44.entities.Exercise.list();
+      const allExercises = await ExerciseEntity.list();
       if (!student || !exercise || allExercises.length === 0) return;
 
-      const allRecordings = await base44.entities.Recording.list();
+      const allRecordings = await Recording.list();
       const studentRecordings = allRecordings.filter(
         (r) => r.student_id === student.id
       );
@@ -448,7 +462,7 @@ export default function ExercisePage() {
         setNextExercise(sameStageExercises[randomIndex]);
       } else {
         const nextStage = exercise.stage + 1;
-        await base44.entities.Student.update(student.id, {
+        await Student.update(student.id, {
           current_stage: nextStage,
         });
 
@@ -471,20 +485,22 @@ export default function ExercisePage() {
   const generateQuiz = async () => {
     setIsGeneratingQuiz(true);
     try {
-      const response = await base44.integrations.Core.InvokeLLM({
+      const response = await InvokeLLM({
         prompt: `
-              بناءً على النص التالي: "${exercise.sentence}"
-              قم بإنشاء 3 أسئلة اختيار من متعدد (MCQ) لاختبار فهم الطالب للنص.
+بناءً على النص التالي: "${exercise.sentence}"
+قم بإنشاء 3 أسئلة اختيار من متعدد (MCQ) لاختبار فهم الطالب للنص.
 
-              المخرجات JSON فقط:
-              [
-                 {
-                    "question": "نص السؤال",
-                    "options": ["خيار 1", "خيار 2", "خيار 3"],
-                    "correct_index": 0
-                 }
-              ]
-           `,
+المخرجات JSON فقط بالشكل:
+{
+  "questions": [
+    {
+      "question": "نص السؤال",
+      "options": ["خيار 1", "خيار 2", "خيار 3"],
+      "correct_index": 0
+    }
+  ]
+}
+        `,
         response_json_schema: {
           type: "object",
           properties: {
@@ -497,14 +513,18 @@ export default function ExercisePage() {
                   options: { type: "array", items: { type: "string" } },
                   correct_index: { type: "integer" },
                 },
+                required: ["question", "options", "correct_index"],
               },
             },
           },
+          required: ["questions"],
         },
       });
 
-      if (response && response.questions) {
-        setQuizQuestions(response.questions);
+      const data = typeof response === "string" ? JSON.parse(response) : response;
+
+      if (data && data.questions) {
+        setQuizQuestions(data.questions);
       } else {
         await loadNextExercise();
       }
@@ -538,7 +558,6 @@ export default function ExercisePage() {
       navigate(
         createPageUrl(`Exercise?id=${nextExercise.id}&studentId=${student.id}`)
       );
-      // لا نستخدم window.location.reload، الـ useEffect سيحمّل التمرين الجديد تلقائياً
     }
   };
 
@@ -607,7 +626,7 @@ export default function ExercisePage() {
           </div>
         </motion.div>
 
-        {/* Focus Mode Overlay Background */}
+        {/* Focus Mode Overlay */}
         {isFocusMode && <div className="fixed inset-0 bg-white z-40" />}
 
         <div
@@ -1012,7 +1031,7 @@ export default function ExercisePage() {
                           تسجيلك محفوظ ووصل للمعلم للمراجعة والتقييم
                         </p>
 
-                        {/* Mirror Mode Section */}
+                        {/* وضع المرآة */}
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 w-full mb-6">
                           <h4 className="font-bold text-slate-800 mb-3 arabic-text flex items-center justify-center gap-2">
                             <Headphones className="w-5 h-5" />
