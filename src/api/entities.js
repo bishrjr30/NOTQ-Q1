@@ -19,11 +19,44 @@ async function handleQuery(promise, context = "Supabase") {
 ========================================================= */
 function createEntity(tableName) {
   return {
-    async list(filters = {}) {
+    /**
+     * list تدعم:
+     * - list() => كل البيانات
+     * - list({a:1}) => match filters
+     * - list("-created_date") => order desc by created_date
+     * - list({a:1}, { order:"-x", limit:10 }) => filters + order + limit
+     */
+    async list(arg1 = {}, arg2 = {}) {
       let query = supabase.from(tableName).select("*");
-      if (filters && Object.keys(filters).length > 0) {
+
+      let filters = arg1;
+      let options = arg2;
+
+      // لو جاءنا string مثل "-created_date" أو "created_date"
+      if (typeof arg1 === "string") {
+        options = { order: arg1 };
+        filters = {};
+      }
+
+      // Filters
+      if (filters && typeof filters === "object" && Object.keys(filters).length > 0) {
         query = query.match(filters);
       }
+
+      // Order
+      if (options?.order && typeof options.order === "string") {
+        const col = options.order.startsWith("-")
+          ? options.order.slice(1)
+          : options.order;
+        const ascending = !options.order.startsWith("-");
+        query = query.order(col, { ascending });
+      }
+
+      // Limit
+      if (options?.limit && Number.isFinite(options.limit)) {
+        query = query.limit(options.limit);
+      }
+
       return await handleQuery(query, `${tableName}.list`);
     },
 
@@ -43,7 +76,8 @@ function createEntity(tableName) {
 
     async update(id, payload) {
       return await handleQuery(
-        supabase.from(tableName)
+        supabase
+          .from(tableName)
           .update(payload)
           .eq("id", id)
           .select("*")
@@ -57,6 +91,11 @@ function createEntity(tableName) {
         supabase.from(tableName).delete().eq("id", id),
         `${tableName}.remove`
       );
+    },
+
+    // ✅ Alias لأن بعض ملفاتك تستخدم delete()
+    async delete(id) {
+      return await this.remove(id);
     },
   };
 }
