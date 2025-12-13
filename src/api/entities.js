@@ -1,8 +1,8 @@
 // src/api/entities.js
-console.log("✅ entities.js NEW loaded v2");
+console.log("✅ entities.js NEW loaded v3");
 import { supabase } from "./supabaseClient";
 
-const ENTITIES_VERSION = "entities.js v2 (fix order + delete alias)";
+const ENTITIES_VERSION = "entities.js v3 (safe list args + safe order)";
 
 /* =========================================================
    🧰 Helper عام للتعامل مع أخطاء Supabase
@@ -22,25 +22,66 @@ async function handleQuery(promise, context = "Supabase") {
 }
 
 /* =========================================================
+   🔁 توحيد باراميترات list
+   يدعم:
+   - list()
+   - list({filters})
+   - list("-created_date")
+   - list("-created_date", {filters})
+   - list({filters}, "-created_date")
+========================================================= */
+function normalizeListArgs(arg1, arg2) {
+  let order = undefined;
+  let filters = {};
+
+  if (typeof arg1 === "string") {
+    order = arg1;
+  } else if (arg1 && typeof arg1 === "object") {
+    filters = arg1;
+  }
+
+  if (typeof arg2 === "string") {
+    order = arg2;
+  } else if (arg2 && typeof arg2 === "object") {
+    filters = arg2;
+  }
+
+  return { filters: filters || {}, order };
+}
+
+/* =========================================================
    🔽 تطبيق ترتيب (order) على Query
    يقبل:
    "-created_date" => created_date DESC
    "+created_date" أو "created_date" => created_date ASC
+   "created_date.desc" / "created_date.asc"
 ========================================================= */
 function applyOrder(query, order) {
   if (!order) return query;
 
-  // String syntax: "-col" / "+col" / "col"
+  // String syntax
   if (typeof order === "string") {
-    let col = order;
+    const raw = order.trim();
+    if (!raw) return query;
+
+    let col = raw;
     let ascending = true;
 
-    if (order.startsWith("-")) {
-      col = order.slice(1);
+    if (col.startsWith("-")) {
+      col = col.slice(1);
       ascending = false;
-    } else if (order.startsWith("+")) {
-      col = order.slice(1);
+    } else if (col.startsWith("+")) {
+      col = col.slice(1);
       ascending = true;
+    }
+
+    // "col.desc" / "col.asc"
+    if (col.includes(".")) {
+      const [c, dir] = col.split(".");
+      col = c;
+      const d = (dir || "").toLowerCase();
+      if (d === "desc") ascending = false;
+      if (d === "asc") ascending = true;
     }
 
     if (!col) return query;
@@ -60,33 +101,16 @@ function applyOrder(query, order) {
 ========================================================= */
 function createEntity(tableName) {
   const entity = {
-    /**
-     * list يمكنه استقبال:
-     * - list() => كل السجلات
-     * - list({ grade: "الصف الثالث" }) => فلاتر
-     * - list("-created_date") => ترتيب تنازلي
-     * - list({ grade:"..." }, "-created_date") => فلاتر + ترتيب
-     */
-    async list(arg1 = {}, arg2 = undefined) {
-      // لطباعة سريعة تؤكد أن النسخة الجديدة اشتغلت
+    async list(arg1 = undefined, arg2 = undefined) {
+      // log version مرة واحدة
       if (typeof window !== "undefined") {
-        // مرة واحدة فقط
         if (!window.__ENTITIES_VER_LOGGED__) {
           window.__ENTITIES_VER_LOGGED__ = true;
           console.info(ENTITIES_VERSION);
         }
       }
 
-      let filters = {};
-      let order = undefined;
-
-      if (typeof arg1 === "string") {
-        order = arg1;
-        filters = {};
-      } else {
-        filters = arg1 || {};
-        order = arg2;
-      }
+      const { filters, order } = normalizeListArgs(arg1, arg2);
 
       // دعم: لو أحد مرّر order داخل filters بالغلط
       const { orderBy, order: orderInFilters, ...pureFilters } =
@@ -96,7 +120,11 @@ function createEntity(tableName) {
 
       query = applyOrder(query, order || orderBy || orderInFilters);
 
-      if (pureFilters && Object.keys(pureFilters).length > 0) {
+      if (
+        pureFilters &&
+        typeof pureFilters === "object" &&
+        Object.keys(pureFilters).length > 0
+      ) {
         query = query.match(pureFilters);
       }
 
@@ -119,7 +147,12 @@ function createEntity(tableName) {
 
     async update(id, payload) {
       return await handleQuery(
-        supabase.from(tableName).update(payload).eq("id", id).select("*").single(),
+        supabase
+          .from(tableName)
+          .update(payload)
+          .eq("id", id)
+          .select("*")
+          .single(),
         `${tableName}.update`
       );
     },
