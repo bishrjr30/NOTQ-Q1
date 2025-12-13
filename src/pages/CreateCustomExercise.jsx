@@ -1,24 +1,30 @@
 // src/pages/CreateCustomExercise.jsx
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { createPageUrl } from '@/utils';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 
 // ✅ Supabase Entities
-import { Exercise } from '@/api/entities';
+import { Exercise } from "@/api/entities";
 
-// ✅ ذكاء اصطناعي عبر aiclient (مفتاح OpenAI من Vercel env)
-import { InvokeLLM } from '@/api/aiclient';
+// ✅ ذكاء اصطناعي عبر integrations (مفتاح OpenAI من Vercel env)
+import { InvokeLLM } from "@/api/integrations";
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
-import { ArrowLeft, Sparkles, Wand2, FileText, AlertCircle, BookOpen } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
+import {
+  ArrowLeft,
+  Sparkles,
+  Wand2,
+  FileText,
+  AlertCircle,
+  BookOpen,
+} from "lucide-react";
+import { motion } from "framer-motion";
 
 const TEXT_TYPES = [
   { value: "علمي", label: "نص علمي 🔬", description: "معلومات علمية مبسطة" },
@@ -27,13 +33,17 @@ const TEXT_TYPES = [
   { value: "حواري", label: "نص حواري 💬", description: "حوار بين شخصيات" },
   { value: "تاريخي", label: "نص تاريخي 🏛️", description: "حدث أو شخصية تاريخية" },
   { value: "ديني", label: "نص ديني 📿", description: "حديث أو قصة دينية" },
-  { value: "نص خاص", label: "نص من اختيارك ✍️", description: "اكتب أو الصق نصك الخاص" },
+  {
+    value: "نص خاص",
+    label: "نص من اختيارك ✍️",
+    description: "اكتب أو الصق نصك الخاص",
+  },
 ];
 
 export default function CreateCustomExercisePage() {
   const navigate = useNavigate();
-  const [textType, setTextType] = useState('');
-  const [customText, setCustomText] = useState('');
+  const [textType, setTextType] = useState("");
+  const [customText, setCustomText] = useState("");
   const [wordCount, setWordCount] = useState([80]);
   const [isLoading, setIsLoading] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
@@ -63,13 +73,13 @@ export default function CreateCustomExercisePage() {
 
       const correctedText = await InvokeLLM({ prompt: reviewPrompt });
 
-      if (typeof correctedText === 'string' && correctedText.trim()) {
+      if (typeof correctedText === "string" && correctedText.trim()) {
         return correctedText.trim();
       } else {
         return originalText;
       }
     } catch (error) {
-      console.error('Text review failed:', error);
+      console.error("Text review failed:", error);
       // Fallback للنص الأصلي في حال خطأ (بما في ذلك حدود الاستخدام)
       return originalText;
     } finally {
@@ -79,12 +89,12 @@ export default function CreateCustomExercisePage() {
 
   const handleGenerate = async () => {
     if (!textType) {
-      setError('يرجى اختيار نوع النص.');
+      setError("يرجى اختيار نوع النص.");
       return;
     }
 
-    if (textType === 'نص خاص' && !customText.trim()) {
-      setError('يرجى كتابة النص الخاص بك.');
+    if (textType === "نص خاص" && !customText.trim()) {
+      setError("يرجى كتابة النص الخاص بك.");
       return;
     }
 
@@ -92,20 +102,23 @@ export default function CreateCustomExercisePage() {
     setIsLoading(true);
 
     try {
-      let finalText = '';
+      let finalText = "";
 
-      if (textType === 'نص خاص') {
+      if (textType === "نص خاص") {
         // الطالب يكتب النص بنفسه → نراجع ونشكّل
         finalText = await reviewAndCorrectText(customText.trim());
       } else {
-        const selectedType = TEXT_TYPES.find(t => t.value === textType);
+        const selectedType = TEXT_TYPES.find((t) => t.value === textType);
 
         // مستوى التعقيد حسب عدد الكلمات
-        let complexityInstruction = "استخدم جملاً بسيطة ومفردات سهلة (مستوى مبتدئ).";
+        let complexityInstruction =
+          "استخدم جملاً بسيطة ومفردات سهلة (مستوى مبتدئ).";
         if (wordCount[0] > 150)
-          complexityInstruction = "استخدم جملاً مركبة، وتراكيب بلاغية قوية، ومفردات غنية (مستوى متقدم).";
+          complexityInstruction =
+            "استخدم جملاً مركبة، وتراكيب بلاغية قوية، ومفردات غنية (مستوى متقدم).";
         else if (wordCount[0] > 80)
-          complexityInstruction = "استخدم جملاً متوسطة الطول، واربط بينها بأدوات ربط مناسبة (مستوى متوسط).";
+          complexityInstruction =
+            "استخدم جملاً متوسطة الطول، واربط بينها بأدوات ربط مناسبة (مستوى متوسط).";
 
         const prompt = `
 بصفتك خبيراً لغوياً، أنشئ نصاً ${textType}اً باللغة العربية الفُصحى.
@@ -128,34 +141,39 @@ export default function CreateCustomExercisePage() {
         try {
           const generatedText = await InvokeLLM({ prompt });
 
-          if (typeof generatedText !== 'string' || generatedText.trim() === '') {
-            throw new Error('فشل الذكاء الاصطناعي في إنشاء النص.');
+          if (
+            typeof generatedText !== "string" ||
+            generatedText.trim() === ""
+          ) {
+            throw new Error("فشل الذكاء الاصطناعي في إنشاء النص.");
           }
 
           finalText = await reviewAndCorrectText(generatedText.trim());
         } catch (llmError) {
           // رسالة خاصة لو انتهى حد الاستخدام
-          if (llmError.message && llmError.message.includes('limit')) {
-            throw new Error('عذراً، وصلنا للحد الأقصى من استخدام الذكاء الاصطناعي. يرجى اختيار "نص خاص" وكتابة النص بنفسك.');
+          if (llmError.message && llmError.message.includes("limit")) {
+            throw new Error(
+              'عذراً، وصلنا للحد الأقصى من استخدام الذكاء الاصطناعي. يرجى اختيار "نص خاص" وكتابة النص بنفسك.'
+            );
           }
           throw llmError;
         }
       }
 
       if (!finalText || finalText.length < 20) {
-        throw new Error('النص المُنشأ قصير جداً أو غير صالح.');
+        throw new Error("النص المُنشأ قصير جداً أو غير صالح.");
       }
 
       // 🔢 تقدير المستوى والمرحلة
-      let level = 'مبتدئ';
+      let level = "مبتدئ";
       let stage = 1;
       const actualWordCount = finalText.split(/\s+/).length;
 
       if (actualWordCount >= 150) {
-        level = 'متقدم';
+        level = "متقدم";
         stage = Math.min(10, Math.floor(actualWordCount / 50));
       } else if (actualWordCount >= 100) {
-        level = 'متوسط';
+        level = "متوسط";
         stage = Math.min(7, Math.floor(actualWordCount / 30));
       } else {
         stage = Math.min(5, Math.floor(actualWordCount / 20));
@@ -166,20 +184,20 @@ export default function CreateCustomExercisePage() {
         sentence: finalText,
         level: level,
         stage: stage,
-        category: textType === 'نص خاص' ? 'نص مخصص' : textType,
+        category: textType === "نص خاص" ? "نص مخصص" : textType,
         difficulty_points: Math.round(actualWordCount / 10),
         word_count: actualWordCount,
       });
 
       const urlParams = new URLSearchParams(window.location.search);
-      const studentId = urlParams.get('studentId');
+      const studentId = urlParams.get("studentId");
 
       navigate(
         createPageUrl(`Exercise?id=${newExercise.id}&studentId=${studentId}`)
       );
     } catch (err) {
       console.error(err);
-      setError('حدث خطأ أثناء إنشاء التمرين. يرجى المحاولة مرة أخرى.');
+      setError("حدث خطأ أثناء إنشاء التمرين. يرجى المحاولة مرة أخرى.");
     } finally {
       setIsLoading(false);
     }
