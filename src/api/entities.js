@@ -1,27 +1,144 @@
-import { base44 } from './base44Client';
+// src/api/entities.js
 
+import { supabase } from "./supabaseClient";
 
-export const Student = base44.entities.Student;
+// ✳️ مساعد عام للتعامل مع الأخطاء
+async function handleQuery(promise, context = "Supabase") {
+  const { data, error } = await promise;
+  if (error) {
+    console.error(`❌ ${context} error:`, error);
+    throw error;
+  }
+  return data;
+}
 
-export const Exercise = base44.entities.Exercise;
+// ✅ Factories بسيطة لكل جدول
+function createEntity(tableName) {
+  return {
+    async list(filters = {}) {
+      let query = supabase.from(tableName).select("*");
+      if (filters && Object.keys(filters).length > 0) {
+        query = query.match(filters);
+      }
+      return await handleQuery(query, `${tableName}.list`);
+    },
 
-export const Recording = base44.entities.Recording;
+    async get(id) {
+      return await handleQuery(
+        supabase.from(tableName).select("*").eq("id", id).single(),
+        `${tableName}.get`
+      );
+    },
 
-export const Lesson = base44.entities.Lesson;
+    async create(payload) {
+      return await handleQuery(
+        supabase.from(tableName).insert(payload).select("*").single(),
+        `${tableName}.create`
+      );
+    },
 
-export const StudentQuestion = base44.entities.StudentQuestion;
+    async update(id, payload) {
+      return await handleQuery(
+        supabase.from(tableName).update(payload).eq("id", id).select("*").single(),
+        `${tableName}.update`
+      );
+    },
 
-export const StudentGroup = base44.entities.StudentGroup;
+    async remove(id) {
+      // في الغالب لن تحتاج للـ data هنا، لكن نرجعه احتياطًا
+      return await handleQuery(
+        supabase.from(tableName).delete().eq("id", id),
+        `${tableName}.remove`
+      );
+    },
+  };
+}
 
-export const SystemSetting = base44.entities.SystemSetting;
+// 🧑‍🎓 الطلاب
+export const Student = createEntity("students");
 
-export const FamilyChallenge = base44.entities.FamilyChallenge;
+// 📚 التمارين
+export const Exercise = createEntity("exercises");
 
-export const ClassAnnouncement = base44.entities.ClassAnnouncement;
+// 🔊 التسجيلات الصوتية
+export const Recording = createEntity("recordings");
 
-export const Certificate = base44.entities.Certificate;
+// 📝 الدروس
+export const Lesson = createEntity("lessons");
 
+// ❓ أسئلة الطلاب
+export const StudentQuestion = createEntity("student_questions");
 
+// 👨‍👩‍👧‍👦 مجموعات الطلاب / العائلة
+export const StudentGroup = createEntity("student_groups");
 
-// auth sdk:
-export const User = base44.auth;
+// ⚙️ إعدادات النظام (مثل مفتاح OpenAI المخزن في قاعدة البيانات إن استخدمته)
+export const SystemSetting = createEntity("system_settings");
+
+// 🏆 تحديات عائلية
+export const FamilyChallenge = createEntity("family_challenges");
+
+// 📢 إعلانات الصف
+export const ClassAnnouncement = createEntity("class_announcements");
+
+// 🎓 الشهادات
+export const Certificate = createEntity("certificates");
+
+// 🧑‍💻 المستخدم (Auth) عبر Supabase
+export const User = {
+  async getCurrentUser() {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+    if (error) {
+      console.error("auth.getUser error:", error);
+      throw error;
+    }
+    return user;
+  },
+
+  async signUp({ email, password, ...meta }) {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: meta,
+      },
+    });
+    if (error) {
+      console.error("auth.signUp error:", error);
+      throw error;
+    }
+    return data;
+  },
+
+  async signInWithPassword({ email, password }) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      console.error("auth.signIn error:", error);
+      throw error;
+    }
+    return data;
+  },
+
+  async signOut() {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("auth.signOut error:", error);
+      throw error;
+    }
+  },
+
+  onAuthStateChange(callback) {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      callback(event, session);
+    });
+    return subscription;
+  },
+};
