@@ -8,6 +8,10 @@ It's a Vite+React app that communicates with the Base44 API.
 
 ```bash
 npm install
+npm install
+git add package.json package-lock.json
+git commit -m "Add supabase dependency"
+git push
 npm run dev
 ```
 
