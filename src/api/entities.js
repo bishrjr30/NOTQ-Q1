@@ -1,4 +1,5 @@
 // src/api/entities.js
+console.log("✅ entities.js NEW loaded v2");
 import { supabase } from "./supabaseClient";
 
 const ENTITIES_VERSION = "entities.js v2 (fix order + delete alias)";
