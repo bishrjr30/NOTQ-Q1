@@ -1,6 +1,7 @@
 // src/api/entities.js
-
 import { supabase } from "./supabaseClient";
+
+const ENTITIES_VERSION = "entities.js v2 (fix order + delete alias)";
 
 /* =========================================================
    🧰 Helper عام للتعامل مع أخطاء Supabase
@@ -8,53 +9,94 @@ import { supabase } from "./supabaseClient";
 async function handleQuery(promise, context = "Supabase") {
   const { data, error } = await promise;
   if (error) {
-    console.error(`❌ ${context} error:`, error);
+    console.error(`❌ ${context} error:`, {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
     throw error;
   }
   return data;
 }
 
 /* =========================================================
+   🔽 تطبيق ترتيب (order) على Query
+   يقبل:
+   "-created_date" => created_date DESC
+   "+created_date" أو "created_date" => created_date ASC
+========================================================= */
+function applyOrder(query, order) {
+  if (!order) return query;
+
+  // String syntax: "-col" / "+col" / "col"
+  if (typeof order === "string") {
+    let col = order;
+    let ascending = true;
+
+    if (order.startsWith("-")) {
+      col = order.slice(1);
+      ascending = false;
+    } else if (order.startsWith("+")) {
+      col = order.slice(1);
+      ascending = true;
+    }
+
+    if (!col) return query;
+    return query.order(col, { ascending });
+  }
+
+  // Object syntax: { column: "created_date", ascending: false }
+  if (typeof order === "object" && order.column) {
+    return query.order(order.column, { ascending: order.ascending !== false });
+  }
+
+  return query;
+}
+
+/* =========================================================
    🏭 Factory لإنشاء CRUD لأي جدول
 ========================================================= */
 function createEntity(tableName) {
-  return {
+  const entity = {
     /**
-     * list تدعم:
-     * - list() => كل البيانات
-     * - list({a:1}) => match filters
-     * - list("-created_date") => order desc by created_date
-     * - list({a:1}, { order:"-x", limit:10 }) => filters + order + limit
+     * list يمكنه استقبال:
+     * - list() => كل السجلات
+     * - list({ grade: "الصف الثالث" }) => فلاتر
+     * - list("-created_date") => ترتيب تنازلي
+     * - list({ grade:"..." }, "-created_date") => فلاتر + ترتيب
      */
-    async list(arg1 = {}, arg2 = {}) {
+    async list(arg1 = {}, arg2 = undefined) {
+      // لطباعة سريعة تؤكد أن النسخة الجديدة اشتغلت
+      if (typeof window !== "undefined") {
+        // مرة واحدة فقط
+        if (!window.__ENTITIES_VER_LOGGED__) {
+          window.__ENTITIES_VER_LOGGED__ = true;
+          console.info(ENTITIES_VERSION);
+        }
+      }
+
+      let filters = {};
+      let order = undefined;
+
+      if (typeof arg1 === "string") {
+        order = arg1;
+        filters = {};
+      } else {
+        filters = arg1 || {};
+        order = arg2;
+      }
+
+      // دعم: لو أحد مرّر order داخل filters بالغلط
+      const { orderBy, order: orderInFilters, ...pureFilters } =
+        filters && typeof filters === "object" ? filters : {};
+
       let query = supabase.from(tableName).select("*");
 
-      let filters = arg1;
-      let options = arg2;
+      query = applyOrder(query, order || orderBy || orderInFilters);
 
-      // لو جاءنا string مثل "-created_date" أو "created_date"
-      if (typeof arg1 === "string") {
-        options = { order: arg1 };
-        filters = {};
-      }
-
-      // Filters
-      if (filters && typeof filters === "object" && Object.keys(filters).length > 0) {
-        query = query.match(filters);
-      }
-
-      // Order
-      if (options?.order && typeof options.order === "string") {
-        const col = options.order.startsWith("-")
-          ? options.order.slice(1)
-          : options.order;
-        const ascending = !options.order.startsWith("-");
-        query = query.order(col, { ascending });
-      }
-
-      // Limit
-      if (options?.limit && Number.isFinite(options.limit)) {
-        query = query.limit(options.limit);
+      if (pureFilters && Object.keys(pureFilters).length > 0) {
+        query = query.match(pureFilters);
       }
 
       return await handleQuery(query, `${tableName}.list`);
@@ -76,12 +118,7 @@ function createEntity(tableName) {
 
     async update(id, payload) {
       return await handleQuery(
-        supabase
-          .from(tableName)
-          .update(payload)
-          .eq("id", id)
-          .select("*")
-          .single(),
+        supabase.from(tableName).update(payload).eq("id", id).select("*").single(),
         `${tableName}.update`
       );
     },
@@ -93,45 +130,27 @@ function createEntity(tableName) {
       );
     },
 
-    // ✅ Alias لأن بعض ملفاتك تستخدم delete()
+    // ✅ Alias لأن بعض صفحاتك تستعمل delete بدل remove
     async delete(id) {
-      return await this.remove(id);
+      return await entity.remove(id);
     },
   };
+
+  return entity;
 }
 
 /* =========================================================
    📦 الكيانات (Tables)
 ========================================================= */
-
-// 🧑‍🎓 الطلاب
 export const Student = createEntity("students");
-
-// 📚 التمارين
 export const Exercise = createEntity("exercises");
-
-// 🔊 التسجيلات الصوتية
 export const Recording = createEntity("recordings");
-
-// 📝 الدروس
 export const Lesson = createEntity("lessons");
-
-// ❓ أسئلة الطلاب
 export const StudentQuestion = createEntity("student_questions");
-
-// 👨‍👩‍👧‍👦 مجموعات / عائلة
 export const StudentGroup = createEntity("student_groups");
-
-// ⚙️ إعدادات النظام
 export const SystemSetting = createEntity("system_settings");
-
-// 🏆 تحديات عائلية
 export const FamilyChallenge = createEntity("family_challenges");
-
-// 📢 إعلانات الصف
 export const ClassAnnouncement = createEntity("class_announcements");
-
-// 🎓 الشهادات
 export const Certificate = createEntity("certificates");
 
 /* =========================================================
@@ -139,12 +158,9 @@ export const Certificate = createEntity("certificates");
 ========================================================= */
 export const User = {
   async getCurrentUser() {
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
+    const { data, error } = await supabase.auth.getUser();
     if (error) throw error;
-    return user;
+    return data.user;
   },
 
   async signUp({ email, password, ...meta }) {
@@ -172,18 +188,15 @@ export const User = {
   },
 
   onAuthStateChange(callback) {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
       callback(event, session);
     });
-    return subscription;
+    return data.subscription;
   },
 };
 
 /* =========================================================
    🤖 InvokeLLM — استدعاء الذكاء الاصطناعي (Vercel API)
-   ⚠️ لا يوجد مفتاح هنا، كله آمن عبر API Route
 ========================================================= */
 export async function InvokeLLM({ prompt, model = "gpt-4o-mini" }) {
   const res = await fetch("/api/llm", {
