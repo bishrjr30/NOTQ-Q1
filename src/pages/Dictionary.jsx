@@ -52,6 +52,7 @@ export default function DictionaryPage() {
         `,
         response_json_schema: {
           type: "object",
+          additionalProperties: false, // ✅ هذا هو الإصلاح الأساسي
           properties: {
             word_vowelled: { type: "string" },
             definition: { type: "string" },
@@ -69,7 +70,7 @@ export default function DictionaryPage() {
         },
       });
 
-      // الحماية لو رجع نص عادي بدلاً من JSON (احتياط)
+      // احتياط: لو رجع نص بدل JSON
       let parsed = response;
       if (typeof response === "string") {
         try {
@@ -191,16 +192,14 @@ export default function DictionaryPage() {
                       التحليل الصوتي:
                     </h3>
                     <div className="flex flex-wrap gap-2 justify-end">
-                      {result.breakdown
-                        ?.split("-")
-                        .map((part, idx) => (
-                          <span
-                            key={idx}
-                            className="bg-white text-blue-700 px-3 py-1 rounded-lg font-mono text-lg shadow-sm"
-                          >
-                            {part.trim()}
-                          </span>
-                        ))}
+                      {result.breakdown?.split("-").map((part, idx) => (
+                        <span
+                          key={idx}
+                          className="bg-white text-blue-700 px-3 py-1 rounded-lg font-mono text-lg shadow-sm"
+                        >
+                          {part.trim()}
+                        </span>
+                      ))}
                     </div>
                   </div>
 
@@ -215,9 +214,7 @@ export default function DictionaryPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() =>
-                          speakText(result.example_sentence)
-                        }
+                        onClick={() => speakText(result.example_sentence)}
                         className="text-green-700 hover:bg-green-100"
                       >
                         <Volume2 className="w-4 h-4 ml-1" />
