@@ -1918,5 +1918,152 @@ function RecordingsTab() {
               </span>
             </div>
           </div>
+          <div className="space-y-1">
+            <Label className="arabic-text text-sm text-slate-700">تعليقات المعلم</Label>
+            <div className="flex items-center gap-2 justify-end">
+              <Switch checked={onlyWithComments} onCheckedChange={setOnlyWithComments} />
+              <span className="text-xs text-slate-700 arabic-text">
+                إظهار التسجيلات التي تحتوي على تعليق فقط
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Recordings list */}
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="arabic-text text-right text-lg flex items-center gap-2">
+            <Mic className="w-5 h-5 text-slate-500" />
+            تسجيلات الطلاب ({filteredRecordings.length})
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="space-y-3">
+          {isLoading && (
+            <div className="text-center py-4">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-500" />
+            </div>
+          )}
+
+          {!isLoading && filteredRecordings.length === 0 && (
+            <div className="text-center py-8 text-slate-500 arabic-text">
+              لا توجد تسجيلات مطابقة للتصفية الحالية.
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-right">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الطالب</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">التاريخ</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الدرجة</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">النص المقروء</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">تعليق المعلم</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الصوت</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredRecordings.map((r) => {
+                  const st = getStudentById(r.student_id);
+                  const readText =
+                    r.analysis_details?.original_text ||
+                    r.analysis_details?.text ||
+                    "";
+
+                  const dateStr = new Date(r.created_date).toLocaleDateString("ar-AE", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  });
+
+                  const scoreColor =
+                    r.score >= 90
+                      ? "bg-emerald-100 text-emerald-800"
+                      : r.score >= 70
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-red-100 text-red-800";
+
+                  return (
+                    <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50/60 align-top">
+                      <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text whitespace-nowrap">
+                        {st?.name}
+                        <div className="text-[11px] text-slate-500">{st?.grade}</div>
+                      </td>
+
+                      <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
+                        {dateStr}
+                      </td>
+
+                      <td className="py-2 px-3 text-xs text-center">
+                        {editScoreRecordingId === r.id ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <Input
+                              type="number"
+                              value={editScore}
+                              onChange={(e) => setEditScore(e.target.value)}
+                              className="h-8 w-16 text-center text-xs"
+                            />
+                            <Button
+                              className="px-2 py-1 text-xs"
+                              onClick={() => handleManualScoreSave(r.id)}
+                            >
+                              حفظ
+                            </Button>
+                          </div>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold cursor-pointer ${scoreColor}`}
+                            onClick={() => handleScoreClick(r)}
+                            title="اضغط لتعديل الدرجة يدويًا"
+                          >
+                            {r.score != null ? `${r.score}%` : "لا يوجد"}
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-2 px-3 text-xs text-slate-800 arabic-text max-w-sm">
+                        <div className="bg-slate-50 rounded-lg p-2">
+                          <p className="line-clamp-3">{readText}</p>
+                          {r.feedback && (
+                            <p className="mt-1 text-[11px] text-blue-700">
+                              🤖 {r.feedback}
+                            </p>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="py-2 px-3 text-xs text-slate-800 arabic-text max-w-xs">
+                        <div className="space-y-2">
+                          {r.teacher_comment && (
+                            <div className="bg-emerald-50 rounded p-2 text-[11px] text-emerald-800">
+                              👩‍🏫 {r.teacher_comment}
+                            </div>
+                          )}
+
+                          {r.teacher_audio_comment && (
+                            <audio controls src={r.teacher_audio_comment} className="w-full" />
+                          )}
+
+                          <AudioCommentModal recording={r} />
+                        </div>
+                      </td>
+
+                      <td className="py-2 px-3 text-xs text-slate-700">
+                        <audio controls src={r.audio_url} className="w-full" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
        
