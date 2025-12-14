@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Student,
   Recording,
@@ -6,7 +6,7 @@ import {
   StudentGroup,
   Exercise,
   SystemSetting,
-  InvokeLLM
+  InvokeLLM,
 } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,35 +14,28 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Tabs, TabsContent, TabsList, TabsTrigger
-} from "@/components/ui/tabs";
-import {
+  AlertTriangle,
+  ArrowLeft,
   BarChart3,
   BookOpen,
   CheckCircle,
-  Download,
-  Edit,
-  Eye,
   Filter,
-  ListChecks,
+  GraduationCap,
   Loader2,
+  Megaphone,
   Mic,
   Plus,
+  RefreshCw,
   Search,
-  Trash2,
+  Settings,
+  Star,
+  Trophy,
   Users,
   Volume2,
-  Star,
-  Award,
-  AlertTriangle,
-  BarChart2,
-  Settings,
-  MessageCircle,
-  RefreshCw,
-  ArrowLeft,
-  Calendar,
-  FileSpreadsheet
+  Trash2,
+  ListChecks,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -50,13 +43,20 @@ import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion } from "framer-motion";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import AudioCommentModal from "../components/teacher/AudioCommentModal";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 
-/* ✅ بوابة دخول المعلم (حماية بسيطة بكلمة مرور) */
+/* =========================
+   ✅ بوابة دخول المعلم (حماية بسيطة بكلمة مرور)
+   ========================= */
 function TeacherGate({ children }) {
   const [pw, setPw] = useState("");
   const [error, setError] = useState("");
@@ -67,7 +67,6 @@ function TeacherGate({ children }) {
     if (pw === "teacher246") {
       sessionStorage.setItem("teacher_authed", "1");
       setError("");
-      // أبسط طريقة بدون تعقيد: نعيد تحميل الصفحة ليدخل للوحة
       window.location.reload();
     } else {
       setError("كلمة المرور غير صحيحة.");
@@ -94,7 +93,9 @@ function TeacherGate({ children }) {
               autoComplete="current-password"
             />
             {error && (
-              <p className="text-sm text-red-600 arabic-text text-right">{error}</p>
+              <p className="text-sm text-red-600 arabic-text text-right">
+                {error}
+              </p>
             )}
             <Button type="submit" className="arabic-text w-full">
               دخول
@@ -102,7 +103,8 @@ function TeacherGate({ children }) {
           </form>
 
           <p className="text-xs text-slate-500 arabic-text text-right">
-            ملاحظة: هذه حماية بسيطة على الواجهة فقط. للحماية القوية نحتاج تسجيل دخول فعلي.
+            ملاحظة: هذه حماية بسيطة على الواجهة فقط. للحماية القوية نحتاج تسجيل
+            دخول فعلي.
           </p>
         </CardContent>
       </Card>
@@ -110,6 +112,225 @@ function TeacherGate({ children }) {
   );
 }
 
+/* =========================
+   ✅ هيدر علوي بشكل قريب من الصور
+   ========================= */
+function HeroHeader({ onBack }) {
+  const [hideImg, setHideImg] = useState(false);
+
+  return (
+    <div className="rounded-2xl overflow-hidden shadow-lg bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500">
+      <div className="px-4 py-5 md:px-8 md:py-7 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onBack}
+            className="rounded-full bg-white/90 hover:bg-white"
+            title="رجوع"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+
+          <div className="text-right">
+            <div className="text-white/95 arabic-text font-bold text-xl md:text-2xl">
+              منصة تعلم القراءة في اللغة العربية
+            </div>
+            <div className="text-white/80 arabic-text text-xs md:text-sm">
+              لوحة تحكم المعلم
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {!hideImg ? (
+            <img
+              src="/logo.png"
+              alt="logo"
+              className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-white/90 p-1"
+              onError={() => setHideImg(true)}
+            />
+          ) : (
+            <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-white/90 flex items-center justify-center">
+              <GraduationCap className="w-6 h-6 text-indigo-700" />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   ✅ مخطط رادار بسيط (SVG) بدون مكتبات
+   ========================= */
+function RadarChartCard({ values, labels, title, subtitle }) {
+  // values: [0..100]
+  const size = 260;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 90;
+
+  const points = useMemo(() => {
+    const n = Math.max(labels.length, 3);
+    return labels.map((_, i) => {
+      const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+      const v = Math.max(0, Math.min(100, values[i] ?? 0)) / 100;
+      const x = cx + Math.cos(angle) * r * v;
+      const y = cy + Math.sin(angle) * r * v;
+      return `${x},${y}`;
+    });
+  }, [labels, values]);
+
+  const gridPolys = [0.25, 0.5, 0.75, 1].map((k) => {
+    const n = Math.max(labels.length, 3);
+    const pts = labels.map((_, i) => {
+      const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+      const x = cx + Math.cos(angle) * r * k;
+      const y = cy + Math.sin(angle) * r * k;
+      return `${x},${y}`;
+    });
+    return pts.join(" ");
+  });
+
+  const axes = useMemo(() => {
+    const n = Math.max(labels.length, 3);
+    return labels.map((_, i) => {
+      const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+      return { x, y };
+    });
+  }, [labels]);
+
+  return (
+    <Card className="border-0 shadow-lg bg-white/90">
+      <CardHeader>
+        <CardTitle className="arabic-text text-right text-lg flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-slate-500" />
+            {title}
+          </span>
+        </CardTitle>
+        {subtitle ? (
+          <p className="arabic-text text-right text-xs text-slate-500 mt-1">
+            {subtitle}
+          </p>
+        ) : null}
+      </CardHeader>
+
+      <CardContent className="flex flex-col items-center">
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          {/* grid */}
+          {gridPolys.map((p, idx) => (
+            <polygon
+              key={idx}
+              points={p}
+              fill="none"
+              stroke="rgba(15,23,42,0.15)"
+              strokeWidth="1"
+            />
+          ))}
+
+          {/* axes */}
+          {axes.map((a, idx) => (
+            <line
+              key={idx}
+              x1={cx}
+              y1={cy}
+              x2={a.x}
+              y2={a.y}
+              stroke="rgba(15,23,42,0.15)"
+              strokeWidth="1"
+            />
+          ))}
+
+          {/* value poly */}
+          <polygon
+            points={points.join(" ")}
+            fill="rgba(99,102,241,0.25)"
+            stroke="rgba(99,102,241,0.85)"
+            strokeWidth="2"
+          />
+        </svg>
+
+        <div className="w-full mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
+          {labels.map((lab, i) => (
+            <div
+              key={lab}
+              className="text-xs arabic-text text-right bg-slate-50 border border-slate-100 rounded-lg px-2 py-2"
+            >
+              <div className="text-slate-600">{lab}</div>
+              <div className="font-bold text-slate-900">
+                {Math.round(values[i] ?? 0)}%
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* =========================
+   ✅ بطاقات إحصائيات أعلى الصفحة (مثل الصور)
+   ========================= */
+function StatsCards({ stats }) {
+  const cards = [
+    {
+      title: "نسبة التحسن",
+      value: stats.improvementPct != null ? `${stats.improvementPct}%` : "-",
+      icon: <Star className="w-5 h-5 text-white" />,
+      bg: "from-purple-600 to-indigo-600",
+    },
+    {
+      title: "التسجيلات الصوتية",
+      value: stats.totalRecordings ?? 0,
+      icon: <Mic className="w-5 h-5 text-white" />,
+      bg: "from-orange-500 to-amber-500",
+    },
+    {
+      title: "الصفوف/المجموعات",
+      value: stats.totalGroups ?? 0,
+      icon: <Users className="w-5 h-5 text-white" />,
+      bg: "from-emerald-500 to-teal-500",
+    },
+    {
+      title: "إجمالي الطلاب",
+      value: stats.totalStudents ?? 0,
+      icon: <Users className="w-5 h-5 text-white" />,
+      bg: "from-sky-600 to-blue-600",
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {cards.map((c) => (
+        <div
+          key={c.title}
+          className={cn(
+            "rounded-2xl p-4 text-white shadow-lg bg-gradient-to-r",
+            c.bg
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-right">
+              <div className="arabic-text text-xs text-white/90">{c.title}</div>
+              <div className="arabic-text text-2xl font-bold">{c.value}</div>
+            </div>
+            <div className="w-10 h-10 rounded-2xl bg-white/15 flex items-center justify-center">
+              {c.icon}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* =========================
+   ✅ إعدادات (نفس وظيفتك) لكن بشكل أقرب للصور
+   ========================= */
 function SettingsTab() {
   const [apiKey, setApiKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -122,7 +343,7 @@ function SettingsTab() {
   const loadSettings = async () => {
     try {
       const settings = await SystemSetting.list();
-      const keySetting = settings.find(s => s.key === "openai_api_key");
+      const keySetting = settings.find((s) => s.key === "openai_api_key");
       if (keySetting) setApiKey(keySetting.value || "");
     } catch (e) {
       console.error("Failed to load settings", e);
@@ -133,7 +354,7 @@ function SettingsTab() {
     setIsLoading(true);
     try {
       const settings = await SystemSetting.list();
-      const existing = settings.find(s => s.key === "openai_api_key");
+      const existing = settings.find((s) => s.key === "openai_api_key");
 
       if (existing) {
         await SystemSetting.update(existing.id, { value: apiKey });
@@ -141,11 +362,12 @@ function SettingsTab() {
         await SystemSetting.create({
           key: "openai_api_key",
           value: apiKey,
-          description: "OpenAI API Key for audio transcription and analysis"
+          description:
+            "OpenAI API Key for audio transcription and analysis (teacher dashboard)",
         });
       }
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      setTimeout(() => setSaved(false), 2500);
     } catch (e) {
       console.error("Failed to save settings", e);
       alert("حدث خطأ أثناء حفظ الإعدادات");
@@ -155,59 +377,405 @@ function SettingsTab() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="arabic-text text-lg">إعدادات النظام المتقدمة</span>
-            <Settings className="w-5 h-5 text-slate-500" />
+          <CardTitle className="arabic-text text-right text-lg flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Settings className="w-5 h-5 text-slate-500" />
+              إعدادات الذكاء الاصطناعي
+            </span>
           </CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-4">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-right arabic-text text-sm leading-relaxed">
-            <p className="font-semibold text-slate-800 mb-1">🔐 مفتاح OpenAI API</p>
-            <p className="text-slate-600">
-              هذا المفتاح يُستخدم لتحويل الصوت إلى نص وتحليل النطق في صفحة <strong>التدريب الخاص</strong>.
-              يتم تخزينه في قاعدة البيانات بشكل آمن ولا يظهر للطلاب أو أولياء الأمور.
-            </p>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-right arabic-text text-sm">
+            <div className="font-semibold text-amber-800 mb-1 flex items-center gap-2 justify-end">
+              <AlertTriangle className="w-4 h-4" />
+              هام جدًا لضمان عمل التحليل
+            </div>
+            <div className="text-amber-700">
+              أدخل مفتاح OpenAI الخاص بك (Your Own Key) لضمان نتائج دقيقة. المفاتيح
+              غير الصحيحة أو المقيّدة ستسبب توقف ميزات الذكاء الاصطناعي.
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="arabic-text font-semibold text-right block text-slate-700">
-              مفتاح OpenAI API
-            </Label>
-            <Input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
-              className="font-mono text-sm"
-              autoComplete="off"
-            />
-            <p className="text-xs text-slate-400 arabic-text text-right">
-              تأكد من أن خطتك في OpenAI تسمح باستخدام Whisper و GPT-4o.
-            </p>
-          </div>
+          <div className="flex flex-col md:flex-row gap-3 md:items-end">
+            <div className="flex-1 space-y-2">
+              <Label className="arabic-text text-right block text-slate-700">
+                OpenAI API Key (sk-...)
+              </Label>
+              <Input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="font-mono text-sm"
+                placeholder="sk-..."
+                autoComplete="off"
+              />
+            </div>
 
-          <Button
-            onClick={handleSave}
-            disabled={isLoading}
-            className="arabic-text w-full md:w-auto"
-          >
-            {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            حفظ الإعدادات
-          </Button>
+            <div className="md:w-40">
+              <Button
+                onClick={handleSave}
+                disabled={isLoading}
+                className="arabic-text w-full"
+              >
+                {isLoading && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                حفظ
+              </Button>
+            </div>
+          </div>
 
           {saved && (
-            <p className="text-xs text-green-600 arabic-text text-right">
-              ✅ تم حفظ الإعدادات بنجاح.
-            </p>
+            <div className="arabic-text text-right text-xs text-green-600">
+              ✅ تم حفظ المفتاح بنجاح.
+            </div>
           )}
         </CardContent>
       </Card>
     </div>
   );
 }
+
+/* =========================
+   ✅ لوحة الصدارة (بدون كسر قواعد البيانات)
+   - إذا كان عندك field show_in_leaderboard في Student سيتم حفظه.
+   - إذا غير موجود: نخليه محلي (localStorage) فقط.
+   ========================= */
+function LeaderboardTab({ students }) {
+  const { toast } = useToast();
+
+  const localKey = "leaderboard_visibility_map_v1";
+  const [localMap, setLocalMap] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(localKey) || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  const hasServerField = useMemo(() => {
+    const s0 = students?.[0];
+    return s0 && Object.prototype.hasOwnProperty.call(s0, "show_in_leaderboard");
+  }, [students]);
+
+  const sorted = useMemo(() => {
+    const arr = [...(students || [])];
+    // ترتيب بنقاط: total_exercises ثم average_score
+    arr.sort((a, b) => {
+      const ap = (a.total_exercises || 0) * 10 + (a.average_score || 0);
+      const bp = (b.total_exercises || 0) * 10 + (b.average_score || 0);
+      return bp - ap;
+    });
+    return arr;
+  }, [students]);
+
+  const isVisible = (s) => {
+    if (hasServerField) return !!s.show_in_leaderboard;
+    return localMap[s.id] !== false; // default true
+  };
+
+  const toggleVisible = async (s) => {
+    const next = !isVisible(s);
+
+    if (hasServerField) {
+      try {
+        await Student.update(s.id, { show_in_leaderboard: next });
+        toast({
+          title: "تم التحديث",
+          description: next ? "تم إظهار الطالب في لوحة الصدارة" : "تم إخفاء الطالب من لوحة الصدارة",
+        });
+      } catch (e) {
+        console.error("Leaderboard toggle failed", e);
+        toast({
+          title: "تعذر الحفظ",
+          description:
+            "يبدو أن قاعدة البيانات لا تدعم هذا الحقل. سيتم حفظه محليًا فقط.",
+          variant: "destructive",
+        });
+        // fallback local
+        const nm = { ...localMap, [s.id]: next };
+        setLocalMap(nm);
+        localStorage.setItem(localKey, JSON.stringify(nm));
+      }
+      return;
+    }
+
+    const nm = { ...localMap, [s.id]: next };
+    setLocalMap(nm);
+    localStorage.setItem(localKey, JSON.stringify(nm));
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="arabic-text text-right text-lg flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-slate-500" />
+              إدارة لوحة الصدارة
+            </span>
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="overflow-x-auto">
+          <table className="w-full border-collapse text-right">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                  #
+                </th>
+                <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                  الطالب
+                </th>
+                <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                  النقاط
+                </th>
+                <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                  الظهور في اللوحة
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((s, idx) => {
+                const points =
+                  (s.total_exercises || 0) * 10 + (s.average_score || 0);
+                const visible = isVisible(s);
+
+                return (
+                  <tr
+                    key={s.id}
+                    className="border-b border-slate-100 hover:bg-slate-50/60"
+                  >
+                    <td className="py-2 px-3 text-xs text-slate-600">
+                      #{idx + 1}
+                    </td>
+                    <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text">
+                      {s.name || "—"}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-700">
+                      {points}
+                    </td>
+                    <td className="py-2 px-3">
+                      <Button
+                        size="sm"
+                        variant={visible ? "default" : "secondary"}
+                        className={cn(
+                          "arabic-text text-xs",
+                          visible ? "bg-emerald-600 hover:bg-emerald-700" : ""
+                        )}
+                        onClick={() => toggleVisible(s)}
+                      >
+                        {visible ? "✅ ظاهر" : "🚫 مخفي"}
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {sorted.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="text-center py-6 text-slate-500 arabic-text"
+                  >
+                    لا توجد بيانات طلاب.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          {!hasServerField && (
+            <div className="mt-3 text-xs arabic-text text-right text-slate-500">
+              ملاحظة: إعدادات “الظهور” محفوظة محليًا فقط (لأنه لا يوجد حقل
+              show_in_leaderboard في جدول الطلاب).
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/* =========================
+   ✅ لوحة الصف (إعلانات بسيطة محلية)
+   ========================= */
+function ClassBoardTab() {
+  const storeKey = "class_board_posts_v1";
+  const [text, setText] = useState("");
+  const [posts, setPosts] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(storeKey) || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const addPost = () => {
+    const t = text.trim();
+    if (!t) return;
+    const p = {
+      id: `${Date.now()}`,
+      text: t,
+      createdAt: new Date().toISOString(),
+    };
+    const next = [p, ...posts];
+    setPosts(next);
+    localStorage.setItem(storeKey, JSON.stringify(next));
+    setText("");
+  };
+
+  const removePost = (id) => {
+    const next = posts.filter((p) => p.id !== id);
+    setPosts(next);
+    localStorage.setItem(storeKey, JSON.stringify(next));
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="arabic-text text-right text-lg flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Megaphone className="w-5 h-5 text-slate-500" />
+              لوحة الصف
+            </span>
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="arabic-text text-right text-sm font-semibold text-slate-800 mb-2">
+              📣 إعلان صفّي جديد
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={addPost} className="arabic-text">
+                إرسال
+              </Button>
+              <Input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                className="text-right arabic-text"
+                placeholder="اكتب إعلانًا للطلاب وأولياء الأمور..."
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {posts.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 arabic-text">
+                لا توجد إعلانات بعد.
+              </div>
+            ) : (
+              posts.map((p) => (
+                <div
+                  key={p.id}
+                  className="rounded-xl border border-slate-200 bg-white p-4 flex items-start justify-between gap-3"
+                >
+                  <div className="text-right">
+                    <div className="arabic-text text-sm text-slate-900">
+                      {p.text}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {new Date(p.createdAt).toLocaleString("ar-AE")}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removePost(p.id)}
+                    title="حذف"
+                  >
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/* =========================
+   ✅ تبويب الدروس (واجهة مثل الصور + زر إنشاء درس)
+   - لا نفترض سكيمة Lesson حتى لا نكسر شيئًا.
+   ========================= */
+function LessonsTab() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="arabic-text text-right text-lg flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-slate-500" />
+              إدارة الدروس المسجلة
+            </span>
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="text-right">
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center mb-3">
+              <BookOpen className="w-7 h-7 text-slate-400" />
+            </div>
+            <div className="arabic-text text-slate-800 font-semibold">
+              لا توجد دروس مسجلة
+            </div>
+            <div className="arabic-text text-slate-500 text-sm mt-1">
+              لم تقم بإنشاء أي دروس بعد
+            </div>
+            <Button
+              className="arabic-text mt-4 bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => navigate(createPageUrl("CreateLesson"))}
+            >
+              إنشاء درس جديد
+            </Button>
+          </div>
+
+          {/* ميزاتك السابقة (التمارين + تمرين طارئ) بداخل الدروس */}
+          <div className="mt-5">
+            <Tabs defaultValue="exercises" className="space-y-3">
+              <TabsList className="bg-white shadow-md rounded-2xl p-1 grid grid-cols-2">
+                <TabsTrigger
+                  value="exercises"
+                  className="arabic-text text-xs md:text-sm"
+                >
+                  <ListChecks className="w-4 h-4 ml-1" />
+                  التمارين
+                </TabsTrigger>
+                <TabsTrigger
+                  value="emergency"
+                  className="arabic-text text-xs md:text-sm"
+                >
+                  <AlertTriangle className="w-4 h-4 ml-1" />
+                  تمرين طارئ
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="exercises">
+                <ExercisesTab />
+              </TabsContent>
+              <TabsContent value="emergency">
+                <EmergencyDrillTab />
+              </TabsContent>
+            </Tabs>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/* =========================
+   ✅ طلاب / مجموعات / تمارين / تسجيلات / تمرين طارئ
+   (نفس كودك تقريبًا، بدون تغيير وظيفي)
+   ========================= */
 
 function StudentsTab({ onSelectStudent }) {
   const [students, setStudents] = useState([]);
@@ -227,7 +795,7 @@ function StudentsTab({ onSelectStudent }) {
     try {
       const [studentList, groupList] = await Promise.all([
         Student.list("-last_activity"),
-        StudentGroup.list()
+        StudentGroup.list(),
       ]);
       setStudents(studentList);
       setGroups(groupList);
@@ -249,10 +817,7 @@ function StudentsTab({ onSelectStudent }) {
           .includes(searchName.trim().toLowerCase());
     }
     if (selectedGroupFilter !== "all") {
-      ok =
-        ok &&
-        s.group_id &&
-        selectedGroupFilter === s.group_id;
+      ok = ok && s.group_id && selectedGroupFilter === s.group_id;
     }
     return ok;
   });
@@ -304,7 +869,7 @@ function StudentsTab({ onSelectStudent }) {
           <CardTitle className="flex items-center justify-between">
             <span className="arabic-text text-lg flex items-center gap-2">
               <Filter className="w-5 h-5 text-slate-500" />
-              تصفية الطلاب
+              إدارة الطلاب
             </span>
             <Button
               variant="ghost"
@@ -321,6 +886,7 @@ function StudentsTab({ onSelectStudent }) {
             </Button>
           </CardTitle>
         </CardHeader>
+
         <CardContent className="grid md:grid-cols-3 gap-4 items-end">
           <div className="space-y-1 text-right">
             <Label className="arabic-text text-sm text-slate-700">
@@ -408,16 +974,33 @@ function StudentsTab({ onSelectStudent }) {
             <table className="w-full text-right border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">الاسم</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">الصف</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">المجموعة</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">آخر نشاط</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">مستوى النطق</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">تمارين</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">المتوسط</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">تفاصيل</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    الاسم
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    الصف
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    المجموعة
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    آخر نشاط
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    المستوى
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    تمارين
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    المتوسط
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    تفاصيل
+                  </th>
                 </tr>
               </thead>
+
               <tbody>
                 {filteredStudents.map((s) => (
                   <React.Fragment key={s.id}>
@@ -476,13 +1059,15 @@ function StudentsTab({ onSelectStudent }) {
                             <div className="flex flex-wrap gap-2">
                               <Badge className="bg-emerald-100 text-emerald-800 arabic-text">
                                 حروف متقنة:{" "}
-                                {s.mastered_letters && s.mastered_letters.length > 0
+                                {s.mastered_letters &&
+                                s.mastered_letters.length > 0
                                   ? s.mastered_letters.join("، ")
                                   : "لا يوجد"}
                               </Badge>
                               <Badge className="bg-orange-100 text-orange-800 arabic-text">
                                 يحتاج تدريب:{" "}
-                                {s.needs_practice_letters && s.needs_practice_letters.length > 0
+                                {s.needs_practice_letters &&
+                                s.needs_practice_letters.length > 0
                                   ? s.needs_practice_letters.join("، ")
                                   : "لا يوجد"}
                               </Badge>
@@ -547,9 +1132,7 @@ function GroupsTab() {
     if (!newGroupName.trim()) return;
     setIsLoading(true);
     try {
-      const g = await StudentGroup.create({
-        name: newGroupName.trim(),
-      });
+      const g = await StudentGroup.create({ name: newGroupName.trim() });
       setGroups((prev) => [g, ...prev]);
       setNewGroupName("");
       toast({
@@ -592,9 +1175,7 @@ function GroupsTab() {
     setIsLoading(true);
     try {
       await StudentGroup.delete(groupId);
-      toast({
-        title: "تم حذف المجموعة",
-      });
+      toast({ title: "تم حذف المجموعة" });
       setGroups((prev) => prev.filter((g) => g.id !== groupId));
     } catch (e) {
       console.error("Delete group failed", e);
@@ -628,7 +1209,7 @@ function GroupsTab() {
           <CardTitle className="flex items-center justify-between">
             <span className="arabic-text text-lg flex items-center gap-2">
               <Users className="w-5 h-5 text-slate-500" />
-              إدارة المجموعات
+              المجموعات
             </span>
             {isLoading && (
               <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
@@ -642,7 +1223,7 @@ function GroupsTab() {
               إنشاء مجموعة جديدة
             </Label>
             <Input
-              placeholder="اسم المجموعة (مثلاً: الصف 5/أ)"
+              placeholder="اسم المجموعة"
               value={newGroupName}
               onChange={(e) => setNewGroupName(e.target.value)}
               className="text-right arabic-text"
@@ -661,7 +1242,7 @@ function GroupsTab() {
             <Label className="arabic-text text-sm text-slate-700">
               اختر مجموعة للربط
             </Label>
-            <Select value={selectedGroupId} onValueChange={(v) => setSelectedGroupId(v)}>
+            <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
               <SelectTrigger className="text-right arabic-text">
                 <SelectValue placeholder="اختر مجموعة" />
               </SelectTrigger>
@@ -673,7 +1254,6 @@ function GroupsTab() {
                 ))}
               </SelectContent>
             </Select>
-
             <Button
               onClick={handleAssignStudents}
               disabled={!selectedGroupId || selectedStudents.length === 0}
@@ -688,13 +1268,17 @@ function GroupsTab() {
             <Label className="arabic-text text-sm text-slate-700">
               تصفية الطلاب حسب المجموعة
             </Label>
-            <Select value={groupFilter} onValueChange={(v) => setGroupFilter(v)}>
+            <Select value={groupFilter} onValueChange={setGroupFilter}>
               <SelectTrigger className="text-right arabic-text">
                 <SelectValue placeholder="كل الطلاب" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all" className="arabic-text">كل الطلاب</SelectItem>
-                <SelectItem value="ungrouped" className="arabic-text">بدون مجموعة</SelectItem>
+                <SelectItem value="all" className="arabic-text">
+                  كل الطلاب
+                </SelectItem>
+                <SelectItem value="ungrouped" className="arabic-text">
+                  بدون مجموعة
+                </SelectItem>
                 {groups.map((g) => (
                   <SelectItem key={g.id} value={g.id} className="arabic-text">
                     {g.name}
@@ -718,15 +1302,26 @@ function GroupsTab() {
             <table className="w-full border-collapse text-right">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">اختيار</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الاسم</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الصف</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">المجموعة الحالية</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    اختيار
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الاسم
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الصف
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    المجموعة الحالية
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredStudents.map((s) => (
-                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50/60">
+                  <tr
+                    key={s.id}
+                    className="border-b border-slate-100 hover:bg-slate-50/60"
+                  >
                     <td className="py-2 px-3 text-center">
                       <Checkbox
                         checked={selectedStudents.includes(s.id)}
@@ -747,7 +1342,10 @@ function GroupsTab() {
 
                 {filteredStudents.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="text-center py-4 text-slate-500 arabic-text">
+                    <td
+                      colSpan={4}
+                      className="text-center py-4 text-slate-500 arabic-text"
+                    >
                       لا يوجد طلاب في هذه التصفية.
                     </td>
                   </tr>
@@ -755,15 +1353,50 @@ function GroupsTab() {
               </tbody>
             </table>
           </div>
+
+          <div className="mt-3 rounded-xl bg-red-50 border border-red-100 p-3 text-right arabic-text text-xs text-red-700 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 mt-1 flex-shrink-0" />
+            <p>
+              ملاحظة: عند حذف مجموعة، لن يتم حذف الطلاب، لكن سيفقدون ارتباطهم بتلك
+              المجموعة.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
-      <Card className="border-0 shadow-lg bg-red-50/80 border-red-100">
-        <CardContent className="text-right arabic-text text-xs text-red-700 flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 mt-1 flex-shrink-0" />
-          <p>
-            ملاحظة: عند حذف مجموعة، لن يتم حذف الطلاب، لكن سيفقدون ارتباطهم بتلك المجموعة.
-          </p>
+      <Card className="border-0 shadow-lg bg-white/90">
+        <CardHeader>
+          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+            <Trash2 className="w-5 h-5 text-slate-500" />
+            حذف مجموعة
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-right">
+          <div className="text-xs text-slate-500 arabic-text">
+            اختر مجموعة ثم اضغط حذف.
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              className="arabic-text"
+              onClick={() => selectedGroupId && handleDeleteGroup(selectedGroupId)}
+              disabled={!selectedGroupId}
+            >
+              حذف
+            </Button>
+            <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
+              <SelectTrigger className="text-right arabic-text">
+                <SelectValue placeholder="اختر مجموعة" />
+              </SelectTrigger>
+              <SelectContent>
+                {groups.map((g) => (
+                  <SelectItem key={g.id} value={g.id} className="arabic-text">
+                    {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -771,7 +1404,7 @@ function GroupsTab() {
 }
 
 function ExercisesTab() {
-  const ALL = "__all__"; // ✅ بدل value="" في SelectItem
+  const ALL = "__all__";
 
   const [exercises, setExercises] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -860,10 +1493,8 @@ function ExercisesTab() {
 
   const filteredExercises = exercises.filter((ex) => {
     let ok = true;
-
     if (filterGrade !== ALL) ok = ok && ex.grade === filterGrade;
     if (filterLevel !== ALL) ok = ok && ex.level === filterLevel;
-
     if (filterStage) ok = ok && ex.stage === parseInt(filterStage, 10);
     if (searchText.trim()) {
       const t = searchText.trim().toLowerCase();
@@ -881,7 +1512,7 @@ function ExercisesTab() {
     <div className="space-y-6">
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+          <CardTitle className="arabic-text text-right text-lg flex items-center gap-2">
             <Plus className="w-5 h-5 text-slate-500" />
             إنشاء تمرين جديد
           </CardTitle>
@@ -960,12 +1591,12 @@ function ExercisesTab() {
             />
             <Button
               onClick={handleCreateExercise}
-              disabled={!newTitle.trim() || !newText.trim() || !newGrade || isLoading}
+              disabled={
+                !newTitle.trim() || !newText.trim() || !newGrade || isLoading
+              }
               className="arabic-text w-full mt-2"
             >
-              {isLoading && (
-                <Loader2 className="w-4 h-4 ml-1 animate-spin" />
-              )}
+              {isLoading && <Loader2 className="w-4 h-4 ml-1 animate-spin" />}
               حفظ التمرين
             </Button>
           </div>
@@ -974,7 +1605,7 @@ function ExercisesTab() {
 
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+          <CardTitle className="arabic-text text-right text-lg flex items-center gap-2">
             <ListChecks className="w-5 h-5 text-slate-500" />
             قائمة التمارين ({filteredExercises.length})
           </CardTitle>
@@ -983,9 +1614,7 @@ function ExercisesTab() {
         <CardContent className="space-y-4 text-right">
           <div className="grid md:grid-cols-4 gap-3">
             <div className="space-y-1">
-              <Label className="arabic-text text-sm text-slate-700">
-                بحث
-              </Label>
+              <Label className="arabic-text text-sm text-slate-700">بحث</Label>
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                 <Input
@@ -998,15 +1627,15 @@ function ExercisesTab() {
             </div>
 
             <div className="space-y-1">
-              <Label className="arabic-text text-sm text-slate-700">
-                الصف
-              </Label>
+              <Label className="arabic-text text-sm text-slate-700">الصف</Label>
               <Select value={filterGrade} onValueChange={setFilterGrade}>
                 <SelectTrigger className="text-right arabic-text">
                   <SelectValue placeholder="الكل" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL} className="arabic-text">الكل</SelectItem>
+                  <SelectItem value={ALL} className="arabic-text">
+                    الكل
+                  </SelectItem>
                   {gradeLevels.map((g) => (
                     <SelectItem key={g} value={g} className="arabic-text">
                       {g}
@@ -1025,7 +1654,9 @@ function ExercisesTab() {
                   <SelectValue placeholder="الكل" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL} className="arabic-text">الكل</SelectItem>
+                  <SelectItem value={ALL} className="arabic-text">
+                    الكل
+                  </SelectItem>
                   {levelOptions.map((lvl) => (
                     <SelectItem key={lvl} value={lvl} className="arabic-text">
                       {lvl}
@@ -1053,17 +1684,32 @@ function ExercisesTab() {
             <table className="w-full border-collapse text-right">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">العنوان</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الصف</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">المستوى</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">المرحلة</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">نشط؟</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الإجراءات</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    العنوان
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الصف
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    المستوى
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    المرحلة
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    نشط؟
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الإجراءات
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredExercises.map((ex) => (
-                  <tr key={ex.id} className="border-b border-slate-100 hover:bg-slate-50/60">
+                  <tr
+                    key={ex.id}
+                    className="border-b border-slate-100 hover:bg-slate-50/60"
+                  >
                     <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text">
                       {ex.title}
                     </td>
@@ -1080,14 +1726,20 @@ function ExercisesTab() {
                       <span
                         className={cn(
                           "inline-flex items-center px-2 py-1 rounded-full text-xs",
-                          ex.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+                          ex.is_active
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-slate-100 text-slate-500"
                         )}
                       >
                         {ex.is_active ? "نعم" : "لا"}
                       </span>
                     </td>
                     <td className="py-2 px-3 text-xs text-center">
-                      <Button size="icon" variant="ghost" onClick={() => handleDeleteExercise(ex.id)}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDeleteExercise(ex.id)}
+                      >
                         <Trash2 className="w-4 h-4 text-red-500" />
                       </Button>
                     </td>
@@ -1096,7 +1748,10 @@ function ExercisesTab() {
 
                 {filteredExercises.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-4 text-slate-500 arabic-text">
+                    <td
+                      colSpan={6}
+                      className="text-center py-4 text-slate-500 arabic-text"
+                    >
                       لا توجد تمارين مطابقة للتصفية الحالية.
                     </td>
                   </tr>
@@ -1111,7 +1766,7 @@ function ExercisesTab() {
 }
 
 function RecordingsTab() {
-  const ALL = "__all__"; // ✅ بدل value=""
+  const ALL = "__all__";
 
   const [recordings, setRecordings] = useState([]);
   const [students, setStudents] = useState([]);
@@ -1120,9 +1775,7 @@ function RecordingsTab() {
   const [filterScore, setFilterScore] = useState(0);
   const [onlyWithComments, setOnlyWithComments] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedRecording, setSelectedRecording] = useState(null);
-  const [teacherComment, setTeacherComment] = useState("");
-  const [isSavingComment, setIsSavingComment] = useState(false);
+
   const [editScore, setEditScore] = useState("");
   const [editScoreRecordingId, setEditScoreRecordingId] = useState(null);
 
@@ -1180,40 +1833,9 @@ function RecordingsTab() {
     return ok;
   });
 
-  const openCommentModal = (recording) => {
-    setSelectedRecording(recording);
-    setTeacherComment(recording.teacher_comment || "");
-  };
-
-  const saveComment = async () => {
-    if (!selectedRecording) return;
-    setIsSavingComment(true);
-    try {
-      await Recording.update(selectedRecording.id, {
-        teacher_comment: teacherComment,
-      });
-      setRecordings((prev) =>
-        prev.map((r) =>
-          r.id === selectedRecording.id ? { ...r, teacher_comment: teacherComment } : r
-        )
-      );
-      setSelectedRecording(null);
-      setTeacherComment("");
-    } catch (e) {
-      console.error("Failed to save comment", e);
-      alert("فشل في حفظ التعليق");
-    } finally {
-      setIsSavingComment(false);
-    }
-  };
-
   const handleScoreClick = (recording) => {
     setEditScore(recording.score?.toString() || "");
     setEditScoreRecordingId(recording.id);
-  };
-
-  const handleScoreChange = (e) => {
-    setEditScore(e.target.value);
   };
 
   const handleManualScoreSave = async (recordingId) => {
@@ -1226,9 +1848,7 @@ function RecordingsTab() {
     try {
       await Recording.update(recordingId, { score: newScore });
       setRecordings((prev) =>
-        prev.map((r) =>
-          r.id === recordingId ? { ...r, score: newScore } : r
-        )
+        prev.map((r) => (r.id === recordingId ? { ...r, score: newScore } : r))
       );
       setEditScoreRecordingId(null);
       setEditScore("");
@@ -1242,7 +1862,7 @@ function RecordingsTab() {
     <div className="space-y-6">
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+          <CardTitle className="arabic-text text-right text-lg flex items-center gap-2">
             <Filter className="w-5 h-5 text-slate-500" />
             تصفية التسجيلات
           </CardTitle>
@@ -1299,420 +1919,4 @@ function RecordingsTab() {
             </div>
           </div>
 
-          <div className="space-y-1">
-            <Label className="arabic-text text-sm text-slate-700">تعليقات المعلم</Label>
-            <div className="flex items-center gap-2 justify-end">
-              <Switch checked={onlyWithComments} onCheckedChange={setOnlyWithComments} />
-              <span className="text-xs text-slate-700 arabic-text">
-                إظهار التسجيلات التي تحتوي على تعليق فقط
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 shadow-lg bg-white/90">
-        <CardHeader>
-          <CardTitle className="arabic-text text-lg flex items-center gap-2">
-            <Mic className="w-5 h-5 text-slate-500" />
-            تسجيلات الطلاب ({filteredRecordings.length})
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-3">
-          {isLoading && (
-            <div className="text-center py-4">
-              <Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-500" />
-            </div>
-          )}
-
-          {!isLoading && filteredRecordings.length === 0 && (
-            <div className="text-center py-8 text-slate-500 arabic-text">
-              لا توجد تسجيلات مطابقة للتصفية الحالية.
-            </div>
-          )}
-
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-right">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الطالب</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">التاريخ</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الدرجة</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">النص المقروء</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">تعليق المعلم</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الصوت</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRecordings.map((r) => {
-                  const st = getStudentById(r.student_id);
-                  const readText =
-                    r.analysis_details?.original_text ||
-                    r.analysis_details?.text ||
-                    "";
-                  const dateStr = new Date(r.created_date).toLocaleDateString("ar-AE", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  });
-
-                  const scoreColor =
-                    r.score >= 90
-                      ? "bg-emerald-100 text-emerald-800"
-                      : r.score >= 70
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-red-100 text-red-800";
-
-                  return (
-                    <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50/60 align-top">
-                      <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text whitespace-nowrap">
-                        {st?.name}
-                        <div className="text-[11px] text-slate-500">{st?.grade}</div>
-                      </td>
-
-                      <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
-                        {dateStr}
-                      </td>
-
-                      <td className="py-2 px-3 text-xs text-center">
-                        {editScoreRecordingId === r.id ? (
-                          <div className="flex items-center justify-center gap-1">
-                            <Input
-                              type="number"
-                              value={editScore}
-                              onChange={handleScoreChange}
-                              className="h-8 w-16 text-center text-xs"
-                            />
-                            <Button
-                              size="xs"
-                              className="px-2 py-1 text-xs"
-                              onClick={() => handleManualScoreSave(r.id)}
-                            >
-                              حفظ
-                            </Button>
-                          </div>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold cursor-pointer ${scoreColor}`}
-                            onClick={() => handleScoreClick(r)}
-                            title="اضغط لتعديل الدرجة يدويًا"
-                          >
-                            {r.score != null ? `${r.score}%` : "لا يوجد"}
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="py-2 px-3 text-xs text-slate-800 arabic-text max-w-sm">
-                        <div className="bg-slate-50 rounded-lg p-2">
-                          <p className="line-clamp-3">{readText}</p>
-                          {r.feedback && (
-                            <p className="mt-1 text-[11px] text-blue-700">
-                              🤖 {r.feedback}
-                            </p>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="py-2 px-3 text-xs text-slate-800 arabic-text max-w-xs">
-                        <div className="space-y-2">
-                          {r.teacher_comment && (
-                            <div className="bg-emerald-50 rounded p-2 text-[11px] text-emerald-800">
-                              👩‍🏫 {r.teacher_comment}
-                            </div>
-                          )}
-                          {r.teacher_audio_comment && (
-                            <audio controls src={r.teacher_audio_comment} className="w-full" />
-                          )}
-                          <AudioCommentModal recording={r} />
-                        </div>
-                      </td>
-
-                      <td className="py-2 px-3 text-xs text-slate-700">
-                        <audio controls src={r.audio_url} className="w-full" />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function EmergencyDrillTab() {
-  const [prompt, setPrompt] = useState(
-    "أريد فقرة قصيرة للصف الثالث عن أهمية الصدق، باللغة العربية الفصحى، مناسبة لتمرين قراءة صوتية."
-  );
-  const [isLoading, setIsLoading] = useState(false);
-  const [generatedText, setGeneratedText] = useState("");
-  const [grade, setGrade] = useState("");
-  const [level, setLevel] = useState("مبتدئ");
-  const [stage, setStage] = useState(1);
-  const [title, setTitle] = useState("تمرين طارئ عن الصدق");
-
-  const gradeLevels = [
-    "الروضة",
-    "الصف الأول",
-    "الصف الثاني",
-    "الصف الثالث",
-    "الصف الرابع",
-    "الصف الخامس",
-    "الصف السادس",
-    "الصف السابع",
-    "الصف الثامن",
-    "الصف التاسع",
-    "الصف العاشر",
-    "الصف الحادي عشر",
-    "الصف الثاني عشر",
-  ];
-
-  const handleGenerate = async () => {
-    if (!prompt.trim()) return;
-    setIsLoading(true);
-    try {
-      const res = await InvokeLLM({
-        prompt: `
-أنت معلم لغة عربية للمرحلة الابتدائية.
-قم بإنشاء فقرة قراءة عربية فصحى (بدون تشكيل كامل، لكن لغة سليمة) بناءً على طلب المعلم التالي:
-"${prompt}"
-
-ارسل الفقرة النهائية فقط، بدون أي تعليق إضافي.`,
-      });
-
-      const text = res?.text || res?.content || "";
-      setGeneratedText(text.trim());
-    } catch (e) {
-      console.error("Emergency drill generation failed", e);
-      alert("فشل في توليد النص. تأكد من إعدادات OpenAI API في صفحة الإعدادات.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSaveAsExercise = async () => {
-    if (!generatedText.trim() || !grade) {
-      alert("يرجى اختيار الصف وإدخال عنوان مناسب قبل الحفظ.");
-      return;
-    }
-
-    try {
-      await Exercise.create({
-        title: title.trim() || "تمرين طارئ",
-        text: generatedText.trim(),
-        grade,
-        level,
-        stage: stage || 1,
-        is_active: true,
-      });
-
-      alert("تم حفظ التمرين بنجاح، ويمكن للطلاب استخدامه.");
-    } catch (e) {
-      console.error("Failed to save emergency exercise", e);
-      alert("فشل في حفظ التمرين الطارئ.");
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card className="border-0 shadow-lg bg-white/90">
-        <CardHeader>
-          <CardTitle className="arabic-text text-lg flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-red-500" />
-            توليد تمرين طارئ بالذكاء الاصطناعي
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="grid md:grid-cols-2 gap-6 text-right">
-          <div className="space-y-3">
-            <Label className="arabic-text text-sm text-slate-700">وصف التمرين المطلوب</Label>
-            <Textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-[180px] text-right arabic-text"
-            />
-            <Button onClick={handleGenerate} disabled={isLoading} className="arabic-text w-full">
-              {isLoading && <Loader2 className="w-4 h-4 ml-1 animate-spin" />}
-              توليد النص
-            </Button>
-            <p className="text-xs text-slate-500 arabic-text">
-              مثال: "فقرة للصف الرابع عن أهمية النظافة الشخصية، جمل قصيرة وواضحة."
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <Label className="arabic-text text-sm text-slate-700">النص الناتج</Label>
-            <Textarea
-              value={generatedText}
-              onChange={(e) => setGeneratedText(e.target.value)}
-              className="min-h-[180px] text-right arabic-text"
-              placeholder="سيظهر هنا النص الذي تم توليده..."
-            />
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="arabic-text text-sm text-slate-700">عنوان التمرين</Label>
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="text-right arabic-text"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="arabic-text text-sm text-slate-700">الصف</Label>
-                <Select value={grade} onValueChange={setGrade}>
-                  <SelectTrigger className="text-right arabic-text">
-                    <SelectValue placeholder="اختر الصف" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {gradeLevels.map((g) => (
-                      <SelectItem key={g} value={g} className="arabic-text">
-                        {g}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="arabic-text text-sm text-slate-700">المستوى</Label>
-                <Select value={level} onValueChange={setLevel}>
-                  <SelectTrigger className="text-right arabic-text">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="مبتدئ" className="arabic-text">مبتدئ</SelectItem>
-                    <SelectItem value="متوسط" className="arabic-text">متوسط</SelectItem>
-                    <SelectItem value="متقدم" className="arabic-text">متقدم</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="arabic-text text-sm text-slate-700">المرحلة</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={stage}
-                  onChange={(e) => setStage(parseInt(e.target.value, 10))}
-                  className="text-right arabic-text"
-                />
-              </div>
-            </div>
-
-            <Button
-              onClick={handleSaveAsExercise}
-              disabled={!generatedText.trim() || !grade}
-              className="arabic-text w-full bg-emerald-600 hover:bg-emerald-700"
-            >
-              <CheckCircle className="w-4 h-4 ml-1" />
-              حفظ كتمرين جاهز للطلاب
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-export default function TeacherDashboard() {
-  const navigate = useNavigate();
-
-  return (
-    <TeacherGate>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 py-6 px-3 md:px-8">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col md:flex-row items-center justify-between gap-4"
-          >
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => navigate(createPageUrl("Home"))}
-                className="rounded-full bg-white/80"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-              <div className="text-right">
-                <h1 className="text-2xl md:text-3xl font-bold text-slate-900 arabic-text">
-                  لوحة تحكم المعلم 👩‍🏫
-                </h1>
-                <p className="text-sm text-slate-600 arabic-text">
-                  إدارة الطلاب، التمارين، المجموعات، والتسجيلات الصوتية
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-indigo-100 text-indigo-800 arabic-text">
-                <Users className="w-3 h-3 ml-1" />
-                معلم اللغة العربية - مرحلة أساسية
-              </Badge>
-              <Badge className="bg-emerald-100 text-emerald-800 arabic-text">
-                <Mic className="w-3 h-3 ml-1" />
-                منصة تحليل النطق الذكي
-              </Badge>
-            </div>
-          </motion.div>
-
-          <Tabs defaultValue="students" className="space-y-4">
-            <TabsList className="bg-white shadow-md rounded-2xl p-1 grid grid-cols-5">
-              <TabsTrigger value="students" className="arabic-text text-xs md:text-sm">
-                <Users className="w-4 h-4 ml-1" /> الطلاب
-              </TabsTrigger>
-              <TabsTrigger value="groups" className="arabic-text text-xs md:text-sm">
-                <ListChecks className="w-4 h-4 ml-1" /> المجموعات
-              </TabsTrigger>
-              <TabsTrigger value="exercises" className="arabic-text text-xs md:text-sm">
-                <BookOpen className="w-4 h-4 ml-1" /> التمارين
-              </TabsTrigger>
-              <TabsTrigger value="recordings" className="arabic-text text-xs md:text-sm">
-                <Mic className="w-4 h-4 ml-1" /> التسجيلات
-              </TabsTrigger>
-              <TabsTrigger value="emergency" className="arabic-text text-xs md:text-sm">
-                <AlertTriangle className="w-4 h-4 ml-1" /> تمرين طارئ
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="students">
-              <StudentsTab
-                onSelectStudent={(s) =>
-                  navigate(createPageUrl(`StudentDashboard?studentId=${s.id}`))
-                }
-              />
-            </TabsContent>
-
-            <TabsContent value="groups">
-              <GroupsTab />
-            </TabsContent>
-
-            <TabsContent value="exercises">
-              <ExercisesTab />
-            </TabsContent>
-
-            <TabsContent value="recordings">
-              <RecordingsTab />
-            </TabsContent>
-
-            <TabsContent value="emergency">
-              <EmergencyDrillTab />
-            </TabsContent>
-          </Tabs>
-
-          <div className="mt-4">
-            <SettingsTab />
-          </div>
-        </div>
-      </div>
-    </TeacherGate>
-  );
-}
+       
