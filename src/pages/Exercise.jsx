@@ -30,54 +30,8 @@ import { Label } from "@/components/ui/label";
 // ✅ Supabase entities
 import { Exercise as ExerciseEntity, Student, Recording } from "@/api/entities";
 
-// ✅ تكامل الذكاء الاصطناعي + رفع الملفات (يمر عبر /api على Vercel)
+// ✅ AI + Upload (يمر عبر /api على Vercel)
 import { UploadFile, InvokeLLM } from "@/api/integrations";
-
-/* =========================================================
-   ✅ Helpers: تطبيع النص العربي + تقدير نسبة التطابق
-   الهدف: منع "0 دائمًا" بسبب اختلاف التشكيل/الترقيم/تنويعات الحروف
-========================================================= */
-function normalizeArabicText(input = "") {
-  if (!input || typeof input !== "string") return "";
-  return (
-    input
-      // إزالة التشكيل
-      .replace(/[\u064B-\u0652\u0670]/g, "")
-      // إزالة التطويل
-      .replace(/\u0640/g, "")
-      // توحيد أشكال الألف
-      .replace(/[إأآا]/g, "ا")
-      // توحيد الياء/الألف المقصورة
-      .replace(/ى/g, "ي")
-      // توحيد الهمزات على واو/ياء (تقريب)
-      .replace(/ؤ/g, "و")
-      .replace(/ئ/g, "ي")
-      // إزالة الترقيم والرموز (نُبقي الحروف العربية والمسافات فقط)
-      .replace(/[^\u0600-\u06FF\s]/g, " ")
-      // مسافات زائدة
-      .replace(/\s+/g, " ")
-      .trim()
-  );
-}
-
-function wordMatchRatio(expectedRaw = "", heardRaw = "") {
-  const expected = normalizeArabicText(expectedRaw);
-  const heard = normalizeArabicText(heardRaw);
-
-  const expWords = expected.split(" ").filter(Boolean);
-  const heardWords = heard.split(" ").filter(Boolean);
-
-  if (expWords.length === 0) return 0;
-
-  // عدّ الكلمات المتوقعة الموجودة في المسموع (تقريبًا)
-  const heardSet = new Set(heardWords);
-  let matched = 0;
-  for (const w of expWords) {
-    if (heardSet.has(w)) matched++;
-  }
-
-  return matched / expWords.length; // 0..1
-}
 
 export default function ExercisePage() {
   const navigate = useNavigate();
@@ -95,6 +49,10 @@ export default function ExercisePage() {
   const [error, setError] = useState(null);
   const [nextExercise, setNextExercise] = useState(null);
   const [lastAnalysis, setLastAnalysis] = useState(null);
+
+  // ✅ التحكم في التقدم
+  const [requiresRetry, setRequiresRetry] = useState(false); // إذا 0 أو wrong_text/silence
+  const [analysisPassed, setAnalysisPassed] = useState(false); // إذا الدرجة >0 و status=valid
 
   // New Features State
   const [isFocusMode, setIsFocusMode] = useState(false);
@@ -129,7 +87,6 @@ export default function ExercisePage() {
           return;
         }
 
-        // ✅ من Supabase عبر entities
         const exerciseData = await ExerciseEntity.get(exerciseId);
         setExercise(exerciseData);
 
@@ -219,13 +176,11 @@ export default function ExercisePage() {
         setError("حدث خطأ أثناء تشغيل التسجيل.");
       };
 
-      audio
-        .play()
-        .catch((err) => {
-          setIsPlaying(false);
-          setError("لم يتمكن من تشغيل التسجيل.");
-          console.error("Audio play error:", err);
-        });
+      audio.play().catch((err) => {
+        setIsPlaying(false);
+        setError("لم يتمكن من تشغيل التسجيل.");
+        console.error("Audio play error:", err);
+      });
     }
   };
 
@@ -234,6 +189,194 @@ export default function ExercisePage() {
     setRecordingSubmitted(false);
     setError(null);
     setAnalysisProgress(0);
+
+    // ✅ مهم: تصفير كل حالات الاختبار/التحليل حتى لا “تعلق”
+    setLastAnalysis(null);
+    setNextExercise(null);
+
+    setShowQuiz(false);
+    setQuizQuestions([]);
+    setQuizAnswers({});
+    setQuizScore(null);
+    setIsGeneratingQuiz(false);
+
+    setRequiresRetry(false);
+    setAnalysisPassed(false);
+  };
+
+  // ✅ Fallback Quiz إذا فشل LLM (حتى لا تمنع الطالب بسبب عطل خارجي)
+  const buildFallbackQuiz = (sentence) => {
+    const words = String(sentence || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    const w1 = words[0] || "—";
+    const w2 = words[1] || w1;
+    const wLast = words[words.length - 1] || w2;
+
+    return [
+      {
+        question: "ما الكَلِمَةُ الأُولَى فِي النَّصِّ؟",
+        options: [w1, w2, wLast].slice(0, 3),
+        correct_index: 0,
+      },
+      {
+        question: "ما الكَلِمَةُ الأَخِيرَةُ فِي النَّصِّ؟",
+        options: [wLast, w1, w2].slice(0, 3),
+        correct_index: 0,
+      },
+      {
+        question: "كَمْ عَدَدُ كَلِمَاتِ النَّصِّ؟",
+        options: [
+          String(words.length),
+          String(Math.max(1, words.length - 1)),
+          String(words.length + 1),
+        ],
+        correct_index: 0,
+      },
+    ];
+  };
+
+  const generateQuiz = async () => {
+    setIsGeneratingQuiz(true);
+    try {
+      const quizSchema = {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          questions: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                question: { type: "string" },
+                options: { type: "array", items: { type: "string" } },
+                correct_index: { type: "integer" },
+              },
+              required: ["question", "options", "correct_index"],
+            },
+          },
+        },
+        required: ["questions"],
+      };
+
+      const response = await InvokeLLM({
+        prompt: `
+بناءً على النَّصِّ التَّالِي: "${exercise.sentence}"
+اِصْنَعْ 3 أَسْئِلَةِ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ (MCQ) لِاخْتِبَارِ فَهْمِ الطَّالِبِ لِلنَّصِّ.
+
+اَلْمَخْرَجُ: JSON فَقَط بِالشَّكْلِ:
+{
+  "questions": [
+    {
+      "question": "نَصُّ السُّؤَالِ",
+      "options": ["خِيَارٌ 1", "خِيَارٌ 2", "خِيَارٌ 3"],
+      "correct_index": 0
+    }
+  ]
+}
+        `,
+        response_json_schema: quizSchema,
+      });
+
+      const data = typeof response === "string" ? JSON.parse(response) : response;
+
+      if (data && Array.isArray(data.questions) && data.questions.length > 0) {
+        setQuizQuestions(data.questions);
+        return;
+      }
+
+      // fallback
+      setQuizQuestions(buildFallbackQuiz(exercise.sentence));
+    } catch (e) {
+      console.error("Quiz gen failed", e);
+      setQuizQuestions(buildFallbackQuiz(exercise.sentence));
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
+  };
+
+  const loadNextExercise = async () => {
+    try {
+      const allExercises = await ExerciseEntity.list();
+      if (!student || !exercise || allExercises.length === 0) return;
+
+      const allRecordings = await Recording.list();
+
+      // ✅ مهم جدًا: لا نعتبر التمرين “مكتمل” إذا الدرجة 0 أو أقل
+      const studentRecordings = allRecordings.filter(
+        (r) => r.student_id === student.id && Number(r.score || 0) > 0
+      );
+
+      const completedExerciseIds = studentRecordings.map((r) => r.exercise_id);
+
+      const sameStageExercises = allExercises.filter(
+        (ex) =>
+          ex.level === exercise.level &&
+          ex.stage === exercise.stage &&
+          ex.id !== exercise.id &&
+          !completedExerciseIds.includes(ex.id)
+      );
+
+      if (sameStageExercises.length > 0) {
+        const randomIndex = Math.floor(Math.random() * sameStageExercises.length);
+        setNextExercise(sameStageExercises[randomIndex]);
+      } else {
+        const nextStage = exercise.stage + 1;
+
+        // ✅ يحدث فقط بعد اجتياز (درجة >0) + إكمال الاختبار
+        await Student.update(student.id, { current_stage: nextStage });
+
+        const nextStageExercises = allExercises.filter(
+          (ex) => ex.level === exercise.level && ex.stage === nextStage
+        );
+
+        if (nextStageExercises.length > 0) {
+          const randomIndex = Math.floor(Math.random() * nextStageExercises.length);
+          setNextExercise(nextStageExercises[randomIndex]);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load next exercise:", err);
+    }
+  };
+
+  const submitQuiz = async () => {
+    let correct = 0;
+    quizQuestions.forEach((q, idx) => {
+      if (quizAnswers[idx] === q.correct_index) correct++;
+    });
+
+    const score = quizQuestions.length ? (correct / quizQuestions.length) * 100 : 0;
+    setQuizScore(score);
+
+    // ✅ الآن فقط نسمح بإحضار التمرين/المرحلة التالية
+    await loadNextExercise();
+  };
+
+  const speakText = (text) => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "ar-SA";
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const goToNextExercise = () => {
+    // ✅ لا انتقال إذا لم يجتز التحليل أو لم يُكمل الاختبار
+    if (!analysisPassed) {
+      setError("لَا يُمْكِنُ الِانْتِقَالُ قَبْلَ أَنْ تُحَقِّقَ دَرَجَةً فَوْقَ الصِّفْرِ.");
+      return;
+    }
+    if (quizQuestions.length > 0 && quizScore === null) {
+      setError("يَجِبُ إِكْمَالُ اخْتِبَارِ الْفَهْمِ أَوَّلًا.");
+      return;
+    }
+
+    if (nextExercise && student) {
+      navigate(createPageUrl(`Exercise?id=${nextExercise.id}&studentId=${student.id}`));
+    }
   };
 
   const submitRecording = async () => {
@@ -247,12 +390,19 @@ export default function ExercisePage() {
     setAnalysisProgress(0);
     setError(null);
 
+    // تصفير
+    setRequiresRetry(false);
+    setAnalysisPassed(false);
+    setShowQuiz(false);
+    setQuizQuestions([]);
+    setQuizAnswers({});
+    setQuizScore(null);
+    setNextExercise(null);
+
     try {
       const fileSizeKB = audioBlob.size / 1024;
       if (fileSizeKB < 2) {
-        setError(
-          "التسجيل فارغ أو قصير جداً. يرجى التأكد من التحدث بوضوح لمدة أطول قليلاً."
-        );
+        setError("التسجيل فارغ أو قصير جداً. يرجى التحدث بوضوح لمدة أطول قليلاً.");
         setIsSending(false);
         setIsAnalyzing(false);
         return;
@@ -269,7 +419,7 @@ export default function ExercisePage() {
 
       setAnalysisProgress(20);
 
-      // 1️⃣ رفع الملف إلى Supabase Storage عبر UploadFile
+      // 1) Upload
       const uploadResult = await UploadFile({
         file,
         bucket: "recordings",
@@ -283,7 +433,7 @@ export default function ExercisePage() {
 
       setAnalysisProgress(40);
 
-      // 2️⃣ تحويل الصوت إلى نص عبر Vercel API (FormData كما يطلب /api/transcribe)
+      // 2) Transcribe عبر /api/transcribe (FormData)
       const audioFileForTranscribe =
         file instanceof File
           ? file
@@ -301,9 +451,7 @@ export default function ExercisePage() {
         body: transcribeForm,
       });
 
-      const transcriptionJson = await transcriptionResponse
-        .json()
-        .catch(() => null);
+      const transcriptionJson = await transcriptionResponse.json().catch(() => null);
 
       if (!transcriptionResponse.ok) {
         const msg =
@@ -325,14 +473,7 @@ export default function ExercisePage() {
 
       setAnalysisProgress(70);
 
-      // ✅ حساب نسبة تطابق تقريبية بعد التطبيع
-      const expectedRaw = exercise.sentence || "";
-      const expectedNorm = normalizeArabicText(expectedRaw);
-      const heardNorm = normalizeArabicText(transcribedText);
-      const matchRatio = wordMatchRatio(expectedRaw, transcribedText);
-
-      // 3️⃣ التحليل عبر InvokeLLM (يمر عبر /api/llm)
-      // ✅ أضفنا additionalProperties:false لتكون الـ JSON Schema صارمة وتتفادى مشاكل السيرفر
+      // 3) Analysis عبر /api/llm
       const analysisSchema = {
         type: "object",
         additionalProperties: false,
@@ -368,39 +509,21 @@ export default function ExercisePage() {
         required: ["score", "status", "feedback", "analysis_details"],
       };
 
-      // ✅ أهم تعديل هنا:
-      // - لا تعتبر اختلاف التشكيل/الترقيم "wrong_text"
-      // - لا تعطي 0 إلا إذا الصمت/غير مفهوم أو قراءة غير مرتبطة فعلاً
-      const analysisPrompt = `أَنْتَ خَبِيرٌ لُغَوِيٌّ مُتَخَصِّصٌ فِي اَللُّغَةِ اَلْعَرَبِيَّةِ اَلْفُصْحَى وَأَحْكَامِ اَلتَّجْوِيدِ وَمَخَارِجِ اَلْحُرُوفِ.
-مَهَمَّتُكَ: تَقْيِيمُ قِرَاءَةِ اَلطَّالِبِ بِدِقَّةٍ.
+      const analysisPrompt = `أَنْتَ خَبِيرٌ لُغَوِيٌّ مُتَخَصِّصٌ فِي اللُّغَةِ الْعَرَبِيَّةِ الْفُصْحَى وَمَخَارِجِ الْحُرُوفِ. قَيِّمْ قِرَاءَةَ الطَّالِبِ بِإِنْصَافٍ وَدِقَّةٍ.
 
-مُلَاحَظَةٌ حَاسِمَةٌ:
-- قَدْ يَخْتَلِفُ نَصُّ اَلْوِيسْبَرِ عَنْ اَلنَّصِّ اَلْمَطْلُوبِ بِسَبَبِ عَدَمِ وُجُودِ تَشْكِيلٍ أَوْ بِسَبَبِ اَلتَّرْقِيمِ أَوْ اَخْتِلَافَاتٍ خَفِيفَةٍ فِي اَلْهَجَاءِ.
-- لَا تُصَنِّفْ "wrong_text" إِلَّا إِذَا كَانَتِ اَلْقِرَاءَةُ غَيْرَ مُرْتَبِطَةٍ بِاَلنَّصِّ فِعْلًا (مُعْظَمُ اَلْكَلِمَاتِ مُخْتَلِفٌ).
+مُلَاحَظَةٌ مُهِمَّةٌ: نَصُّ التَّحْوِيلِ مِنَ الصَّوْتِ (Whisper) قَدْ يَفْتَقِدُ التَّشْكِيلَ، فَلَا تُعَاقِبْ الطَّالِبَ عَلَى نَقْصِ التَّشْكِيلِ فِي Whisper، وَرَكِّزْ عَلَى:
+- مُطَابَقَةِ الْكَلِمَاتِ وَالْمَعْنَى
+- الطَّلَاقَةِ وَوُضُوحِ النُّطْق
 
-اَلنَّصُّ اَلْمَطْلُوبُ (raw): "${expectedRaw}"
-اَلنَّصُّ اَلْمَسْمُوعُ مِنَ اَلنِّظَامِ (raw): "${transcribedText}"
+الحَالَات:
+1) صَمْت/غَيْرُ مَفْهُوم -> score = 0.0، status = "silence"
+2) نَصٌّ مُخْتَلِفٌ بِوُضُوح -> score = 0.0، status = "wrong_text"
+3) مُحَاوَلَةُ قِرَاءَةٍ لِلنَّصِّ نَفْسِهِ -> status = "valid" وَ score > 0
 
-نَصٌّ مُطَبَّعٌ لِلتَّطَابُقِ (دُونَ تَشْكِيلٍ/تَرْقِيمٍ):
-- expected_norm: "${expectedNorm}"
-- heard_norm: "${heardNorm}"
-- match_ratio (0..1): ${matchRatio}
+التَّعْلِيق (feedback): بِالْعَرَبِيَّةِ الْفُصْحَى وَمُشَكَّلًا بِالْكَامِلِ.
 
-قَوَاعِدُ اَلتَّصْنِيفِ:
-1) إِذَا كَانَ هُنَاكَ صَمْتٌ/غَيْرُ مَفْهُومٍ -> status="silence" وَ score=0.
-2) إِذَا كَانَ match_ratio < 0.45 -> status="wrong_text" وَ score=0.
-3) خِلَافَ ذَلِكَ -> status="valid" وَ score يَكُونُ مِنْ 0 إِلَى 100 بِدِقَّةٍ وَعَدْلٍ.
-
-اِحْسِبِ اَلدَّرَجَةَ بِوَزْنٍ:
-- صِحَّةُ اَلْمَخَارِجِ وَصِفَاتُ اَلْحُرُوفِ (30%)
-- اَلْتِزَامُ اَلنَّحْوِ وَتَشْكِيلُ أَوَاخِرِ اَلْكَلِمَاتِ (30%)
-- مُطَابَقَةُ اَلْكَلِمَاتِ (30%) (اِسْتَعِنْ بِـ match_ratio كَإِشَارَةٍ)
-- اَلطَّلَاقَةُ وَالأَدَاءُ (10%)
-
-اَلتَّعْلِيقُ (feedback) يَجِبُ أَنْ يَكُونَ بِالْعَرَبِيَّةِ اَلْفُصْحَى وَمُشَكَّلًا كُلِّيًّا:
-1) مَدْحُ نُقْطَةِ قُوَّةٍ مُحَدَّدَةٍ.
-2) تَحْدِيدُ خَطَإٍ وَتَصْحِيحُهُ.
-3) نَصِيحَةٌ لِلتَّحْسِينِ.
+النَّصُّ الْأَصْلِيُّ: "${exercise.sentence}"
+نَصُّ Whisper: "${transcribedText}"
 
 أَعِدْ نَاتِجًا بِصِيغَةِ JSON فَقَط.`;
 
@@ -414,196 +537,66 @@ export default function ExercisePage() {
           ? JSON.parse(analysisResponse)
           : analysisResponse;
 
+      const scoreNum = Number(aiAnalysis?.score || 0);
+      const status = String(aiAnalysis?.status || "");
+
       // نخزن رابط الصوت مع التحليل ليستفيد "وضع المرآة"
       setLastAnalysis({ ...aiAnalysis, audio_url: file_url });
 
       setAnalysisProgress(90);
 
-      // 4️⃣ حفظ التسجيل والنتيجة في جدول recordings
+      // 4) Save recording
       const recordingData = {
         student_id: student.id,
         exercise_id: exercise.id,
         audio_url: file_url,
-        score: aiAnalysis.score,
+        score: scoreNum,
         feedback: aiAnalysis.feedback,
         analysis_details: {
           ...aiAnalysis.analysis_details,
           ai_model: "Vercel API (/api/llm)",
           analyzed_at: new Date().toISOString(),
-          // ✅ (اختياري) مفيد للتشخيص لاحقاً:
-          match_ratio: matchRatio,
-          expected_norm: expectedNorm,
-          heard_norm: heardNorm,
-          transcribed_text: transcribedText,
+          status,
         },
       };
 
       await Recording.create(recordingData);
 
-      setAnalysisProgress(100);
-
-      // 5️⃣ تحديث بيانات الطالب
+      // 5) Update student stats (حتى لو صفر، نحفظ نشاطه)
       await Student.update(student.id, {
         last_activity: new Date().toISOString(),
         total_exercises: (student.total_exercises || 0) + 1,
         total_minutes: (student.total_minutes || 0) + 1,
       });
 
+      setAnalysisProgress(100);
+
+      // ✅ شرط النجاح: الدرجة >0 و status valid
+      const passed = scoreNum > 0 && status === "valid";
+      setAnalysisPassed(passed);
+      setRequiresRetry(!passed);
+
       setRecordingSubmitted(true);
       setIsSending(false);
       setIsAnalyzing(false);
 
-      if (aiAnalysis && aiAnalysis.score > 50) {
-        generateQuiz();
-      } else {
-        await loadNextExercise();
+      // ✅ إذا لم يجتز: لا اختبار ولا تمرين جديد
+      if (!passed) {
+        setShowQuiz(false);
+        setQuizQuestions([]);
+        setNextExercise(null);
+        return;
       }
+
+      // ✅ إذا اجتاز: لازم اختبار فهم قبل المرحلة التالية
+      await generateQuiz();
     } catch (err) {
       console.error("Failed to submit recording:", err);
-      let errorMessage = err.message || "خطأ غير معروف";
-
-      if (
-        errorMessage.includes("limit of integrations") ||
-        errorMessage.includes("upgrade your plan")
-      ) {
-        errorMessage =
-          "عذراً، وصل النظام إلى الحد الأقصى للاستخدام الشهري لهذا التطبيق. يرجى إبلاغ المعلم بذلك.";
-      } else if (errorMessage.includes("quota")) {
-        errorMessage =
-          "عذراً، تم تجاوز حد استخدام الذكاء الاصطناعي. يرجى إبلاغ المعلم.";
-      }
-
+      const errorMessage = err?.message || "خطأ غير معروف";
       setError(`فشل إرسال التسجيل: ${errorMessage}`);
       setIsSending(false);
       setIsAnalyzing(false);
       setAnalysisProgress(0);
-    }
-  };
-
-  const loadNextExercise = async () => {
-    try {
-      const allExercises = await ExerciseEntity.list();
-      if (!student || !exercise || allExercises.length === 0) return;
-
-      const allRecordings = await Recording.list();
-      const studentRecordings = allRecordings.filter(
-        (r) => r.student_id === student.id
-      );
-      const completedExerciseIds = studentRecordings.map((r) => r.exercise_id);
-
-      const sameStageExercises = allExercises.filter(
-        (ex) =>
-          ex.level === exercise.level &&
-          ex.stage === exercise.stage &&
-          ex.id !== exercise.id &&
-          !completedExerciseIds.includes(ex.id)
-      );
-
-      if (sameStageExercises.length > 0) {
-        const randomIndex = Math.floor(
-          Math.random() * sameStageExercises.length
-        );
-        setNextExercise(sameStageExercises[randomIndex]);
-      } else {
-        const nextStage = exercise.stage + 1;
-        await Student.update(student.id, {
-          current_stage: nextStage,
-        });
-
-        const nextStageExercises = allExercises.filter(
-          (ex) => ex.level === exercise.level && ex.stage === nextStage
-        );
-
-        if (nextStageExercises.length > 0) {
-          const randomIndex = Math.floor(
-            Math.random() * nextStageExercises.length
-          );
-          setNextExercise(nextStageExercises[randomIndex]);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to load next exercise:", err);
-    }
-  };
-
-  const generateQuiz = async () => {
-    setIsGeneratingQuiz(true);
-    try {
-      const response = await InvokeLLM({
-        prompt: `
-بناءً على النص التالي: "${exercise.sentence}"
-قم بإنشاء 3 أسئلة اختيار من متعدد (MCQ) لاختبار فهم الطالب للنص.
-
-المخرجات JSON فقط بالشكل:
-{
-  "questions": [
-    {
-      "question": "نص السؤال",
-      "options": ["خيار 1", "خيار 2", "خيار 3"],
-      "correct_index": 0
-    }
-  ]
-}
-        `,
-        response_json_schema: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            questions: {
-              type: "array",
-              items: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  question: { type: "string" },
-                  options: { type: "array", items: { type: "string" } },
-                  correct_index: { type: "integer" },
-                },
-                required: ["question", "options", "correct_index"],
-              },
-            },
-          },
-          required: ["questions"],
-        },
-      });
-
-      const data = typeof response === "string" ? JSON.parse(response) : response;
-
-      if (data && data.questions) {
-        setQuizQuestions(data.questions);
-      } else {
-        await loadNextExercise();
-      }
-    } catch (e) {
-      console.error("Quiz gen failed", e);
-      await loadNextExercise();
-    } finally {
-      setIsGeneratingQuiz(false);
-    }
-  };
-
-  const submitQuiz = () => {
-    let correct = 0;
-    quizQuestions.forEach((q, idx) => {
-      if (quizAnswers[idx] === q.correct_index) correct++;
-    });
-    const score = (correct / quizQuestions.length) * 100;
-    setQuizScore(score);
-    loadNextExercise();
-  };
-
-  const speakText = (text) => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "ar-SA";
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const goToNextExercise = () => {
-    if (nextExercise && student) {
-      navigate(
-        createPageUrl(`Exercise?id=${nextExercise.id}&studentId=${student.id}`)
-      );
     }
   };
 
@@ -635,6 +628,7 @@ export default function ExercisePage() {
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
+
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent arabic-text">
               تمرين النطق
@@ -643,45 +637,34 @@ export default function ExercisePage() {
               مستوى {exercise.level} - المرحلة {exercise.stage}
             </p>
           </div>
+
           <div className="mr-auto flex gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsPracticeMode(!isPracticeMode)}
               className={`arabic-text ${
-                isPracticeMode
-                  ? "bg-yellow-100 border-yellow-300 text-yellow-800"
-                  : ""
+                isPracticeMode ? "bg-yellow-100 border-yellow-300 text-yellow-800" : ""
               }`}
             >
               <Headphones className="w-4 h-4 ml-2" />
               {isPracticeMode ? "وضع التدريب مفعّل" : "تفعيل وضع التدريب"}
             </Button>
+
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsFocusMode(!isFocusMode)}
               title="وضع التركيز"
             >
-              {isFocusMode ? (
-                <EyeOff className="w-5 h-5" />
-              ) : (
-                <Eye className="w-5 h-5" />
-              )}
+              {isFocusMode ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </Button>
           </div>
         </motion.div>
 
-        {/* Focus Mode Overlay */}
         {isFocusMode && <div className="fixed inset-0 bg-white z-40" />}
 
-        <div
-          className={
-            isFocusMode
-              ? "fixed inset-0 z-50 flex items-center justify-center bg-white p-6"
-              : ""
-          }
-        >
+        <div className={isFocusMode ? "fixed inset-0 z-50 flex items-center justify-center bg-white p-6" : ""}>
           <div className={isFocusMode ? "w-full max-w-4xl" : ""}>
             {isFocusMode && (
               <Button
@@ -695,11 +678,7 @@ export default function ExercisePage() {
             )}
 
             {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-6"
-              >
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
                 <Card className="border-red-200 bg-red-50">
                   <CardContent className="p-4 flex items-center gap-3">
                     <AlertTriangle className="w-5 h-5 text-red-500" />
@@ -770,9 +749,7 @@ export default function ExercisePage() {
                           <>
                             <div className="w-32 h-32 mx-auto">
                               <Button
-                                onClick={
-                                  isRecording ? stopRecording : startRecording
-                                }
+                                onClick={isRecording ? stopRecording : startRecording}
                                 size="lg"
                                 className={`w-full h-full rounded-full text-white shadow-2xl transition-all duration-300 glow-effect ${
                                   isRecording
@@ -780,36 +757,17 @@ export default function ExercisePage() {
                                     : "bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 hover:scale-110"
                                 }`}
                               >
-                                {isRecording ? (
-                                  <Square className="w-12 h-12" />
-                                ) : (
-                                  <Mic className="w-12 h-12" />
-                                )}
+                                {isRecording ? <Square className="w-12 h-12" /> : <Mic className="w-12 h-12" />}
                               </Button>
                             </div>
+
                             <div>
                               <p className="text-xl font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent arabic-text mb-2">
-                                {isRecording
-                                  ? "جارٍ التسجيل..."
-                                  : "اضغط للبدء في التسجيل"}
+                                {isRecording ? "جارٍ التسجيل..." : "اضغط للبدء في التسجيل"}
                               </p>
                               <p className="text-indigo-600 arabic-text">
-                                {isRecording
-                                  ? "اضغط مرة أخرى للتوقف"
-                                  : "خذ وقتك - لا يوجد حد زمني"}
+                                {isRecording ? "اضغط مرة أخرى للتوقف" : "خذ وقتك - لا يوجد حد زمني"}
                               </p>
-                              <div className="mt-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border-2 border-blue-200">
-                                <div className="flex items-center justify-center gap-2 mb-2">
-                                  <CheckCircle className="w-5 h-5 text-blue-600" />
-                                  <p className="font-bold text-blue-900 arabic-text">
-                                    تقييم المعلم المتخصص
-                                  </p>
-                                </div>
-                                <p className="text-sm text-blue-700 arabic-text">
-                                  سيراجع المعلم تسجيلك بعناية ويعطيك تقييماً
-                                  دقيقاً وتوجيهات مخصصة
-                                </p>
-                              </div>
                             </div>
                           </>
                         ) : (
@@ -826,21 +784,16 @@ export default function ExercisePage() {
                                   ) : (
                                     <Play className="w-5 h-5 mr-2" />
                                   )}
-                                  <span className="arabic-text">
-                                    {isPlaying
-                                      ? "يتم التشغيل..."
-                                      : "استمع للتسجيل"}
-                                  </span>
+                                  <span className="arabic-text">{isPlaying ? "يتم التشغيل..." : "استمع للتسجيل"}</span>
                                 </Button>
+
                                 <Button
                                   onClick={retryRecording}
                                   variant="outline"
                                   className="rounded-full px-8 py-4 border-2 border-indigo-300 hover:bg-indigo-50 shadow-lg"
                                 >
                                   <RotateCcw className="w-5 h-5 mr-2" />
-                                  <span className="arabic-text">
-                                    إعادة التسجيل
-                                  </span>
+                                  <span className="arabic-text">إعادة التسجيل</span>
                                 </Button>
                               </div>
                             </div>
@@ -850,7 +803,7 @@ export default function ExercisePage() {
                                 <div className="flex items-center justify-center gap-2">
                                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-500"></div>
                                   <p className="text-indigo-700 arabic-text font-semibold">
-                                    جاري تحليل الصوت باستخدام CHAT GPT 5...
+                                    جاري تحليل الصوت...
                                   </p>
                                 </div>
                                 <Progress value={analysisProgress} className="h-3" />
@@ -895,6 +848,7 @@ export default function ExercisePage() {
                           اختبر فهمك للنص
                         </CardTitle>
                       </CardHeader>
+
                       <CardContent className="p-8 space-y-6">
                         {quizScore === null ? (
                           <div className="space-y-6">
@@ -906,22 +860,35 @@ export default function ExercisePage() {
                                 <p className="font-bold text-lg text-slate-900 mb-3 arabic-text">
                                   {q.question}
                                 </p>
+
+                                {/* ✅ FIX: RadioGroup controlled + functional setState */}
                                 <RadioGroup
-                                  onValueChange={(val) =>
-                                    setQuizAnswers({
-                                      ...quizAnswers,
-                                      [qIdx]: parseInt(val, 10),
-                                    })
-                                  }
                                   dir="rtl"
+                                  value={
+                                    quizAnswers[qIdx] !== undefined
+                                      ? String(quizAnswers[qIdx])
+                                      : undefined
+                                  }
+                                  onValueChange={(val) =>
+                                    setQuizAnswers((prev) => ({
+                                      ...prev,
+                                      [qIdx]: Number(val),
+                                    }))
+                                  }
                                 >
                                   {q.options.map((opt, oIdx) => (
                                     <div
                                       key={oIdx}
-                                      className="flex items-center space-x-2 space-x-reverse mb-2"
+                                      className="flex items-center gap-2 mb-2 cursor-pointer"
+                                      onClick={() =>
+                                        setQuizAnswers((prev) => ({
+                                          ...prev,
+                                          [qIdx]: oIdx,
+                                        }))
+                                      }
                                     >
                                       <RadioGroupItem
-                                        value={oIdx.toString()}
+                                        value={String(oIdx)}
                                         id={`q${qIdx}-o${oIdx}`}
                                       />
                                       <Label
@@ -935,11 +902,11 @@ export default function ExercisePage() {
                                 </RadioGroup>
                               </div>
                             ))}
+
                             <Button
                               onClick={submitQuiz}
                               disabled={
-                                Object.keys(quizAnswers).length <
-                                quizQuestions.length
+                                Object.keys(quizAnswers).length < quizQuestions.length
                               }
                               className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-6 text-lg arabic-text"
                             >
@@ -953,11 +920,11 @@ export default function ExercisePage() {
                                 {Math.round(quizScore)}%
                               </span>
                             </div>
+
                             <h3 className="text-2xl font-bold text-slate-800 arabic-text">
-                              {quizScore === 100
-                                ? "ممتاز! فهم كامل للنص 🌟"
-                                : "جيد جداً! استمر في المحاولة 👍"}
+                              {quizScore === 100 ? "ممتاز! 🌟" : "جيد جداً! 👍"}
                             </h3>
+
                             <div className="flex justify-center">
                               {nextExercise && (
                                 <Button
@@ -988,7 +955,27 @@ export default function ExercisePage() {
                           تم إرسال تسجيلك بنجاح! 🎉
                         </CardTitle>
                       </CardHeader>
+
                       <CardContent className="text-center p-8 space-y-6">
+                        {/* ✅ رسالة منع التقدم */}
+                        {requiresRetry && (
+                          <Card className="border-red-200 bg-red-50">
+                            <CardContent className="p-4 text-right">
+                              <p className="text-red-800 arabic-text font-bold">
+                                لَا يُمْكِنُ الِانْتِقَالُ: يَجِبُ أَنْ تَقْرَأَ النَّصَّ نَفْسَهُ وَتَحْصُلَ عَلَى دَرَجَةٍ فَوْقَ الصِّفْرِ.
+                              </p>
+                              <div className="mt-3 flex justify-end">
+                                <Button
+                                  onClick={retryRecording}
+                                  className="bg-red-600 hover:bg-red-700 text-white arabic-text"
+                                >
+                                  أَعِدِ المُحَاوَلَةَ
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
                         {lastAnalysis && (
                           <motion.div
                             initial={{ opacity: 0, y: 20 }}
@@ -996,7 +983,7 @@ export default function ExercisePage() {
                             className="bg-white p-6 rounded-xl border-2 border-indigo-100 shadow-sm text-right w-full mb-6"
                           >
                             <h3 className="font-bold text-indigo-800 text-xl mb-4 arabic-text border-b pb-2">
-                              📊 نتيجة التحليل (Chat GPT 5):
+                              📊 نتيجة التحليل:
                             </h3>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -1010,38 +997,10 @@ export default function ExercisePage() {
                               </div>
                               <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
                                 <p className="text-purple-900 font-bold arabic-text mb-2">
-                                  📝 النص الذي تم تقييمه:
+                                  📝 النص:
                                 </p>
                                 <p className="text-purple-800 arabic-text text-sm leading-relaxed">
                                   "{exercise.sentence}"
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="space-y-4 mb-6">
-                              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                <p className="text-blue-900 font-bold arabic-text">
-                                  🎵 الإيقاع:
-                                </p>
-                                <p className="text-blue-700 arabic-text">
-                                  {lastAnalysis.analysis_details?.rhythm || "جيد"}
-                                </p>
-                              </div>
-                              <div className="bg-green-50 p-3 rounded-lg border border-green-100">
-                                <p className="text-green-900 font-bold arabic-text">
-                                  🗣️ النبرة:
-                                </p>
-                                <p className="text-green-700 arabic-text">
-                                  {lastAnalysis.analysis_details?.tone || "واضحة"}
-                                </p>
-                              </div>
-                              <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
-                                <p className="text-orange-900 font-bold arabic-text">
-                                  💨 التنفس:
-                                </p>
-                                <p className="text-orange-700 arabic-text">
-                                  {lastAnalysis.analysis_details?.breathing ||
-                                    "منتظم"}
                                 </p>
                               </div>
                             </div>
@@ -1053,82 +1012,40 @@ export default function ExercisePage() {
                               <p className="text-yellow-800 arabic-text text-lg leading-relaxed">
                                 {lastAnalysis.feedback}
                               </p>
-                              {lastAnalysis.analysis_details?.suggestions && (
-                                <p className="text-yellow-700 arabic-text mt-2 pt-2 border-t border-yellow-200">
-                                  <strong>كيفية التطوير:</strong>{" "}
-                                  {lastAnalysis.analysis_details.suggestions}
-                                </p>
-                              )}
                             </div>
-
-                            <p className="text-xs text-gray-400 text-center mt-4 arabic-text">
-                              تم التحليل عبر Vercel API بدقة عالية
-                            </p>
                           </motion.div>
                         )}
 
-                        <p className="text-xl text-indigo-700 arabic-text leading-relaxed">
-                          تسجيلك محفوظ ووصل للمعلم للمراجعة والتقييم
-                        </p>
-
-                        {/* وضع المرآة */}
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 w-full mb-6">
-                          <h4 className="font-bold text-slate-800 mb-3 arabic-text flex items-center justify-center gap-2">
-                            <Headphones className="w-5 h-5" />
-                            وضع المرآة (قارن نطقك)
-                          </h4>
-                          <div className="flex justify-center gap-4">
-                            <Button
-                              variant="outline"
-                              onClick={() => {
-                                const audio = new Audio(
-                                  lastAnalysis.audio_url ||
-                                    URL.createObjectURL(audioBlob)
-                                );
-                                audio.play();
-                              }}
-                              className="arabic-text"
-                            >
-                              <Play className="w-4 h-4 ml-2" />
-                              اسمع صوتك
-                            </Button>
-                            <Button
-                              variant="default"
-                              onClick={() => speakText(exercise.sentence)}
-                              className="arabic-text bg-indigo-600 hover:bg-indigo-700"
-                            >
-                              <Volume2 className="w-4 h-4 ml-2" />
-                              اسمع النطق الصحيح
-                            </Button>
-                          </div>
-                        </div>
-
+                        {/* ✅ لا اختبار ولا انتقال إذا لم يجتز */}
                         <div className="flex gap-4 justify-center flex-wrap">
-                          {isGeneratingQuiz ? (
+                          {analysisPassed ? (
+                            isGeneratingQuiz ? (
+                              <Button
+                                disabled
+                                className="bg-gray-100 text-gray-600 px-8 py-6 rounded-xl text-lg arabic-text border-2 border-gray-200"
+                              >
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600 ml-2"></div>
+                                جارٍ تحضير الأسئلة...
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => setShowQuiz(true)}
+                                disabled={quizQuestions.length === 0}
+                                className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white px-10 py-6 rounded-xl text-xl arabic-text shadow-xl animate-pulse"
+                              >
+                                <Brain className="w-6 h-6 mr-2" />
+                                ابدأ اختبار الفهم
+                              </Button>
+                            )
+                          ) : (
                             <Button
-                              disabled
-                              className="bg-gray-100 text-gray-600 px-8 py-6 rounded-xl text-lg arabic-text border-2 border-gray-200"
+                              onClick={retryRecording}
+                              className="bg-red-600 hover:bg-red-700 text-white px-10 py-6 rounded-xl text-xl arabic-text shadow-xl"
                             >
-                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600 ml-2"></div>
-                              جارٍ تحضير الأسئلة...
+                              <RotateCcw className="w-6 h-6 mr-2" />
+                              أعد التسجيل
                             </Button>
-                          ) : quizQuestions.length > 0 ? (
-                            <Button
-                              onClick={() => setShowQuiz(true)}
-                              className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white px-10 py-6 rounded-xl text-xl arabic-text shadow-xl animate-pulse"
-                            >
-                              <Brain className="w-6 h-6 mr-2" />
-                              ابدأ اختبار الفهم
-                            </Button>
-                          ) : nextExercise ? (
-                            <Button
-                              onClick={goToNextExercise}
-                              className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-8 py-6 rounded-xl text-lg arabic-text shadow-lg glow-effect"
-                            >
-                              <Sparkles className="w-5 h-5 mr-2" />
-                              التمرين التالي
-                            </Button>
-                          ) : null}
+                          )}
 
                           <Link to={createPageUrl("StudentDashboard")}>
                             <Button
