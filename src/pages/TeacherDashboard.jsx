@@ -6,17 +6,16 @@ import {
   StudentGroup,
   Exercise,
   SystemSetting,
-  InvokeLLM
+  InvokeLLM,
 } from "@/api/entities";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Tabs, TabsContent, TabsList, TabsTrigger
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart3,
   BookOpen,
@@ -42,7 +41,7 @@ import {
   RefreshCw,
   ArrowLeft,
   Calendar,
-  FileSpreadsheet
+  FileSpreadsheet,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -50,11 +49,77 @@ import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion } from "framer-motion";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import AudioCommentModal from "../components/teacher/AudioCommentModal";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
+/* =========================
+   ✅ Helpers (Supabase توافق)
+   ========================= */
+const normalizeExercise = (ex) => ({
+  ...ex,
+  text: ex?.text ?? ex?.sentence ?? "",
+});
+
+async function safeCreateExercise(payload) {
+  try {
+    return await Exercise.create(payload);
+  } catch (e1) {
+    const fallback = { ...payload };
+    if ("sentence" in fallback && !("text" in fallback)) {
+      fallback.text = fallback.sentence;
+      delete fallback.sentence;
+    } else if ("text" in fallback && !("sentence" in fallback)) {
+      fallback.sentence = fallback.text;
+      delete fallback.text;
+    }
+    return await Exercise.create(fallback);
+  }
+}
+
+async function safeUpdateRecording(id, patch) {
+  try {
+    return await Recording.update(id, patch);
+  } catch (e1) {
+    // دعم اختلاف اسم teacher_audio_comment في بعض المشاريع
+    if (patch.teacher_audio_comment && !patch.teacher_audio) {
+      const { teacher_audio_comment, ...rest } = patch;
+      return await Recording.update(id, {
+        ...rest,
+        teacher_audio: teacher_audio_comment,
+      });
+    }
+    throw e1;
+  }
+}
+
+const pickTeacherAudio = (r) =>
+  r.teacher_audio_comment || r.teacher_audio || "";
+const pickAiFeedback = (r) =>
+  r.feedback ||
+  r.analysis_details?.feedback ||
+  r.analysis_details?.ai_feedback ||
+  "";
+const pickReadText = (r) =>
+  r.analysis_details?.original_text ||
+  r.analysis_details?.text ||
+  r.analysis_details?.sentence ||
+  "";
 
 /* ✅ بوابة دخول المعلم (حماية بسيطة بكلمة مرور) */
 function TeacherGate({ children }) {
@@ -67,7 +132,6 @@ function TeacherGate({ children }) {
     if (pw === "teacher246") {
       sessionStorage.setItem("teacher_authed", "1");
       setError("");
-      // أبسط طريقة بدون تعقيد: نعيد تحميل الصفحة ليدخل للوحة
       window.location.reload();
     } else {
       setError("كلمة المرور غير صحيحة.");
@@ -77,32 +141,41 @@ function TeacherGate({ children }) {
   if (authed) return children;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md border-0 shadow-lg bg-white/95">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+      <Card className="w-full max-w-md border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="arabic-text text-right">دخول المعلم</CardTitle>
+          <CardTitle className="arabic-text text-right text-lg">
+            دخول المعلم
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <form onSubmit={submit} className="space-y-3">
-            <Label className="arabic-text text-right block">كلمة المرور</Label>
-            <Input
-              type="password"
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
-              className="text-right arabic-text"
-              placeholder="••••••••"
-              autoComplete="current-password"
-            />
+            <div className="space-y-1 text-right">
+              <Label className="arabic-text">كلمة المرور</Label>
+              <Input
+                type="password"
+                value={pw}
+                onChange={(e) => setPw(e.target.value)}
+                className="text-right arabic-text"
+                placeholder="••••••••"
+                autoComplete="current-password"
+              />
+            </div>
+
             {error && (
-              <p className="text-sm text-red-600 arabic-text text-right">{error}</p>
+              <div className="text-right arabic-text text-sm text-red-600">
+                {error}
+              </div>
             )}
+
             <Button type="submit" className="arabic-text w-full">
               دخول
             </Button>
           </form>
 
           <p className="text-xs text-slate-500 arabic-text text-right">
-            ملاحظة: هذه حماية بسيطة على الواجهة فقط. للحماية القوية نحتاج تسجيل دخول فعلي.
+            ملاحظة: هذه حماية بسيطة على الواجهة فقط. للحماية القوية نحتاج تسجيل
+            دخول فعلي.
           </p>
         </CardContent>
       </Card>
@@ -122,7 +195,7 @@ function SettingsTab() {
   const loadSettings = async () => {
     try {
       const settings = await SystemSetting.list();
-      const keySetting = settings.find(s => s.key === "openai_api_key");
+      const keySetting = settings.find((s) => s.key === "openai_api_key");
       if (keySetting) setApiKey(keySetting.value || "");
     } catch (e) {
       console.error("Failed to load settings", e);
@@ -133,7 +206,7 @@ function SettingsTab() {
     setIsLoading(true);
     try {
       const settings = await SystemSetting.list();
-      const existing = settings.find(s => s.key === "openai_api_key");
+      const existing = settings.find((s) => s.key === "openai_api_key");
 
       if (existing) {
         await SystemSetting.update(existing.id, { value: apiKey });
@@ -141,9 +214,10 @@ function SettingsTab() {
         await SystemSetting.create({
           key: "openai_api_key",
           value: apiKey,
-          description: "OpenAI API Key for audio transcription and analysis"
+          description: "OpenAI API Key for audio transcription and analysis",
         });
       }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
@@ -155,22 +229,22 @@ function SettingsTab() {
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="border-0 shadow-lg bg-white/90">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="arabic-text text-lg">إعدادات النظام المتقدمة</span>
-            <Settings className="w-5 h-5 text-slate-500" />
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-right arabic-text text-sm leading-relaxed">
-            <p className="font-semibold text-slate-800 mb-1">🔐 مفتاح OpenAI API</p>
-            <p className="text-slate-600">
-              هذا المفتاح يُستخدم لتحويل الصوت إلى نص وتحليل النطق في صفحة <strong>التدريب الخاص</strong>.
-              يتم تخزينه في قاعدة البيانات بشكل آمن ولا يظهر للطلاب أو أولياء الأمور.
-            </p>
+    <Card className="border-0 shadow-none bg-transparent">
+      <CardHeader className="px-0">
+        <CardTitle className="arabic-text text-right text-lg">
+          إعدادات النظام المتقدمة
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent className="px-0 space-y-3">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+          <div className="arabic-text text-right font-semibold">
+            🔐 مفتاح OpenAI API
           </div>
+          <p className="text-sm text-slate-600 arabic-text text-right">
+            هذا المفتاح يُستخدم لتحويل الصوت إلى نص وتحليل النطق في صفحة التدريب
+            الخاص. يتم تخزينه في قاعدة البيانات ولا يظهر للطلاب.
+          </p>
 
           <div className="space-y-2">
             <Label className="arabic-text font-semibold text-right block text-slate-700">
@@ -185,27 +259,29 @@ function SettingsTab() {
               autoComplete="off"
             />
             <p className="text-xs text-slate-400 arabic-text text-right">
-              تأكد من أن خطتك في OpenAI تسمح باستخدام Whisper و GPT-4o.
+              تأكد من أن خطتك تسمح باستخدام Whisper و GPT-4o.
             </p>
           </div>
 
-          <Button
-            onClick={handleSave}
-            disabled={isLoading}
-            className="arabic-text w-full md:w-auto"
-          >
-            {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            حفظ الإعدادات
-          </Button>
+          <div className="flex justify-end">
+            <Button
+              onClick={handleSave}
+              disabled={isLoading}
+              className="arabic-text"
+            >
+              {isLoading && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+              حفظ الإعدادات
+            </Button>
+          </div>
 
           {saved && (
             <p className="text-xs text-green-600 arabic-text text-right">
               ✅ تم حفظ الإعدادات بنجاح.
             </p>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -227,10 +303,10 @@ function StudentsTab({ onSelectStudent }) {
     try {
       const [studentList, groupList] = await Promise.all([
         Student.list("-last_activity"),
-        StudentGroup.list()
+        StudentGroup.list(),
       ]);
-      setStudents(studentList);
-      setGroups(groupList);
+      setStudents(studentList || []);
+      setGroups(groupList || []);
     } catch (error) {
       console.error("Failed to load students or groups", error);
     } finally {
@@ -238,7 +314,7 @@ function StudentsTab({ onSelectStudent }) {
     }
   };
 
-  const filteredStudents = students.filter((s) => {
+  const filteredStudents = (students || []).filter((s) => {
     let ok = true;
     if (filterGrade) ok = ok && s.grade === filterGrade;
     if (searchName.trim()) {
@@ -249,10 +325,7 @@ function StudentsTab({ onSelectStudent }) {
           .includes(searchName.trim().toLowerCase());
     }
     if (selectedGroupFilter !== "all") {
-      ok =
-        ok &&
-        s.group_id &&
-        selectedGroupFilter === s.group_id;
+      ok = ok && s.group_id && selectedGroupFilter === s.group_id;
     }
     return ok;
   });
@@ -293,7 +366,7 @@ function StudentsTab({ onSelectStudent }) {
 
   const getGroupName = (groupId) => {
     if (!groupId) return "غير منضم لمجموعة";
-    const group = groups.find((g) => g.id === groupId);
+    const group = (groups || []).find((g) => g.id === groupId);
     return group ? group.name : "مجموعة غير معروفة";
   };
 
@@ -301,8 +374,8 @@ function StudentsTab({ onSelectStudent }) {
     <div className="space-y-6">
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="arabic-text text-lg flex items-center gap-2">
+          <CardTitle className="arabic-text text-right flex items-center justify-between">
+            <span className="flex items-center gap-2">
               <Filter className="w-5 h-5 text-slate-500" />
               تصفية الطلاب
             </span>
@@ -317,11 +390,11 @@ function StudentsTab({ onSelectStudent }) {
               className="arabic-text text-xs text-slate-500"
             >
               إعادة ضبط
-              <RefreshCw className="w-3 h-3 mr-1" />
             </Button>
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-3 gap-4 items-end">
+
+        <CardContent className="grid md:grid-cols-3 gap-4">
           <div className="space-y-1 text-right">
             <Label className="arabic-text text-sm text-slate-700">
               البحث بالاسم
@@ -408,16 +481,33 @@ function StudentsTab({ onSelectStudent }) {
             <table className="w-full text-right border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">الاسم</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">الصف</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">المجموعة</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">آخر نشاط</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">مستوى النطق</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">تمارين</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">المتوسط</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">تفاصيل</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    الاسم
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    الصف
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    المجموعة
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    آخر نشاط
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    مستوى النطق
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    تمارين
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    المتوسط
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
+                    تفاصيل
+                  </th>
                 </tr>
               </thead>
+
               <tbody>
                 {filteredStudents.map((s) => (
                   <React.Fragment key={s.id}>
@@ -476,17 +566,20 @@ function StudentsTab({ onSelectStudent }) {
                             <div className="flex flex-wrap gap-2">
                               <Badge className="bg-emerald-100 text-emerald-800 arabic-text">
                                 حروف متقنة:{" "}
-                                {s.mastered_letters && s.mastered_letters.length > 0
+                                {s.mastered_letters &&
+                                s.mastered_letters.length > 0
                                   ? s.mastered_letters.join("، ")
                                   : "لا يوجد"}
                               </Badge>
                               <Badge className="bg-orange-100 text-orange-800 arabic-text">
                                 يحتاج تدريب:{" "}
-                                {s.needs_practice_letters && s.needs_practice_letters.length > 0
+                                {s.needs_practice_letters &&
+                                s.needs_practice_letters.length > 0
                                   ? s.needs_practice_letters.join("، ")
                                   : "لا يوجد"}
                               </Badge>
                             </div>
+
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
@@ -534,8 +627,8 @@ function GroupsTab() {
         StudentGroup.list(),
         Student.list("-name"),
       ]);
-      setGroups(groupList);
-      setStudents(studentList);
+      setGroups(groupList || []);
+      setStudents(studentList || []);
     } catch (e) {
       console.error("Failed to load data", e);
     } finally {
@@ -547,9 +640,7 @@ function GroupsTab() {
     if (!newGroupName.trim()) return;
     setIsLoading(true);
     try {
-      const g = await StudentGroup.create({
-        name: newGroupName.trim(),
-      });
+      const g = await StudentGroup.create({ name: newGroupName.trim() });
       setGroups((prev) => [g, ...prev]);
       setNewGroupName("");
       toast({
@@ -592,9 +683,7 @@ function GroupsTab() {
     setIsLoading(true);
     try {
       await StudentGroup.delete(groupId);
-      toast({
-        title: "تم حذف المجموعة",
-      });
+      toast({ title: "تم حذف المجموعة" });
       setGroups((prev) => prev.filter((g) => g.id !== groupId));
     } catch (e) {
       console.error("Delete group failed", e);
@@ -604,14 +693,14 @@ function GroupsTab() {
     }
   };
 
-  const filteredStudents = students.filter((s) => {
+  const filteredStudents = (students || []).filter((s) => {
     if (groupFilter === "all") return true;
     if (groupFilter === "ungrouped") return !s.group_id;
     return s.group_id === groupFilter;
   });
 
   const getGroupName = (groupId) => {
-    const group = groups.find((g) => g.id === groupId);
+    const group = (groups || []).find((g) => g.id === groupId);
     return group ? group.name : "غير منضم لمجموعة";
   };
 
@@ -625,13 +714,16 @@ function GroupsTab() {
     <div className="space-y-6">
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="arabic-text text-lg flex items-center gap-2">
+          <CardTitle className="arabic-text text-right text-lg flex items-center justify-between">
+            <span className="flex items-center gap-2">
               <Users className="w-5 h-5 text-slate-500" />
               إدارة المجموعات
             </span>
             {isLoading && (
-              <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+              <span className="flex items-center gap-2 text-xs text-slate-500 arabic-text">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                جاري التحميل...
+              </span>
             )}
           </CardTitle>
         </CardHeader>
@@ -661,7 +753,7 @@ function GroupsTab() {
             <Label className="arabic-text text-sm text-slate-700">
               اختر مجموعة للربط
             </Label>
-            <Select value={selectedGroupId} onValueChange={(v) => setSelectedGroupId(v)}>
+            <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
               <SelectTrigger className="text-right arabic-text">
                 <SelectValue placeholder="اختر مجموعة" />
               </SelectTrigger>
@@ -688,13 +780,17 @@ function GroupsTab() {
             <Label className="arabic-text text-sm text-slate-700">
               تصفية الطلاب حسب المجموعة
             </Label>
-            <Select value={groupFilter} onValueChange={(v) => setGroupFilter(v)}>
+            <Select value={groupFilter} onValueChange={setGroupFilter}>
               <SelectTrigger className="text-right arabic-text">
                 <SelectValue placeholder="كل الطلاب" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all" className="arabic-text">كل الطلاب</SelectItem>
-                <SelectItem value="ungrouped" className="arabic-text">بدون مجموعة</SelectItem>
+                <SelectItem value="all" className="arabic-text">
+                  كل الطلاب
+                </SelectItem>
+                <SelectItem value="ungrouped" className="arabic-text">
+                  بدون مجموعة
+                </SelectItem>
                 {groups.map((g) => (
                   <SelectItem key={g.id} value={g.id} className="arabic-text">
                     {g.name}
@@ -702,31 +798,54 @@ function GroupsTab() {
                 ))}
               </SelectContent>
             </Select>
+
+            <Button
+              variant="destructive"
+              className="arabic-text w-full"
+              disabled={!selectedGroupId || isLoading}
+              onClick={() => handleDeleteGroup(selectedGroupId)}
+            >
+              <Trash2 className="w-4 h-4 ml-1" />
+              حذف المجموعة المحددة
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+          <CardTitle className="arabic-text text-right text-lg flex items-center gap-2">
             <Users className="w-5 h-5 text-slate-500" />
             الطلاب
           </CardTitle>
         </CardHeader>
+
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-right">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">اختيار</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الاسم</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الصف</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">المجموعة الحالية</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    اختيار
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الاسم
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الصف
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    المجموعة الحالية
+                  </th>
                 </tr>
               </thead>
+
               <tbody>
                 {filteredStudents.map((s) => (
-                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50/60">
+                  <tr
+                    key={s.id}
+                    className="border-b border-slate-100 hover:bg-slate-50/60"
+                  >
                     <td className="py-2 px-3 text-center">
                       <Checkbox
                         checked={selectedStudents.includes(s.id)}
@@ -747,7 +866,10 @@ function GroupsTab() {
 
                 {filteredStudents.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="text-center py-4 text-slate-500 arabic-text">
+                    <td
+                      colSpan={4}
+                      className="text-center py-4 text-slate-500 arabic-text"
+                    >
                       لا يوجد طلاب في هذه التصفية.
                     </td>
                   </tr>
@@ -758,11 +880,12 @@ function GroupsTab() {
         </CardContent>
       </Card>
 
-      <Card className="border-0 shadow-lg bg-red-50/80 border-red-100">
+      <Card className="border-0 shadow-lg bg-red-50/80 border border-red-100">
         <CardContent className="text-right arabic-text text-xs text-red-700 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 mt-1 flex-shrink-0" />
           <p>
-            ملاحظة: عند حذف مجموعة، لن يتم حذف الطلاب، لكن سيفقدون ارتباطهم بتلك المجموعة.
+            ملاحظة: عند حذف مجموعة، لن يتم حذف الطلاب، لكن سيفقدون ارتباطهم بتلك
+            المجموعة.
           </p>
         </CardContent>
       </Card>
@@ -770,8 +893,11 @@ function GroupsTab() {
   );
 }
 
+/* =========================
+   ✅ ExercisesTab (توافق sentence/text)
+   ========================= */
 function ExercisesTab() {
-  const ALL = "__all__"; // ✅ بدل value="" في SelectItem
+  const ALL = "__all__";
 
   const [exercises, setExercises] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -810,9 +936,10 @@ function ExercisesTab() {
     setIsLoading(true);
     try {
       const list = await Exercise.list("-created_date");
-      setExercises(list);
+      setExercises((list || []).map(normalizeExercise));
     } catch (e) {
       console.error("Failed to load exercises", e);
+      setExercises([]);
     } finally {
       setIsLoading(false);
     }
@@ -823,15 +950,16 @@ function ExercisesTab() {
 
     setIsLoading(true);
     try {
-      const ex = await Exercise.create({
+      const ex = await safeCreateExercise({
         title: newTitle.trim(),
-        text: newText.trim(),
+        sentence: newText.trim(), // ✅ supabase غالبًا sentence
         grade: newGrade,
         level: newLevel,
         stage: parseInt(newStage, 10) || 1,
         is_active: true,
       });
-      setExercises((prev) => [ex, ...prev]);
+
+      setExercises((prev) => [normalizeExercise(ex), ...prev]);
       setNewTitle("");
       setNewText("");
       setNewGrade("");
@@ -858,12 +986,10 @@ function ExercisesTab() {
     }
   };
 
-  const filteredExercises = exercises.filter((ex) => {
+  const filteredExercises = (exercises || []).filter((ex) => {
     let ok = true;
-
     if (filterGrade !== ALL) ok = ok && ex.grade === filterGrade;
     if (filterLevel !== ALL) ok = ok && ex.level === filterLevel;
-
     if (filterStage) ok = ok && ex.stage === parseInt(filterStage, 10);
     if (searchText.trim()) {
       const t = searchText.trim().toLowerCase();
@@ -881,11 +1007,12 @@ function ExercisesTab() {
     <div className="space-y-6">
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+          <CardTitle className="arabic-text text-right text-lg flex items-center gap-2">
             <Plus className="w-5 h-5 text-slate-500" />
             إنشاء تمرين جديد
           </CardTitle>
         </CardHeader>
+
         <CardContent className="grid md:grid-cols-2 gap-6">
           <div className="space-y-3 text-right">
             <Label className="arabic-text text-sm text-slate-700">
@@ -925,13 +1052,18 @@ function ExercisesTab() {
                   </SelectTrigger>
                   <SelectContent>
                     {levelOptions.map((lvl) => (
-                      <SelectItem key={lvl} value={lvl} className="arabic-text">
+                      <SelectItem
+                        key={lvl}
+                        value={lvl}
+                        className="arabic-text"
+                      >
                         {lvl}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-1 text-right">
                 <Label className="arabic-text text-sm text-slate-700">
                   المرحلة
@@ -963,9 +1095,7 @@ function ExercisesTab() {
               disabled={!newTitle.trim() || !newText.trim() || !newGrade || isLoading}
               className="arabic-text w-full mt-2"
             >
-              {isLoading && (
-                <Loader2 className="w-4 h-4 ml-1 animate-spin" />
-              )}
+              {isLoading && <Loader2 className="w-4 h-4 ml-1 animate-spin" />}
               حفظ التمرين
             </Button>
           </div>
@@ -974,7 +1104,7 @@ function ExercisesTab() {
 
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+          <CardTitle className="arabic-text text-right text-lg flex items-center gap-2">
             <ListChecks className="w-5 h-5 text-slate-500" />
             قائمة التمارين ({filteredExercises.length})
           </CardTitle>
@@ -983,9 +1113,7 @@ function ExercisesTab() {
         <CardContent className="space-y-4 text-right">
           <div className="grid md:grid-cols-4 gap-3">
             <div className="space-y-1">
-              <Label className="arabic-text text-sm text-slate-700">
-                بحث
-              </Label>
+              <Label className="arabic-text text-sm text-slate-700">بحث</Label>
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                 <Input
@@ -998,15 +1126,15 @@ function ExercisesTab() {
             </div>
 
             <div className="space-y-1">
-              <Label className="arabic-text text-sm text-slate-700">
-                الصف
-              </Label>
+              <Label className="arabic-text text-sm text-slate-700">الصف</Label>
               <Select value={filterGrade} onValueChange={setFilterGrade}>
                 <SelectTrigger className="text-right arabic-text">
                   <SelectValue placeholder="الكل" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL} className="arabic-text">الكل</SelectItem>
+                  <SelectItem value={ALL} className="arabic-text">
+                    الكل
+                  </SelectItem>
                   {gradeLevels.map((g) => (
                     <SelectItem key={g} value={g} className="arabic-text">
                       {g}
@@ -1025,7 +1153,9 @@ function ExercisesTab() {
                   <SelectValue placeholder="الكل" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL} className="arabic-text">الكل</SelectItem>
+                  <SelectItem value={ALL} className="arabic-text">
+                    الكل
+                  </SelectItem>
                   {levelOptions.map((lvl) => (
                     <SelectItem key={lvl} value={lvl} className="arabic-text">
                       {lvl}
@@ -1036,9 +1166,7 @@ function ExercisesTab() {
             </div>
 
             <div className="space-y-1">
-              <Label className="arabic-text text-sm text-slate-700">
-                المرحلة
-              </Label>
+              <Label className="arabic-text text-sm text-slate-700">المرحلة</Label>
               <Input
                 type="number"
                 value={filterStage}
@@ -1053,17 +1181,33 @@ function ExercisesTab() {
             <table className="w-full border-collapse text-right">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">العنوان</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الصف</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">المستوى</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">المرحلة</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">نشط؟</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الإجراءات</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    العنوان
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الصف
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    المستوى
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    المرحلة
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    نشط؟
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الإجراءات
+                  </th>
                 </tr>
               </thead>
+
               <tbody>
                 {filteredExercises.map((ex) => (
-                  <tr key={ex.id} className="border-b border-slate-100 hover:bg-slate-50/60">
+                  <tr
+                    key={ex.id}
+                    className="border-b border-slate-100 hover:bg-slate-50/60"
+                  >
                     <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text">
                       {ex.title}
                     </td>
@@ -1080,14 +1224,20 @@ function ExercisesTab() {
                       <span
                         className={cn(
                           "inline-flex items-center px-2 py-1 rounded-full text-xs",
-                          ex.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+                          ex.is_active
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-slate-100 text-slate-500"
                         )}
                       >
                         {ex.is_active ? "نعم" : "لا"}
                       </span>
                     </td>
                     <td className="py-2 px-3 text-xs text-center">
-                      <Button size="icon" variant="ghost" onClick={() => handleDeleteExercise(ex.id)}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDeleteExercise(ex.id)}
+                      >
                         <Trash2 className="w-4 h-4 text-red-500" />
                       </Button>
                     </td>
@@ -1096,7 +1246,10 @@ function ExercisesTab() {
 
                 {filteredExercises.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-4 text-slate-500 arabic-text">
+                    <td
+                      colSpan={6}
+                      className="text-center py-4 text-slate-500 arabic-text"
+                    >
                       لا توجد تمارين مطابقة للتصفية الحالية.
                     </td>
                   </tr>
@@ -1104,14 +1257,25 @@ function ExercisesTab() {
               </tbody>
             </table>
           </div>
+
+          {isLoading && (
+            <div className="text-center py-3">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-500" />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
 
+/* =========================
+   ✅ RecordingsTab (لوحة التحكم/التسجيلات)
+   - عرض رد الذكاء + الدرجة /100 قابلة للتعديل
+   - رد نصي + رد صوتي (AudioCommentModal)
+   ========================= */
 function RecordingsTab() {
-  const ALL = "__all__"; // ✅ بدل value=""
+  const ALL = "__all__";
 
   const [recordings, setRecordings] = useState([]);
   const [students, setStudents] = useState([]);
@@ -1120,9 +1284,11 @@ function RecordingsTab() {
   const [filterScore, setFilterScore] = useState(0);
   const [onlyWithComments, setOnlyWithComments] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
   const [selectedRecording, setSelectedRecording] = useState(null);
   const [teacherComment, setTeacherComment] = useState("");
   const [isSavingComment, setIsSavingComment] = useState(false);
+
   const [editScore, setEditScore] = useState("");
   const [editScoreRecordingId, setEditScoreRecordingId] = useState(null);
 
@@ -1153,18 +1319,20 @@ function RecordingsTab() {
         Student.list(),
         Recording.list("-created_date"),
       ]);
-      setStudents(studentList);
-      setRecordings(recordingList);
+      setStudents(studentList || []);
+      setRecordings(recordingList || []);
     } catch (e) {
       console.error("Failed to load recordings", e);
+      setStudents([]);
+      setRecordings([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const getStudentById = (id) => students.find((s) => s.id === id);
+  const getStudentById = (id) => (students || []).find((s) => s.id === id);
 
-  const filteredRecordings = recordings.filter((r) => {
+  const filteredRecordings = (recordings || []).filter((r) => {
     let ok = true;
 
     if (selectedStudentId !== ALL) ok = ok && r.student_id === selectedStudentId;
@@ -1175,33 +1343,36 @@ function RecordingsTab() {
     }
 
     if (filterScore > 0) ok = ok && (r.score || 0) >= filterScore;
-    if (onlyWithComments) ok = ok && (r.teacher_comment || r.teacher_audio_comment);
+
+    if (onlyWithComments) ok = ok && (r.teacher_comment || pickTeacherAudio(r));
 
     return ok;
   });
 
-  const openCommentModal = (recording) => {
+  const openReplyDialog = (recording) => {
     setSelectedRecording(recording);
     setTeacherComment(recording.teacher_comment || "");
   };
 
-  const saveComment = async () => {
+  const saveReply = async () => {
     if (!selectedRecording) return;
     setIsSavingComment(true);
     try {
-      await Recording.update(selectedRecording.id, {
+      await safeUpdateRecording(selectedRecording.id, {
         teacher_comment: teacherComment,
       });
+
       setRecordings((prev) =>
         prev.map((r) =>
           r.id === selectedRecording.id ? { ...r, teacher_comment: teacherComment } : r
         )
       );
+
       setSelectedRecording(null);
       setTeacherComment("");
     } catch (e) {
-      console.error("Failed to save comment", e);
-      alert("فشل في حفظ التعليق");
+      console.error("Failed to save teacher reply", e);
+      alert("فشل حفظ رد المعلم.");
     } finally {
       setIsSavingComment(false);
     }
@@ -1212,10 +1383,6 @@ function RecordingsTab() {
     setEditScoreRecordingId(recording.id);
   };
 
-  const handleScoreChange = (e) => {
-    setEditScore(e.target.value);
-  };
-
   const handleManualScoreSave = async (recordingId) => {
     const newScore = parseInt(editScore, 10);
     if (isNaN(newScore) || newScore < 0 || newScore > 100) {
@@ -1224,11 +1391,9 @@ function RecordingsTab() {
     }
 
     try {
-      await Recording.update(recordingId, { score: newScore });
+      await safeUpdateRecording(recordingId, { score: newScore });
       setRecordings((prev) =>
-        prev.map((r) =>
-          r.id === recordingId ? { ...r, score: newScore } : r
-        )
+        prev.map((r) => (r.id === recordingId ? { ...r, score: newScore } : r))
       );
       setEditScoreRecordingId(null);
       setEditScore("");
@@ -1242,9 +1407,21 @@ function RecordingsTab() {
     <div className="space-y-6">
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="arabic-text text-lg flex items-center gap-2">
-            <Filter className="w-5 h-5 text-slate-500" />
-            تصفية التسجيلات
+          <CardTitle className="arabic-text text-right text-lg flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-slate-500" />
+              تصفية التسجيلات
+            </span>
+
+            <Button
+              variant="outline"
+              className="arabic-text text-xs"
+              onClick={loadData}
+              disabled={isLoading}
+            >
+              <RefreshCw className="w-4 h-4 ml-1" />
+              تحديث
+            </Button>
           </CardTitle>
         </CardHeader>
 
@@ -1256,7 +1433,9 @@ function RecordingsTab() {
                 <SelectValue placeholder="كل الطلاب" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL} className="arabic-text">كل الطلاب</SelectItem>
+                <SelectItem value={ALL} className="arabic-text">
+                  كل الطلاب
+                </SelectItem>
                 {students.map((s) => (
                   <SelectItem key={s.id} value={s.id} className="arabic-text">
                     {s.name} - {s.grade}
@@ -1273,7 +1452,9 @@ function RecordingsTab() {
                 <SelectValue placeholder="الكل" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL} className="arabic-text">الكل</SelectItem>
+                <SelectItem value={ALL} className="arabic-text">
+                  الكل
+                </SelectItem>
                 {gradeLevels.map((g) => (
                   <SelectItem key={g} value={g} className="arabic-text">
                     {g}
@@ -1294,7 +1475,7 @@ function RecordingsTab() {
                 onValueChange={(v) => setFilterScore(v[0])}
               />
               <span className="w-10 text-center text-xs font-semibold">
-                {filterScore}%
+                {filterScore}
               </span>
             </div>
           </div>
@@ -1304,7 +1485,7 @@ function RecordingsTab() {
             <div className="flex items-center gap-2 justify-end">
               <Switch checked={onlyWithComments} onCheckedChange={setOnlyWithComments} />
               <span className="text-xs text-slate-700 arabic-text">
-                إظهار التسجيلات التي تحتوي على تعليق فقط
+                إظهار التي تحتوي على رد فقط
               </span>
             </div>
           </div>
@@ -1313,9 +1494,9 @@ function RecordingsTab() {
 
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="arabic-text text-lg flex items-center gap-2">
+          <CardTitle className="arabic-text text-right text-lg flex items-center gap-2">
             <Mic className="w-5 h-5 text-slate-500" />
-            تسجيلات الطلاب ({filteredRecordings.length})
+            جميع تسجيلات الطلاب ({filteredRecordings.length})
           </CardTitle>
         </CardHeader>
 
@@ -1336,39 +1517,60 @@ function RecordingsTab() {
             <table className="w-full border-collapse text-right">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الطالب</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">التاريخ</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الدرجة</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">النص المقروء</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">تعليق المعلم</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الصوت</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الطالب
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    التاريخ
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    الدرجة /100
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    رد الذكاء
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    محاولة الطالب
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
+                    رد المعلم
+                  </th>
                 </tr>
               </thead>
+
               <tbody>
                 {filteredRecordings.map((r) => {
                   const st = getStudentById(r.student_id);
-                  const readText =
-                    r.analysis_details?.original_text ||
-                    r.analysis_details?.text ||
-                    "";
-                  const dateStr = new Date(r.created_date).toLocaleDateString("ar-AE", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  });
+                  const dateStr = r.created_date
+                    ? new Date(r.created_date).toLocaleDateString("ar-AE", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })
+                    : "—";
 
+                  const ai = pickAiFeedback(r);
+                  const readText = pickReadText(r);
+                  const teacherAudioUrl = pickTeacherAudio(r);
+
+                  const scoreVal = r.score ?? null;
                   const scoreColor =
-                    r.score >= 90
+                    scoreVal >= 90
                       ? "bg-emerald-100 text-emerald-800"
-                      : r.score >= 70
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-red-100 text-red-800";
+                      : scoreVal >= 70
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-red-100 text-red-800";
 
                   return (
-                    <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50/60 align-top">
+                    <tr
+                      key={r.id}
+                      className="border-b border-slate-100 hover:bg-slate-50/60 align-top"
+                    >
                       <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text whitespace-nowrap">
-                        {st?.name}
-                        <div className="text-[11px] text-slate-500">{st?.grade}</div>
+                        {st?.name || "طالب"}
+                        <div className="text-[11px] text-slate-500">
+                          {st?.grade || ""}
+                        </div>
                       </td>
 
                       <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
@@ -1381,11 +1583,10 @@ function RecordingsTab() {
                             <Input
                               type="number"
                               value={editScore}
-                              onChange={handleScoreChange}
+                              onChange={(e) => setEditScore(e.target.value)}
                               className="h-8 w-16 text-center text-xs"
                             />
                             <Button
-                              size="xs"
                               className="px-2 py-1 text-xs"
                               onClick={() => handleManualScoreSave(r.id)}
                             >
@@ -1396,21 +1597,33 @@ function RecordingsTab() {
                           <span
                             className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold cursor-pointer ${scoreColor}`}
                             onClick={() => handleScoreClick(r)}
-                            title="اضغط لتعديل الدرجة يدويًا"
+                            title="اضغط لتعديل الدرجة"
                           >
-                            {r.score != null ? `${r.score}%` : "لا يوجد"}
+                            {scoreVal != null ? scoreVal : "—"}
                           </span>
                         )}
                       </td>
 
                       <td className="py-2 px-3 text-xs text-slate-800 arabic-text max-w-sm">
                         <div className="bg-slate-50 rounded-lg p-2">
-                          <p className="line-clamp-3">{readText}</p>
-                          {r.feedback && (
-                            <p className="mt-1 text-[11px] text-blue-700">
-                              🤖 {r.feedback}
-                            </p>
-                          )}
+                          <div className="text-[11px] text-slate-500 mb-1">
+                            🤖 رد الذكاء
+                          </div>
+                          <p className="line-clamp-3">
+                            {ai || "لا يوجد رد ذكاء مسجل."}
+                          </p>
+                        </div>
+                      </td>
+
+                      <td className="py-2 px-3 text-xs text-slate-700 arabic-text max-w-sm">
+                        <div className="space-y-2">
+                          <div className="bg-slate-50 rounded-lg p-2">
+                            <div className="text-[11px] text-slate-500 mb-1">
+                              النص المقروء
+                            </div>
+                            <p className="line-clamp-2">{readText || "—"}</p>
+                          </div>
+                          <audio controls src={r.audio_url} className="w-full" />
                         </div>
                       </td>
 
@@ -1421,15 +1634,29 @@ function RecordingsTab() {
                               👩‍🏫 {r.teacher_comment}
                             </div>
                           )}
-                          {r.teacher_audio_comment && (
-                            <audio controls src={r.teacher_audio_comment} className="w-full" />
-                          )}
-                          <AudioCommentModal recording={r} />
-                        </div>
-                      </td>
 
-                      <td className="py-2 px-3 text-xs text-slate-700">
-                        <audio controls src={r.audio_url} className="w-full" />
+                          {teacherAudioUrl && (
+                            <audio
+                              controls
+                              src={teacherAudioUrl}
+                              className="w-full"
+                            />
+                          )}
+
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="arabic-text text-xs"
+                              onClick={() => openReplyDialog(r)}
+                            >
+                              رد نصي
+                            </Button>
+
+                            {/* ✅ رد صوتي (موجود مسبقًا ويرفع للـ bucket ويحدث التسجيل) */}
+                            <AudioCommentModal recording={r} />
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1437,10 +1664,63 @@ function RecordingsTab() {
               </tbody>
             </table>
           </div>
+
+          {/* ✅ Dialog: رد نصي */}
+          <Dialog
+            open={!!selectedRecording}
+            onOpenChange={(v) => !v && setSelectedRecording(null)}
+          >
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="arabic-text text-right">
+                  إرسال رد نصي للطالب
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-2 text-right">
+                <Label className="arabic-text">ملاحظة المعلم</Label>
+                <Textarea
+                  value={teacherComment}
+                  onChange={(e) => setTeacherComment(e.target.value)}
+                  className="min-h-[140px] text-right arabic-text"
+                  placeholder="اكتب ملاحظة واضحة..."
+                />
+                <p className="text-xs text-slate-500 arabic-text">
+                  سيتم حفظ هذا الرد داخل نفس التسجيل ليظهر للطالب في سجل التعليقات
+                  الذكي.
+                </p>
+              </div>
+
+              <DialogFooter className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedRecording(null)}
+                  className="arabic-text"
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  onClick={saveReply}
+                  disabled={isSavingComment}
+                  className="arabic-text"
+                >
+                  {isSavingComment && (
+                    <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  )}
+                  حفظ الرد
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
     </div>
   );
+}
+
+/* ✅ لوحة التحكم = جميع التسجيلات (نفس تسجيلات الطلاب) */
+function DashboardTab() {
+  return <RecordingsTab />;
 }
 
 function EmergencyDrillTab() {
@@ -1475,16 +1755,13 @@ function EmergencyDrillTab() {
     setIsLoading(true);
     try {
       const res = await InvokeLLM({
-        prompt: `
-أنت معلم لغة عربية للمرحلة الابتدائية.
-قم بإنشاء فقرة قراءة عربية فصحى (بدون تشكيل كامل، لكن لغة سليمة) بناءً على طلب المعلم التالي:
-"${prompt}"
+        prompt: `أنت معلم لغة عربية للمرحلة الابتدائية. قم بإنشاء فقرة قراءة عربية فصحى (بدون تشكيل كامل، لكن لغة سليمة) بناءً على طلب المعلم التالي: "${prompt}"
 
 ارسل الفقرة النهائية فقط، بدون أي تعليق إضافي.`,
       });
 
       const text = res?.text || res?.content || "";
-      setGeneratedText(text.trim());
+      setGeneratedText((text || "").trim());
     } catch (e) {
       console.error("Emergency drill generation failed", e);
       alert("فشل في توليد النص. تأكد من إعدادات OpenAI API في صفحة الإعدادات.");
@@ -1498,11 +1775,10 @@ function EmergencyDrillTab() {
       alert("يرجى اختيار الصف وإدخال عنوان مناسب قبل الحفظ.");
       return;
     }
-
     try {
-      await Exercise.create({
+      await safeCreateExercise({
         title: title.trim() || "تمرين طارئ",
-        text: generatedText.trim(),
+        sentence: generatedText.trim(),
         grade,
         level,
         stage: stage || 1,
@@ -1520,21 +1796,27 @@ function EmergencyDrillTab() {
     <div className="space-y-6">
       <Card className="border-0 shadow-lg bg-white/90">
         <CardHeader>
-          <CardTitle className="arabic-text text-lg flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-red-500" />
+          <CardTitle className="arabic-text text-right text-lg flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-slate-500" />
             توليد تمرين طارئ بالذكاء الاصطناعي
           </CardTitle>
         </CardHeader>
 
         <CardContent className="grid md:grid-cols-2 gap-6 text-right">
           <div className="space-y-3">
-            <Label className="arabic-text text-sm text-slate-700">وصف التمرين المطلوب</Label>
+            <Label className="arabic-text text-sm text-slate-700">
+              وصف التمرين المطلوب
+            </Label>
             <Textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[180px] text-right arabic-text"
             />
-            <Button onClick={handleGenerate} disabled={isLoading} className="arabic-text w-full">
+            <Button
+              onClick={handleGenerate}
+              disabled={isLoading}
+              className="arabic-text w-full"
+            >
               {isLoading && <Loader2 className="w-4 h-4 ml-1 animate-spin" />}
               توليد النص
             </Button>
@@ -1561,6 +1843,7 @@ function EmergencyDrillTab() {
                   className="text-right arabic-text"
                 />
               </div>
+
               <div className="space-y-1">
                 <Label className="arabic-text text-sm text-slate-700">الصف</Label>
                 <Select value={grade} onValueChange={setGrade}>
@@ -1621,67 +1904,111 @@ function EmergencyDrillTab() {
   );
 }
 
+/* =========================
+   ✅ TeacherDashboard (مُحدّث)
+   - إضافة "لوحة التحكم"
+   - إزالة الفراغ: SettingsTab داخل Dialog وليس أسفل الصفحة
+   ========================= */
 export default function TeacherDashboard() {
   const navigate = useNavigate();
 
   return (
     <TeacherGate>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 py-6 px-3 md:px-8">
-        <div className="max-w-7xl mx-auto space-y-6">
+      <div className="min-h-screen bg-slate-50">
+        <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             className="flex flex-col md:flex-row items-center justify-between gap-4"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
               <Button
                 variant="outline"
                 size="icon"
                 onClick={() => navigate(createPageUrl("Home"))}
                 className="rounded-full bg-white/80"
+                title="رجوع"
               >
                 <ArrowLeft className="w-4 h-4" />
               </Button>
+
               <div className="text-right">
-                <h1 className="text-2xl md:text-3xl font-bold text-slate-900 arabic-text">
+                <div className="arabic-text text-xl md:text-2xl font-bold text-slate-900">
                   لوحة تحكم المعلم 👩‍🏫
-                </h1>
-                <p className="text-sm text-slate-600 arabic-text">
+                </div>
+                <div className="arabic-text text-sm text-slate-600">
                   إدارة الطلاب، التمارين، المجموعات، والتسجيلات الصوتية
-                </p>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 justify-end">
               <Badge className="bg-indigo-100 text-indigo-800 arabic-text">
                 <Users className="w-3 h-3 ml-1" />
                 معلم اللغة العربية - مرحلة أساسية
               </Badge>
+
               <Badge className="bg-emerald-100 text-emerald-800 arabic-text">
                 <Mic className="w-3 h-3 ml-1" />
                 منصة تحليل النطق الذكي
               </Badge>
+
+              {/* ✅ SettingsTab داخل Dialog = لا يوجد فراغ أسفل الصفحة */}
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="arabic-text bg-white/80">
+                    <Settings className="w-4 h-4 ml-1" />
+                    إعدادات متقدمة
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="arabic-text text-right">
+                      إعدادات متقدمة
+                    </DialogTitle>
+                  </DialogHeader>
+                  <SettingsTab />
+                </DialogContent>
+              </Dialog>
             </div>
           </motion.div>
 
-          <Tabs defaultValue="students" className="space-y-4">
-            <TabsList className="bg-white shadow-md rounded-2xl p-1 grid grid-cols-5">
+          <Tabs defaultValue="dashboard" className="space-y-4">
+            <TabsList className="bg-white shadow-md rounded-2xl p-1 grid grid-cols-6">
+              <TabsTrigger value="dashboard" className="arabic-text text-xs md:text-sm">
+                <BarChart3 className="w-4 h-4 ml-1" />
+                لوحة التحكم
+              </TabsTrigger>
+
               <TabsTrigger value="students" className="arabic-text text-xs md:text-sm">
-                <Users className="w-4 h-4 ml-1" /> الطلاب
+                <Users className="w-4 h-4 ml-1" />
+                الطلاب
               </TabsTrigger>
+
               <TabsTrigger value="groups" className="arabic-text text-xs md:text-sm">
-                <ListChecks className="w-4 h-4 ml-1" /> المجموعات
+                <ListChecks className="w-4 h-4 ml-1" />
+                المجموعات
               </TabsTrigger>
+
               <TabsTrigger value="exercises" className="arabic-text text-xs md:text-sm">
-                <BookOpen className="w-4 h-4 ml-1" /> التمارين
+                <BookOpen className="w-4 h-4 ml-1" />
+                التمارين
               </TabsTrigger>
+
               <TabsTrigger value="recordings" className="arabic-text text-xs md:text-sm">
-                <Mic className="w-4 h-4 ml-1" /> التسجيلات
+                <Mic className="w-4 h-4 ml-1" />
+                التسجيلات
               </TabsTrigger>
+
               <TabsTrigger value="emergency" className="arabic-text text-xs md:text-sm">
-                <AlertTriangle className="w-4 h-4 ml-1" /> تمرين طارئ
+                <AlertTriangle className="w-4 h-4 ml-1" />
+                تمرين طارئ
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="dashboard">
+              <DashboardTab />
+            </TabsContent>
 
             <TabsContent value="students">
               <StudentsTab
@@ -1707,10 +2034,6 @@ export default function TeacherDashboard() {
               <EmergencyDrillTab />
             </TabsContent>
           </Tabs>
-
-          <div className="mt-4">
-            <SettingsTab />
-          </div>
         </div>
       </div>
     </TeacherGate>
