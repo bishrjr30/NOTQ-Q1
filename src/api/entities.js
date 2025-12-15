@@ -59,7 +59,6 @@ function normalizeListArgs(arg1, arg2) {
 function applyOrder(query, order) {
   if (!order) return query;
 
-  // String syntax
   if (typeof order === "string") {
     const raw = order.trim();
     if (!raw) return query;
@@ -75,7 +74,6 @@ function applyOrder(query, order) {
       ascending = true;
     }
 
-    // "col.desc" / "col.asc"
     if (col.includes(".")) {
       const [c, dir] = col.split(".");
       col = c;
@@ -88,7 +86,6 @@ function applyOrder(query, order) {
     return query.order(col, { ascending });
   }
 
-  // Object syntax: { column: "created_date", ascending: false }
   if (typeof order === "object" && order.column) {
     return query.order(order.column, { ascending: order.ascending !== false });
   }
@@ -102,7 +99,6 @@ function applyOrder(query, order) {
 function createEntity(tableName) {
   const entity = {
     async list(arg1 = undefined, arg2 = undefined) {
-      // log version مرة واحدة
       if (typeof window !== "undefined") {
         if (!window.__ENTITIES_VER_LOGGED__) {
           window.__ENTITIES_VER_LOGGED__ = true;
@@ -112,7 +108,6 @@ function createEntity(tableName) {
 
       const { filters, order } = normalizeListArgs(arg1, arg2);
 
-      // دعم: لو أحد مرّر order داخل filters بالغلط
       const { orderBy, order: orderInFilters, ...pureFilters } =
         filters && typeof filters === "object" ? filters : {};
 
@@ -164,7 +159,6 @@ function createEntity(tableName) {
       );
     },
 
-    // ✅ Alias لأن بعض صفحاتك تستعمل delete بدل remove
     async delete(id) {
       return await entity.remove(id);
     },
@@ -230,19 +224,38 @@ export const User = {
 };
 
 /* =========================================================
-   🤖 InvokeLLM — استدعاء الذكاء الاصطناعي (Vercel API)
+   🤖 InvokeLLM — استدعاء الذكاء الاصطناعي عبر Vercel API
+   ✅ لا مفاتيح في الواجهة الأمامية
+   ✅ يدعم response_json_schema (اختياري)
+   ✅ يبقي التوافق: يرجع كائن { content, json? } كما يجيء من السيرفر
 ========================================================= */
-export async function InvokeLLM({ prompt, model = "gpt-4o-mini" }) {
+export async function InvokeLLM({
+  prompt,
+  model, // اختياري: نرسله فقط إذا أعطيته، حتى لا نكسر أي validation في السيرفر
+  response_json_schema, // اختياري
+} = {}) {
+  if (!prompt || typeof prompt !== "string") {
+    throw new Error("الـ prompt مفقود أو غير صالح في InvokeLLM");
+  }
+
+  const payload = {
+    prompt,
+    ...(model ? { model } : {}),
+    ...(response_json_schema ? { response_json_schema } : {}),
+  };
+
   const res = await fetch("/api/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, model }),
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
-    const text = await res.text();
+    const text = await res.text().catch(() => "");
+    console.error("❌ /api/llm error:", text);
     throw new Error(text || "LLM request failed");
   }
 
+  // المتوقع من السيرفر: { content: "..." , json?: {...} }
   return res.json();
 }
