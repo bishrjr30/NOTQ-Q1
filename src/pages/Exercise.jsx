@@ -32,10 +32,9 @@ import {
   Exercise as ExerciseEntity,
   Student,
   Recording,
-  SystemSetting,
 } from "@/api/entities";
 
-// ✅ تكامل الذكاء الاصطناعي + رفع الملفات (OpenAI + Supabase Storage)
+// ✅ تكامل الذكاء الاصطناعي + رفع الملفات (يمر عبر /api على Vercel)
 import { UploadFile, InvokeLLM } from "@/api/integrations";
 
 export default function ExercisePage() {
@@ -207,26 +206,9 @@ export default function ExercisePage() {
     setError(null);
 
     try {
-      // ✅ جلب مفتاح OpenAI من env أو من جدول system_settings في Supabase
-      let OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || "";
-
-      try {
-        const settings = await SystemSetting.list();
-        const keySetting = settings.find(
-          (s) => s.key === "openai_api_key" && typeof s.value === "string"
-        );
-        if (keySetting && keySetting.value.startsWith("sk-")) {
-          OPENAI_API_KEY = keySetting.value;
-        }
-      } catch (e) {
-        console.warn("Could not load system key, using default env key if any");
-      }
-
-      if (!OPENAI_API_KEY) {
-        throw new Error(
-          "لم يتم إعداد مفتاح OpenAI API. يرجى من المعلم إضافة المفتاح في الإعدادات."
-        );
-      }
+      // ✅ ملاحظة مهمة:
+      // لم نعد نقرأ أي مفتاح من الواجهة (لا VITE ولا system_settings)
+      // كل استدعاءات الذكاء الاصطناعي تمر عبر /api على Vercel
 
       const fileSizeKB = audioBlob.size / 1024;
       if (fileSizeKB < 2) {
@@ -263,61 +245,69 @@ export default function ExercisePage() {
 
       setAnalysisProgress(40);
 
-      // 2️⃣ تحويل الصوت إلى نص (Whisper)
-      const audioFile = new File([audioBlob], "recording.webm", {
-        type: "audio/webm",
+      // 2️⃣ تحويل الصوت إلى نص عبر Vercel API (بدون مفتاح بالواجهة)
+      const transcriptionResponse = await fetch("/api/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          audio_url: file_url,
+          language: "ar",
+        }),
       });
-      const formData = new FormData();
-      formData.append("file", audioFile);
-      formData.append("model", "whisper-1");
-      formData.append("language", "ar");
-
-      const transcriptionResponse = await fetch(
-        "https://api.openai.com/v1/audio/transcriptions",
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
-          body: formData,
-        }
-      );
 
       if (!transcriptionResponse.ok) {
         const errText = await transcriptionResponse.text();
-        if (
-          transcriptionResponse.status === 429 ||
-          errText.includes("insufficient_quota")
-        ) {
-          throw new Error(
-            "⚠️ عذراً، تم تجاوز حد استخدام الذكاء الاصطناعي المجاني. يرجى من المعلم إضافة مفتاح API خاص في الإعدادات."
-          );
-        }
-        throw new Error(`خطأ في خدمة تحويل الصوت (Whisper): ${errText}`);
+        throw new Error(errText || "خطأ في خدمة تحويل الصوت.");
       }
 
       const transcriptionData = await transcriptionResponse.json();
-      const transcribedText = transcriptionData.text;
+      const transcribedText =
+        transcriptionData?.text ||
+        transcriptionData?.transcript ||
+        transcriptionData?.result ||
+        "";
 
       setAnalysisProgress(70);
 
-      // 3️⃣ التحليل بـ GPT-4o (chat completions)
-      const analysisResponse = await fetch(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${OPENAI_API_KEY}`,
+      // 3️⃣ التحليل عبر InvokeLLM (يمر عبر /api/llm)
+      const analysisSchema = {
+        type: "object",
+        properties: {
+          score: { type: "number" },
+          status: { type: "string", enum: ["valid", "silence", "wrong_text"] },
+          feedback: { type: "string" },
+          analysis_details: {
+            type: "object",
+            properties: {
+              word_match_score: { type: "number" },
+              pronunciation_score: { type: "number" },
+              tashkeel_score: { type: "number" },
+              fluency_score: { type: "number" },
+              rhythm: { type: "string" },
+              tone: { type: "string" },
+              breathing: { type: "string" },
+              suggestions: { type: "string" },
+            },
+            required: [
+              "word_match_score",
+              "pronunciation_score",
+              "tashkeel_score",
+              "fluency_score",
+              "rhythm",
+              "tone",
+              "breathing",
+              "suggestions",
+            ],
           },
-          body: JSON.stringify({
-            model: "gpt-4o",
-            messages: [
-              {
-                role: "system",
-                content: `أنت خبير لغوي متخصص في اللغة العربية الفصحى وأحكام التجويد ومخارج الحروف. مهمتك تقييم تسجيل الطالب بدقة لغوية عالية:
+        },
+        required: ["score", "status", "feedback", "analysis_details"],
+      };
+
+      const analysisPrompt = `أنت خبير لغوي متخصص في اللغة العربية الفصحى وأحكام التجويد ومخارج الحروف. مهمتك تقييم تسجيل الطالب بدقة لغوية عالية:
 
 الحالات:
-1. صمت/غير مفهوم -> 0.0، تعليق: "لم نسمع قراءة..."
-2. نص مختلف -> 0.0، تعليق: "النص المقروء مختلف..."
+1. صمت/غير مفهوم -> 0.0، تعليق: "لَمْ نَسْمَعْ قِرَاءَةً وَاضِحَةً..."
+2. نص مختلف -> 0.0، تعليق: "اَلنَّصُّ اَلْمَقْرُوءُ مُخْتَلِفٌ..."
 3. محاولة قراءة -> تقييم دقيق (مثلاً 87.5) بناءً على:
    - صحة المخارج وصفات الحروف (30%)
    - الالتزام بقواعد النحو وتشكيل أواخر الكلمات (30%)
@@ -327,57 +317,26 @@ export default function ExercisePage() {
 التعليق (Feedback) - يجب أن يكون باللغة العربية الفصحى ومشكولاً بالكامل (Full Tashkeel):
 1. ابدأ بمدح نقطة قوة محددة.
 2. ثم حدد خطأً لغوياً أو نحوياً وصححه.
-3. اختم بنصيحة لغوية للتحسين.`,
-              },
-              {
-                role: "user",
-                content: `
+3. اختم بنصيحة لغوية للتحسين.
+
 النص الأصلي المطلوب قراءته: "${exercise.sentence}"
-النص الذي سمعه النظام (Whisper): "${transcribedText}"
+النص الذي سمعه النظام: "${transcribedText}"
 
-قم بالتحليل وإخراج JSON فقط:
-{
-  "score": number (float, e.g. 85.5),
-  "status": "valid" | "silence" | "wrong_text",
-  "feedback": "string (Arabic, Full Tashkeel)",
-  "analysis_details": {
-    "word_match_score": number,
-    "pronunciation_score": number,
-    "tashkeel_score": number,
-    "fluency_score": number,
-    "rhythm": "string",
-    "tone": "string",
-    "breathing": "string",
-    "suggestions": "string"
-  }
-}
-`,
-              },
-            ],
-            response_format: { type: "json_object" },
-          }),
-        }
-      );
+أَعِدْ ناتِجًا بِصِيغَةِ JSON فَقَط.`;
 
-      if (!analysisResponse.ok) {
-        const errText = await analysisResponse.text();
-        if (
-          analysisResponse.status === 429 ||
-          errText.includes("insufficient_quota")
-        ) {
-          throw new Error(
-            "⚠️ عذراً، تم تجاوز حد استخدام الذكاء الاصطناعي المجاني. يرجى من المعلم إضافة مفتاح API خاص في الإعدادات."
-          );
-        }
-        throw new Error(`خطأ في خدمة التحليل (GPT-4): ${errText}`);
-      }
+      const analysisResponse = await InvokeLLM({
+        prompt: analysisPrompt,
+        response_json_schema: analysisSchema,
+      });
 
-      const analysisData = await analysisResponse.json();
-      const aiAnalysis = JSON.parse(
-        analysisData.choices[0].message.content
-      );
+      const aiAnalysis =
+        typeof analysisResponse === "string"
+          ? JSON.parse(analysisResponse)
+          : analysisResponse;
 
-      setLastAnalysis(aiAnalysis);
+      // نخزن رابط الصوت مع التحليل ليستفيد "وضع المرآة"
+      setLastAnalysis({ ...aiAnalysis, audio_url: file_url });
+
       setAnalysisProgress(90);
 
       // 4️⃣ حفظ التسجيل والنتيجة في جدول recordings
@@ -389,7 +348,7 @@ export default function ExercisePage() {
         feedback: aiAnalysis.feedback,
         analysis_details: {
           ...aiAnalysis.analysis_details,
-          ai_model: "OpenAI GPT-4o (Real)",
+          ai_model: "Vercel API (/api/llm)",
           analyzed_at: new Date().toISOString(),
         },
       };
@@ -808,10 +767,7 @@ export default function ExercisePage() {
                                     جاري تحليل الصوت باستخدام CHAT GPT 5...
                                   </p>
                                 </div>
-                                <Progress
-                                  value={analysisProgress}
-                                  className="h-3"
-                                />
+                                <Progress value={analysisProgress} className="h-3" />
                               </div>
                             )}
 
@@ -982,8 +938,7 @@ export default function ExercisePage() {
                                   🎵 الإيقاع:
                                 </p>
                                 <p className="text-blue-700 arabic-text">
-                                  {lastAnalysis.analysis_details?.rhythm ||
-                                    "جيد"}
+                                  {lastAnalysis.analysis_details?.rhythm || "جيد"}
                                 </p>
                               </div>
                               <div className="bg-green-50 p-3 rounded-lg border border-green-100">
@@ -991,8 +946,7 @@ export default function ExercisePage() {
                                   🗣️ النبرة:
                                 </p>
                                 <p className="text-green-700 arabic-text">
-                                  {lastAnalysis.analysis_details?.tone ||
-                                    "واضحة"}
+                                  {lastAnalysis.analysis_details?.tone || "واضحة"}
                                 </p>
                               </div>
                               <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
@@ -1022,7 +976,7 @@ export default function ExercisePage() {
                             </div>
 
                             <p className="text-xs text-gray-400 text-center mt-4 arabic-text">
-                              تم التحليل بواسطة Chat GPT 5 بدقة عالية
+                              تم التحليل عبر Vercel API بدقة عالية
                             </p>
                           </motion.div>
                         )}
@@ -1069,7 +1023,7 @@ export default function ExercisePage() {
                               disabled
                               className="bg-gray-100 text-gray-600 px-8 py-6 rounded-xl text-lg arabic-text border-2 border-gray-200"
                             >
-                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600 mr-2"></div>
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600 ml-2"></div>
                               جارٍ تحضير الأسئلة...
                             </Button>
                           ) : quizQuestions.length > 0 ? (
