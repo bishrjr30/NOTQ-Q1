@@ -1,47 +1,46 @@
-// src/api/aiclient.js
+// src/utils/aiclient.js
 
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-
-export async function InvokeLLM({
-  prompt,
-  model = "gpt-4o-mini",
-  temperature = 0.3,
-}) {
-  if (!OPENAI_API_KEY) {
-    console.error("VITE_OPENAI_API_KEY غير موجود في البيئة");
-    throw new Error(
-      "مفتاح OpenAI غير مهيّأ. أضِف VITE_OPENAI_API_KEY في إعدادات Vercel."
-    );
-  }
-
-  const body = {
-    model,
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
-    temperature,
-  };
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+async function postJSON(url, body) {
+  const r = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data?.ok === false) {
+    throw new Error(data?.error || "Request failed");
+  }
+  return data;
+}
 
-  if (!response.ok) {
-    const text = await response.text();
-    console.error("LLM error:", response.status, text);
-    throw new Error(`فشل استدعاء الذكاء الاصطناعي: ${response.status}`);
+// نفس فكرة “InvokeLLM” لكن آمنة: تكلم السيرفر وليس OpenAI مباشرة
+export async function InvokeLLM({ model, messages, response_format, temperature, max_output_tokens }) {
+  const data = await postJSON("/api/llm", {
+    model,
+    messages,
+    response_format,
+    temperature,
+    max_output_tokens,
+  });
+
+  // نرجّع نفس الشيء اللي غالبًا مشروعك يتوقعه
+  return { content: data.content, raw: data.response };
+}
+
+// تفريغ صوت -> نص (يرسل FormData إلى /api/transcribe)
+export async function TranscribeAudio({ blob, filename = "audio.webm", model = "whisper-1", language }) {
+  const fd = new FormData();
+  fd.append("file", blob, filename);
+  fd.append("model", model);
+  if (language) fd.append("language", language);
+
+  const r = await fetch("/api/transcribe", { method: "POST", body: fd });
+  const data = await r.json().catch(() => ({}));
+
+  if (!r.ok || data?.ok === false) {
+    throw new Error(data?.error || "Transcription failed");
   }
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-
-  return typeof content === "string" ? content : "";
+  // OpenAI يرجع غالبًا { text: "..." }
+  return data.text || "";
 }
