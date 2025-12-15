@@ -28,14 +28,56 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 
 // ✅ Supabase entities
-import {
-  Exercise as ExerciseEntity,
-  Student,
-  Recording,
-} from "@/api/entities";
+import { Exercise as ExerciseEntity, Student, Recording } from "@/api/entities";
 
 // ✅ تكامل الذكاء الاصطناعي + رفع الملفات (يمر عبر /api على Vercel)
 import { UploadFile, InvokeLLM } from "@/api/integrations";
+
+/* =========================================================
+   ✅ Helpers: تطبيع النص العربي + تقدير نسبة التطابق
+   الهدف: منع "0 دائمًا" بسبب اختلاف التشكيل/الترقيم/تنويعات الحروف
+========================================================= */
+function normalizeArabicText(input = "") {
+  if (!input || typeof input !== "string") return "";
+  return (
+    input
+      // إزالة التشكيل
+      .replace(/[\u064B-\u0652\u0670]/g, "")
+      // إزالة التطويل
+      .replace(/\u0640/g, "")
+      // توحيد أشكال الألف
+      .replace(/[إأآا]/g, "ا")
+      // توحيد الياء/الألف المقصورة
+      .replace(/ى/g, "ي")
+      // توحيد الهمزات على واو/ياء (تقريب)
+      .replace(/ؤ/g, "و")
+      .replace(/ئ/g, "ي")
+      // إزالة الترقيم والرموز (نُبقي الحروف العربية والمسافات فقط)
+      .replace(/[^\u0600-\u06FF\s]/g, " ")
+      // مسافات زائدة
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
+function wordMatchRatio(expectedRaw = "", heardRaw = "") {
+  const expected = normalizeArabicText(expectedRaw);
+  const heard = normalizeArabicText(heardRaw);
+
+  const expWords = expected.split(" ").filter(Boolean);
+  const heardWords = heard.split(" ").filter(Boolean);
+
+  if (expWords.length === 0) return 0;
+
+  // عدّ الكلمات المتوقعة الموجودة في المسموع (تقريبًا)
+  const heardSet = new Set(heardWords);
+  let matched = 0;
+  for (const w of expWords) {
+    if (heardSet.has(w)) matched++;
+  }
+
+  return matched / expWords.length; // 0..1
+}
 
 export default function ExercisePage() {
   const navigate = useNavigate();
@@ -206,10 +248,6 @@ export default function ExercisePage() {
     setError(null);
 
     try {
-      // ✅ ملاحظة مهمة:
-      // لم نعد نقرأ أي مفتاح من الواجهة (لا VITE ولا system_settings)
-      // كل استدعاءات الذكاء الاصطناعي تمر عبر /api على Vercel
-
       const fileSizeKB = audioBlob.size / 1024;
       if (fileSizeKB < 2) {
         setError(
@@ -245,57 +283,66 @@ export default function ExercisePage() {
 
       setAnalysisProgress(40);
 
-     // 2️⃣ تحويل الصوت إلى نص عبر Vercel API (FormData كما يطلب /api/transcribe)
-setAnalysisProgress(40);
+      // 2️⃣ تحويل الصوت إلى نص عبر Vercel API (FormData كما يطلب /api/transcribe)
+      const audioFileForTranscribe =
+        file instanceof File
+          ? file
+          : new File([audioBlob], "recording.webm", {
+              type: audioBlob.type || "audio/webm",
+            });
 
-// استخدم نفس الملف الذي رفعته أو ملف جديد من audioBlob (كلاهما صحيح)
-const audioFileForTranscribe =
-  file instanceof File
-    ? file
-    : new File([audioBlob], "recording.webm", { type: audioBlob.type || "audio/webm" });
+      const transcribeForm = new FormData();
+      transcribeForm.append("file", audioFileForTranscribe);
+      transcribeForm.append("language", "ar");
+      transcribeForm.append("model", "whisper-1");
 
-const transcribeForm = new FormData();
-transcribeForm.append("file", audioFileForTranscribe); // مهم: اسم الحقل "file"
-transcribeForm.append("language", "ar");               // اختياري حسب API عندك
-transcribeForm.append("model", "whisper-1");           // اختياري حسب API عندك
+      const transcriptionResponse = await fetch("/api/transcribe", {
+        method: "POST",
+        body: transcribeForm,
+      });
 
-const transcriptionResponse = await fetch("/api/transcribe", {
-  method: "POST",
-  body: transcribeForm, // ✅ لا تضع Content-Type هنا
-});
+      const transcriptionJson = await transcriptionResponse
+        .json()
+        .catch(() => null);
 
-const transcriptionJson = await transcriptionResponse.json().catch(() => null);
+      if (!transcriptionResponse.ok) {
+        const msg =
+          transcriptionJson?.error ||
+          transcriptionJson?.message ||
+          `Transcribe failed (${transcriptionResponse.status})`;
+        throw new Error(msg);
+      }
 
-if (!transcriptionResponse.ok) {
-  const msg =
-    transcriptionJson?.error ||
-    transcriptionJson?.message ||
-    `Transcribe failed (${transcriptionResponse.status})`;
-  throw new Error(msg);
-}
+      const transcribedText =
+        transcriptionJson?.text ||
+        transcriptionJson?.transcript ||
+        transcriptionJson?.result ||
+        "";
 
-// يدعم أكثر من شكل رجوع
-const transcribedText =
-  transcriptionJson?.text ||
-  transcriptionJson?.transcript ||
-  transcriptionJson?.result ||
-  "";
+      if (!transcribedText) {
+        throw new Error("لم يتم استخراج نص من الصوت.");
+      }
 
-if (!transcribedText) {
-  throw new Error("لم يتم استخراج نص من الصوت.");
-}
+      setAnalysisProgress(70);
 
-setAnalysisProgress(70);
+      // ✅ حساب نسبة تطابق تقريبية بعد التطبيع
+      const expectedRaw = exercise.sentence || "";
+      const expectedNorm = normalizeArabicText(expectedRaw);
+      const heardNorm = normalizeArabicText(transcribedText);
+      const matchRatio = wordMatchRatio(expectedRaw, transcribedText);
 
       // 3️⃣ التحليل عبر InvokeLLM (يمر عبر /api/llm)
+      // ✅ أضفنا additionalProperties:false لتكون الـ JSON Schema صارمة وتتفادى مشاكل السيرفر
       const analysisSchema = {
         type: "object",
+        additionalProperties: false,
         properties: {
           score: { type: "number" },
           status: { type: "string", enum: ["valid", "silence", "wrong_text"] },
           feedback: { type: "string" },
           analysis_details: {
             type: "object",
+            additionalProperties: false,
             properties: {
               word_match_score: { type: "number" },
               pronunciation_score: { type: "number" },
@@ -321,26 +368,41 @@ setAnalysisProgress(70);
         required: ["score", "status", "feedback", "analysis_details"],
       };
 
-      const analysisPrompt = `أنت خبير لغوي متخصص في اللغة العربية الفصحى وأحكام التجويد ومخارج الحروف. مهمتك تقييم تسجيل الطالب بدقة لغوية عالية:
+      // ✅ أهم تعديل هنا:
+      // - لا تعتبر اختلاف التشكيل/الترقيم "wrong_text"
+      // - لا تعطي 0 إلا إذا الصمت/غير مفهوم أو قراءة غير مرتبطة فعلاً
+      const analysisPrompt = `أَنْتَ خَبِيرٌ لُغَوِيٌّ مُتَخَصِّصٌ فِي اَللُّغَةِ اَلْعَرَبِيَّةِ اَلْفُصْحَى وَأَحْكَامِ اَلتَّجْوِيدِ وَمَخَارِجِ اَلْحُرُوفِ.
+مَهَمَّتُكَ: تَقْيِيمُ قِرَاءَةِ اَلطَّالِبِ بِدِقَّةٍ.
 
-الحالات:
-1. صمت/غير مفهوم -> 0.0، تعليق: "لَمْ نَسْمَعْ قِرَاءَةً وَاضِحَةً..."
-2. نص مختلف -> 0.0، تعليق: "اَلنَّصُّ اَلْمَقْرُوءُ مُخْتَلِفٌ..."
-3. محاولة قراءة -> تقييم دقيق (مثلاً 87.5) بناءً على:
-   - صحة المخارج وصفات الحروف (30%)
-   - الالتزام بقواعد النحو وتشكيل أواخر الكلمات (30%)
-   - مطابقة الكلمات (30%)
-   - الطلاقة والأداء (10%)
+مُلَاحَظَةٌ حَاسِمَةٌ:
+- قَدْ يَخْتَلِفُ نَصُّ اَلْوِيسْبَرِ عَنْ اَلنَّصِّ اَلْمَطْلُوبِ بِسَبَبِ عَدَمِ وُجُودِ تَشْكِيلٍ أَوْ بِسَبَبِ اَلتَّرْقِيمِ أَوْ اَخْتِلَافَاتٍ خَفِيفَةٍ فِي اَلْهَجَاءِ.
+- لَا تُصَنِّفْ "wrong_text" إِلَّا إِذَا كَانَتِ اَلْقِرَاءَةُ غَيْرَ مُرْتَبِطَةٍ بِاَلنَّصِّ فِعْلًا (مُعْظَمُ اَلْكَلِمَاتِ مُخْتَلِفٌ).
 
-التعليق (Feedback) - يجب أن يكون باللغة العربية الفصحى ومشكولاً بالكامل (Full Tashkeel):
-1. ابدأ بمدح نقطة قوة محددة.
-2. ثم حدد خطأً لغوياً أو نحوياً وصححه.
-3. اختم بنصيحة لغوية للتحسين.
+اَلنَّصُّ اَلْمَطْلُوبُ (raw): "${expectedRaw}"
+اَلنَّصُّ اَلْمَسْمُوعُ مِنَ اَلنِّظَامِ (raw): "${transcribedText}"
 
-النص الأصلي المطلوب قراءته: "${exercise.sentence}"
-النص الذي سمعه النظام: "${transcribedText}"
+نَصٌّ مُطَبَّعٌ لِلتَّطَابُقِ (دُونَ تَشْكِيلٍ/تَرْقِيمٍ):
+- expected_norm: "${expectedNorm}"
+- heard_norm: "${heardNorm}"
+- match_ratio (0..1): ${matchRatio}
 
-أَعِدْ ناتِجًا بِصِيغَةِ JSON فَقَط.`;
+قَوَاعِدُ اَلتَّصْنِيفِ:
+1) إِذَا كَانَ هُنَاكَ صَمْتٌ/غَيْرُ مَفْهُومٍ -> status="silence" وَ score=0.
+2) إِذَا كَانَ match_ratio < 0.45 -> status="wrong_text" وَ score=0.
+3) خِلَافَ ذَلِكَ -> status="valid" وَ score يَكُونُ مِنْ 0 إِلَى 100 بِدِقَّةٍ وَعَدْلٍ.
+
+اِحْسِبِ اَلدَّرَجَةَ بِوَزْنٍ:
+- صِحَّةُ اَلْمَخَارِجِ وَصِفَاتُ اَلْحُرُوفِ (30%)
+- اَلْتِزَامُ اَلنَّحْوِ وَتَشْكِيلُ أَوَاخِرِ اَلْكَلِمَاتِ (30%)
+- مُطَابَقَةُ اَلْكَلِمَاتِ (30%) (اِسْتَعِنْ بِـ match_ratio كَإِشَارَةٍ)
+- اَلطَّلَاقَةُ وَالأَدَاءُ (10%)
+
+اَلتَّعْلِيقُ (feedback) يَجِبُ أَنْ يَكُونَ بِالْعَرَبِيَّةِ اَلْفُصْحَى وَمُشَكَّلًا كُلِّيًّا:
+1) مَدْحُ نُقْطَةِ قُوَّةٍ مُحَدَّدَةٍ.
+2) تَحْدِيدُ خَطَإٍ وَتَصْحِيحُهُ.
+3) نَصِيحَةٌ لِلتَّحْسِينِ.
+
+أَعِدْ نَاتِجًا بِصِيغَةِ JSON فَقَط.`;
 
       const analysisResponse = await InvokeLLM({
         prompt: analysisPrompt,
@@ -368,6 +430,11 @@ setAnalysisProgress(70);
           ...aiAnalysis.analysis_details,
           ai_model: "Vercel API (/api/llm)",
           analyzed_at: new Date().toISOString(),
+          // ✅ (اختياري) مفيد للتشخيص لاحقاً:
+          match_ratio: matchRatio,
+          expected_norm: expectedNorm,
+          heard_norm: heardNorm,
+          transcribed_text: transcribedText,
         },
       };
 
@@ -480,11 +547,13 @@ setAnalysisProgress(70);
         `,
         response_json_schema: {
           type: "object",
+          additionalProperties: false,
           properties: {
             questions: {
               type: "array",
               items: {
                 type: "object",
+                additionalProperties: false,
                 properties: {
                   question: { type: "string" },
                   options: { type: "array", items: { type: "string" } },
@@ -652,8 +721,7 @@ setAnalysisProgress(70);
                   <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm glow-effect">
                     <CardHeader className="text-center bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-t-xl">
                       <CardTitle className="text-xl font-bold arabic-text">
-                        اقرأ النص التالي بصوت واضح مع مراعاة تشكيل أواخر
-                        الكلمات
+                        اقرأ النص التالي بصوت واضح مع مراعاة تشكيل أواخر الكلمات
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
