@@ -245,29 +245,47 @@ export default function ExercisePage() {
 
       setAnalysisProgress(40);
 
-      // 2️⃣ تحويل الصوت إلى نص عبر Vercel API (بدون مفتاح بالواجهة)
-      const transcriptionResponse = await fetch("/api/transcribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          audio_url: file_url,
-          language: "ar",
-        }),
-      });
+     // 2️⃣ تحويل الصوت إلى نص عبر Vercel API (FormData كما يطلب /api/transcribe)
+setAnalysisProgress(40);
 
-      if (!transcriptionResponse.ok) {
-        const errText = await transcriptionResponse.text();
-        throw new Error(errText || "خطأ في خدمة تحويل الصوت.");
-      }
+// استخدم نفس الملف الذي رفعته أو ملف جديد من audioBlob (كلاهما صحيح)
+const audioFileForTranscribe =
+  file instanceof File
+    ? file
+    : new File([audioBlob], "recording.webm", { type: audioBlob.type || "audio/webm" });
 
-      const transcriptionData = await transcriptionResponse.json();
-      const transcribedText =
-        transcriptionData?.text ||
-        transcriptionData?.transcript ||
-        transcriptionData?.result ||
-        "";
+const transcribeForm = new FormData();
+transcribeForm.append("file", audioFileForTranscribe); // مهم: اسم الحقل "file"
+transcribeForm.append("language", "ar");               // اختياري حسب API عندك
+transcribeForm.append("model", "whisper-1");           // اختياري حسب API عندك
 
-      setAnalysisProgress(70);
+const transcriptionResponse = await fetch("/api/transcribe", {
+  method: "POST",
+  body: transcribeForm, // ✅ لا تضع Content-Type هنا
+});
+
+const transcriptionJson = await transcriptionResponse.json().catch(() => null);
+
+if (!transcriptionResponse.ok) {
+  const msg =
+    transcriptionJson?.error ||
+    transcriptionJson?.message ||
+    `Transcribe failed (${transcriptionResponse.status})`;
+  throw new Error(msg);
+}
+
+// يدعم أكثر من شكل رجوع
+const transcribedText =
+  transcriptionJson?.text ||
+  transcriptionJson?.transcript ||
+  transcriptionJson?.result ||
+  "";
+
+if (!transcribedText) {
+  throw new Error("لم يتم استخراج نص من الصوت.");
+}
+
+setAnalysisProgress(70);
 
       // 3️⃣ التحليل عبر InvokeLLM (يمر عبر /api/llm)
       const analysisSchema = {
