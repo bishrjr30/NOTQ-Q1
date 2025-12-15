@@ -2,20 +2,14 @@
 
 import { supabase } from "./supabaseClient";
 
-// ✅ ملاحظة: لم نعد نستخدم VITE_OPENAI_API_KEY في الواجهة الأمامية إطلاقًا.
+// ✅ ملاحظة: لا نستخدم مفاتيح OpenAI في الواجهة الأمامية إطلاقًا.
 // المفتاح يجب أن يكون في Vercel كمتغير سيرفر فقط (مثلاً: OPENAI_API_KEY)
 // وملفات /api/* هي التي تتواصل مع OpenAI.
 
 async function uploadToSupabaseBucket(file, options = {}) {
-  const {
-    bucket = "uploads",
-    folder = "public",
-    isPublic = true,
-  } = options;
+  const { bucket = "uploads", folder = "public", isPublic = true } = options;
 
-  if (!file) {
-    throw new Error("لا يوجد ملف لرفعه");
-  }
+  if (!file) throw new Error("لا يوجد ملف لرفعه");
 
   const ext = file.name?.split(".").pop() || "bin";
   const random = Math.random().toString(36).slice(2);
@@ -38,37 +32,87 @@ async function uploadToSupabaseBucket(file, options = {}) {
   };
 }
 
-// 🔹 استدعاء نموذج عبر Vercel API بدلًا من OpenAI مباشرة
-export async function InvokeLLM({ prompt, response_json_schema } = {}) {
-  if (!prompt || typeof prompt !== "string") {
-    throw new Error("الـ prompt مفقود أو غير صالح في InvokeLLM");
+/**
+ * 🔹 InvokeLLM عبر /api/llm
+ * ✅ السيرفر عندك يطلب: messages (وليس prompt) — وهذا سبب خطأ: "messages is required"
+ * ✅ نحافظ على التوافق مع استدعاءاتك الحالية التي تمرّر prompt كنص
+ */
+export async function InvokeLLM({
+  prompt,
+  messages,
+  response_json_schema,
+  model,
+  system,
+} = {}) {
+  // دعم قديم: prompt string
+  const finalMessages =
+    Array.isArray(messages) && messages.length
+      ? messages
+      : typeof prompt === "string" && prompt.trim()
+        ? [
+            ...(system
+              ? [{ role: "system", content: String(system) }]
+              : []),
+            { role: "user", content: prompt },
+          ]
+        : null;
+
+  if (!finalMessages) {
+    throw new Error("يجب تمرير prompt (نص) أو messages (مصفوفة رسائل) إلى InvokeLLM");
   }
+
+  const payload = {
+    messages: finalMessages, // ✅ المطلوب من السيرفر
+    ...(model ? { model } : {}),
+    ...(response_json_schema ? { response_json_schema } : {}),
+  };
 
   const res = await fetch("/api/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      prompt,
-      response_json_schema: response_json_schema || null,
-    }),
+    body: JSON.stringify(payload),
   });
 
+  // حاول قراءة جسم الرد حتى لو 400 لإظهار السبب الحقيقي
+  let raw = "";
+  try {
+    raw = await res.text();
+  } catch {}
+
   if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    console.error("❌ /api/llm error:", errText);
-    throw new Error("فشل في الاتصال بخدمة الذكاء الاصطناعي.");
+    console.error("❌ /api/llm error:", raw);
+    // لو السيرفر يرجع JSON بشكل {ok:false,error:"..."} نخليه يظهر للمستخدم
+    try {
+      const j = JSON.parse(raw);
+      throw new Error(j?.error || "فشل في الاتصال بخدمة الذكاء الاصطناعي.");
+    } catch {
+      throw new Error(raw || "فشل في الاتصال بخدمة الذكاء الاصطناعي.");
+    }
   }
 
-  const data = await res.json();
+  let data = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    data = {};
+  }
 
-  // السيرفر يرجع:
-  // - { content: "..." } للنص العادي
-  // - { json: {...}, content: "..." } عند json_schema
+  // السيرفر غالباً يرجع:
+  // - { content: "..." }
+  // - أو { json: {...}, content: "..." }
   if (response_json_schema) {
-    return data?.json ?? data?.content ?? "";
+    if (data?.json) return data.json;
+    if (typeof data?.content === "string") {
+      try {
+        return JSON.parse(data.content);
+      } catch {
+        return data.content;
+      }
+    }
+    return data;
   }
 
-  return data?.content ?? "";
+  return data?.content ?? data;
 }
 
 export async function UploadFile({ file, bucket, folder } = {}) {
