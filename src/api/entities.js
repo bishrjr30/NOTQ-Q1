@@ -23,38 +23,22 @@ async function handleQuery(promise, context = "Supabase") {
 
 /* =========================================================
    🔁 توحيد باراميترات list
-   يدعم:
-   - list()
-   - list({filters})
-   - list("-created_date")
-   - list("-created_date", {filters})
-   - list({filters}, "-created_date")
 ========================================================= */
 function normalizeListArgs(arg1, arg2) {
   let order = undefined;
   let filters = {};
 
-  if (typeof arg1 === "string") {
-    order = arg1;
-  } else if (arg1 && typeof arg1 === "object") {
-    filters = arg1;
-  }
+  if (typeof arg1 === "string") order = arg1;
+  else if (arg1 && typeof arg1 === "object") filters = arg1;
 
-  if (typeof arg2 === "string") {
-    order = arg2;
-  } else if (arg2 && typeof arg2 === "object") {
-    filters = arg2;
-  }
+  if (typeof arg2 === "string") order = arg2;
+  else if (arg2 && typeof arg2 === "object") filters = arg2;
 
   return { filters: filters || {}, order };
 }
 
 /* =========================================================
    🔽 تطبيق ترتيب (order) على Query
-   يقبل:
-   "-created_date" => created_date DESC
-   "+created_date" أو "created_date" => created_date ASC
-   "created_date.desc" / "created_date.asc"
 ========================================================= */
 function applyOrder(query, order) {
   if (!order) return query;
@@ -112,14 +96,9 @@ function createEntity(tableName) {
         filters && typeof filters === "object" ? filters : {};
 
       let query = supabase.from(tableName).select("*");
-
       query = applyOrder(query, order || orderBy || orderInFilters);
 
-      if (
-        pureFilters &&
-        typeof pureFilters === "object" &&
-        Object.keys(pureFilters).length > 0
-      ) {
+      if (pureFilters && typeof pureFilters === "object" && Object.keys(pureFilters).length > 0) {
         query = query.match(pureFilters);
       }
 
@@ -142,12 +121,7 @@ function createEntity(tableName) {
 
     async update(id, payload) {
       return await handleQuery(
-        supabase
-          .from(tableName)
-          .update(payload)
-          .eq("id", id)
-          .select("*")
-          .single(),
+        supabase.from(tableName).update(payload).eq("id", id).select("*").single(),
         `${tableName}.update`
       );
     },
@@ -202,10 +176,7 @@ export const User = {
   },
 
   async signInWithPassword({ email, password }) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
   },
@@ -224,22 +195,29 @@ export const User = {
 };
 
 /* =========================================================
-   🤖 InvokeLLM — استدعاء الذكاء الاصطناعي عبر Vercel API
-   ✅ لا مفاتيح في الواجهة الأمامية
-   ✅ يدعم response_json_schema (اختياري)
-   ✅ يبقي التوافق: يرجع كائن { content, json? } كما يجيء من السيرفر
+   🤖 InvokeLLM — عبر Vercel API
+   ✅ إصلاح: السيرفر يطلب messages (وليس prompt)
+   ✅ نحافظ على توافق الاستدعاءات القديمة التي ترسل prompt كنص
 ========================================================= */
 export async function InvokeLLM({
   prompt,
-  model, // اختياري: نرسله فقط إذا أعطيته، حتى لا نكسر أي validation في السيرفر
-  response_json_schema, // اختياري
+  messages,
+  model,
+  response_json_schema,
 } = {}) {
-  if (!prompt || typeof prompt !== "string") {
-    throw new Error("الـ prompt مفقود أو غير صالح في InvokeLLM");
+  const finalMessages =
+    Array.isArray(messages) && messages.length
+      ? messages
+      : typeof prompt === "string" && prompt.trim()
+        ? [{ role: "user", content: prompt }]
+        : null;
+
+  if (!finalMessages) {
+    throw new Error("يجب تمرير prompt أو messages إلى InvokeLLM");
   }
 
   const payload = {
-    prompt,
+    messages: finalMessages,
     ...(model ? { model } : {}),
     ...(response_json_schema ? { response_json_schema } : {}),
   };
@@ -253,9 +231,13 @@ export async function InvokeLLM({
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     console.error("❌ /api/llm error:", text);
-    throw new Error(text || "LLM request failed");
+    try {
+      const j = JSON.parse(text);
+      throw new Error(j?.error || text || "LLM request failed");
+    } catch {
+      throw new Error(text || "LLM request failed");
+    }
   }
 
-  // المتوقع من السيرفر: { content: "..." , json?: {...} }
   return res.json();
 }
