@@ -177,7 +177,7 @@ export default function Home() {
                   size="lg"
                   className="bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 text-white px-12 py-6 text-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 arabic-text"
                 >
-                  ابدأ التعلّم مجاناً
+                  ابدأ التعلّم 
                 </Button>
               </Link>
             </CardContent>
