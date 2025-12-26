@@ -6,9 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, Users, Mic, Brain, Award, TrendingUp } from "lucide-react";
 import { motion } from "framer-motion";
 import Leaderboard from "@/components/Leaderboard";
-import Privacy from "src/pages/privacy.jsx";
-
-<Route path="/privacy" element={<Privacy />} />
 
 
 export default function Home() {
