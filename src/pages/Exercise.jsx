@@ -24,7 +24,8 @@ import {
   ChevronRight,
   ThumbsUp,
   ThumbsDown,
-  Star
+  Star,
+  Loader2 // أيقونة التحميل
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -33,7 +34,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 
 // ✅ Supabase entities
-import { Exercise as ExerciseEntity, Student, Recording } from "@/api/entities";
+import { Exercise as ExerciseEntity, Student, Recording, Certificate } from "@/api/entities";
 
 // ✅ Integrations
 import { UploadFile, InvokeLLM } from "@/api/integrations";
@@ -72,6 +73,14 @@ function wordMatchRatio(expectedRaw = "", heardRaw = "") {
   return matched / expWords.length;
 }
 
+// ✅ دالة Timeout لإنهاء العملية إذا طالت مدتها
+const withTimeout = (promise, ms = 45000, errorMsg = "استغرق الاتصال وقتاً طويلاً. حاول مرة أخرى.") => {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms))
+    ]);
+};
+
 export default function ExercisePage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -81,9 +90,13 @@ export default function ExercisePage() {
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  
+  // حالات الإرسال والتحليل
   const [isSending, setIsSending] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(""); // رسالة توضح الخطوة الحالية
   const [analysisProgress, setAnalysisProgress] = useState(0);
+
   const [recordingSubmitted, setRecordingSubmitted] = useState(false);
   const [error, setError] = useState(null);
   const [nextExercise, setNextExercise] = useState(null);
@@ -100,6 +113,7 @@ export default function ExercisePage() {
   const [analysisPassed, setAnalysisPassed] = useState(false);
   const [mustRetry, setMustRetry] = useState(false);
   const [lastRecordingId, setLastRecordingId] = useState(null);
+  const [earnedCertificate, setEarnedCertificate] = useState(null);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -233,6 +247,7 @@ export default function ExercisePage() {
     setRecordingSubmitted(false);
     setError(null);
     setAnalysisProgress(0);
+    setStatusMessage("");
     setShowQuiz(false);
     setQuizQuestions([]);
     setQuizAnswers({});
@@ -243,6 +258,7 @@ export default function ExercisePage() {
     setAnalysisPassed(false);
     setMustRetry(false);
     setLastRecordingId(null);
+    setEarnedCertificate(null);
   };
 
   const submitRecording = async () => {
@@ -253,7 +269,8 @@ export default function ExercisePage() {
 
     setIsSending(true);
     setIsAnalyzing(true);
-    setAnalysisProgress(0);
+    setAnalysisProgress(5);
+    setStatusMessage("جارٍ تجهيز الملف..."); // رسالة أولية
     setError(null);
 
     try {
@@ -261,70 +278,85 @@ export default function ExercisePage() {
         throw new Error("التسجيل قصير جداً.");
       }
 
-      setAnalysisProgress(10);
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const fileName = `recording_${student.name}_${timestamp}.webm`;
       const file = new File([audioBlob], fileName, { type: audioBlob.type || "audio/webm" });
 
+      // 1. رفع الملف
       setAnalysisProgress(20);
-      const uploadResult = await UploadFile({
-        file,
-        bucket: "recordings",
-        folder: `student_recordings/${student.id}`,
-      });
+      setStatusMessage("جارٍ رفع التسجيل...");
+      
+      const uploadResult = await withTimeout(
+          UploadFile({
+            file,
+            bucket: "recordings",
+            folder: `student_recordings/${student.id}`,
+          }),
+          25000, // Timeout 25s
+          "تأخر رفع الملف. يرجى التحقق من الانترنت."
+      );
 
       if (!uploadResult?.file_url) throw new Error("فشل رفع الملف.");
       const file_url = uploadResult.file_url;
 
+      // 2. تحويل الصوت لنص (Transcribe)
       setAnalysisProgress(40);
+      setStatusMessage("جارٍ تحويل الصوت إلى نص...");
+
       const audioFileForTranscribe = file;
       const transcribeForm = new FormData();
       transcribeForm.append("file", audioFileForTranscribe);
       transcribeForm.append("language", "ar");
       transcribeForm.append("model", "whisper-1");
 
-      const transcriptionResponse = await fetch("/api/transcribe", { method: "POST", body: transcribeForm });
+      const transcriptionResponse = await withTimeout(
+          fetch("/api/transcribe", { method: "POST", body: transcribeForm }),
+          30000, // Timeout 30s
+          "تأخرت خدمة تحويل الصوت (Whisper)."
+      );
+      
       const transcriptionJson = await transcriptionResponse.json().catch(() => null);
       const transcribedText = transcriptionJson?.text || "";
 
-      if (!transcribedText) throw new Error("لم يتم سماع أي صوت.");
+      if (!transcribedText) throw new Error("لم يتم سماع أي صوت واضح.");
 
+      // 3. تحليل الذكاء الاصطناعي (LLM)
       setAnalysisProgress(70);
+      setStatusMessage("المعلم الذكي يقوم بالتقييم...");
+
       const expectedRaw = exercise.sentence || exercise.text || "";
       const expectedNorm = normalizeArabicText(expectedRaw);
       const heardNorm = normalizeArabicText(transcribedText);
       const matchRatio = wordMatchRatio(expectedRaw, transcribedText);
 
-      // ✅ التعديل هنا: Prompt مفصل وواقعي (AI عادل ومشجع)
       const analysisPrompt = `
-      أنت معلم لغة عربية متميز وداعم، تهدف لتعليم الطلاب النطق الصحيح بأسلوب مشجع وواقعي.
+      أنت معلم لغة عربية طيب القلب ومشجع جداً للأطفال. هدفك هو تحفيز الطالب وليس إحباطه.
 
       **المهمة:**
-      تحليل تسجيل صوتي لطالب يقرأ النص التالي.
-      النص المطلوب: "${expectedRaw}"
-      النص المسموع (تقريباً): "${transcribedText}"
-      نسبة التطابق التقريبية: ${(matchRatio * 100).toFixed(0)}%
+      قيم قراءة الطالب للنص التالي.
+      - النص المطلوب: "${expectedRaw}"
+      - النص المسموع (تقريباً): "${transcribedText}"
+      - نسبة التطابق التقريبية: ${(matchRatio * 100).toFixed(0)}%
 
-      **معايير التقييم (كن واقعياً ومتوسط الصرامة):**
-      1. **الدرجة (Score):** امنح درجة تعكس الجهد والوضوح.
-         - قراءة ممتازة (حتى مع أخطاء بسيطة جداً): 90-100.
-         - قراءة جيدة ومفهومة (أخطاء تشكيل أو كلمة): 75-89.
-         - قراءة مقبولة (أخطاء متعددة لكن المعنى واضح): 50-74.
-         - قراءة غير صحيحة أو نص مختلف: أقل من 50.
-         - صمت تام: 0.
+      **قواعد التقييم (العدالة والتشجيع):**
+      1. **حالات الصفر (فقط):**
+         - إذا كان التسجيل صامتاً تماماً أو ضجيجاً فقط -> Score: 0, Status: silence
+         - إذا قرأ نصاً مختلفاً كلياً عن الموضوع -> Score: 0, Status: wrong_text
 
-      2. **التعليق (Feedback):**
-         - يجب أن يكون باللغة العربية، متوسط الطول (3-4 جمل)، وبنبرة محفزة.
-         - ابدأ بمدح واضح.
-         - اذكر **نقاط القوة** (مثلاً: وضوح الصوت، نطق حروف معينة).
-         - اذكر **نقاط الضعف/التحسين** بلطف (مثلاً: الانتباه للمدود، التشكيل في كلمة كذا).
-         - اختم بتشجيع.
+      2. **التقييم العادل (لأي محاولة قراءة):**
+         - **ممتاز (90-100):** قراءة صحيحة وواضحة.
+         - **جيد جداً (75-89):** قراءة مفهومة مع أخطاء بسيطة.
+         - **جيد/مقبول (50-74):** الطالب يحاول، نطق بعض الكلمات بشكل صحيح.
+         - **ضعيف (10-49):** قرأ كلمة واحدة فقط صحيحة.
+
+      3. **أسلوب التعليق (Feedback):**
+         - اكتب 3 جمل قصيرة بلهجة مشجعة جداً. ابدأ بكلمة مثل: "يا بطل!" أو "أحسنت!".
 
       **المطلوب إرجاع JSON فقط:**
       {
         "score": number,
         "status": "valid" | "silence" | "wrong_text",
-        "feedback": "نص التعليق المفصل...",
+        "feedback": "نص التعليق...",
         "analysis_details": {
           "word_match_score": number,
           "pronunciation_score": number,
@@ -333,28 +365,34 @@ export default function ExercisePage() {
           "rhythm": "string",
           "tone": "string",
           "breathing": "string",
-          "suggestions": "نصيحة قصيرة ومفيدة"
+          "suggestions": "نصيحة قصيرة"
         }
       }
       `;
 
-      const analysisResponse = await InvokeLLM({
-        prompt: analysisPrompt,
-        response_json_schema: {
-            type: "object",
-            properties: {
-                score: {type: "number"},
-                status: {type: "string"},
-                feedback: {type: "string"},
-                analysis_details: {type: "object"}
+      const analysisResponse = await withTimeout(
+          InvokeLLM({
+            prompt: analysisPrompt,
+            response_json_schema: {
+                type: "object",
+                properties: {
+                    score: {type: "number"},
+                    status: {type: "string"},
+                    feedback: {type: "string"},
+                    analysis_details: {type: "object"}
+                },
+                required: ["score", "status", "feedback"]
             },
-            required: ["score", "status", "feedback"]
-        },
-      });
+          }),
+          30000, // Timeout 30s
+          "تأخر تحليل الذكاء الاصطناعي."
+      );
 
       const aiAnalysis = typeof analysisResponse === "string" ? JSON.parse(analysisResponse) : analysisResponse;
       setLastAnalysis({ ...aiAnalysis, audio_url: file_url });
+      
       setAnalysisProgress(90);
+      setStatusMessage("جارٍ حفظ النتيجة...");
 
       const recordingData = {
         student_id: student.id,
@@ -378,7 +416,7 @@ export default function ExercisePage() {
         createdRecording = await Recording.create(recordingData);
         setLastRecordingId(createdRecording?.id || null);
       } catch (dbErr) {
-        console.warn("DB Save Error:", dbErr);
+        console.warn("DB Save Warning:", dbErr);
       }
 
       setAnalysisProgress(100);
@@ -391,6 +429,7 @@ export default function ExercisePage() {
       setRecordingSubmitted(true);
       setIsSending(false);
       setIsAnalyzing(false);
+      setStatusMessage(""); // تنظيف الرسالة
 
       const scoreNum = Number(aiAnalysis?.score || 0);
       const passed = scoreNum > 0 && aiAnalysis?.status === "valid";
@@ -398,19 +437,62 @@ export default function ExercisePage() {
       setAnalysisPassed(passed);
       setMustRetry(!passed);
 
-      // تحميل التمرين التالي
-      await loadNextExercise();
-
+      // ✅ منطق إصدار الشهادات
       if (passed) {
+        if (scoreNum >= 90) {
+           try {
+             await Certificate.create({
+               student_id: student.id,
+               student_name: student.name,
+               type: "exercise",
+               title: "شهادة تميز في الأداء",
+               details: exercise.title || "تمرين القراءة",
+               date: new Date().toLocaleDateString('ar-AE')
+             });
+             setEarnedCertificate("exercise");
+           } catch(e) { console.error("Cert error", e); }
+        }
+
+        try {
+            const dbExercises = await ExerciseEntity.list();
+            const allExercises = [...dbExercises, ...staticExercises];
+            const allRecordings = await Recording.list();
+            const myPassedRecordings = allRecordings.filter(r => r.student_id === student.id && Number(r.score) > 0);
+            const passedIds = myPassedRecordings.map(r => r.exercise_id);
+            if (!passedIds.includes(exercise.id)) passedIds.push(exercise.id);
+
+            const stageExs = allExercises.filter(ex => 
+                (parseInt(ex.stage) || 1) === (parseInt(exercise.stage) || 1) &&
+                ex.level === exercise.level
+            );
+
+            if (stageExs.length > 0 && stageExs.every(ex => passedIds.includes(ex.id))) {
+                await Certificate.create({
+                    student_id: student.id,
+                    student_name: student.name,
+                    type: "stage",
+                    title: `إتمام المرحلة ${exercise.stage}`,
+                    details: `المرحلة ${exercise.stage} - المستوى ${exercise.level}`,
+                    date: new Date().toLocaleDateString('ar-AE')
+                });
+                setEarnedCertificate("stage");
+            }
+        } catch(e) { console.error("Stage cert error", e); }
+
         generateQuiz();
       }
+
+      await loadNextExercise();
+
     } catch (err) {
       console.error("Submission error:", err);
       let msg = err.message;
-      if (msg.includes("uuid")) msg = "حدث خطأ تقني. لكن نتيجتك ظهرت!";
+      if (msg.includes("uuid")) msg = "حدث خطأ تقني في حفظ البيانات. لكن نتيجتك ظهرت!";
+      
       setError(`تنبيه: ${msg}`);
       setIsSending(false);
       setIsAnalyzing(false);
+      setStatusMessage("");
     }
   };
 
@@ -422,27 +504,21 @@ export default function ExercisePage() {
       if (!student || !exercise || allExercises.length === 0) return;
 
       const currentStage = parseInt(exercise.stage) || 1;
-      
-      // منطق اختيار التمرين التالي: نفس المرحلة (لم يحل بعد) أو المرحلة التالية
       const sameStageCandidates = allExercises.filter(ex => 
         (parseInt(ex.stage) || 1) === currentStage && ex.id !== exercise.id
       );
-
       const nextStageCandidates = allExercises.filter(ex => 
         (parseInt(ex.stage) || 1) === currentStage + 1
       );
 
       let nextEx = null;
-
       if (sameStageCandidates.length > 0) {
         nextEx = sameStageCandidates[Math.floor(Math.random() * sameStageCandidates.length)];
       } else if (nextStageCandidates.length > 0) {
         nextEx = nextStageCandidates[0];
         await Student.update(student.id, { current_stage: currentStage + 1 });
       }
-
       setNextExercise(nextEx);
-
     } catch (err) {
       console.error("Failed to load next exercise:", err);
     }
@@ -452,14 +528,21 @@ export default function ExercisePage() {
     setIsGeneratingQuiz(true);
     const text = exercise.sentence || exercise.text || "";
     try {
-      const response = await InvokeLLM({
-        prompt: `نص: "${text}". أنشئ 3 أسئلة اختيار من متعدد بسيطة جداً للأطفال. JSON: {questions: [{question, options:[], correct_index}]}`,
-        response_json_schema: { type: "object", properties: { questions: { type: "array" } } }
-      });
+      // إضافة Timeout لتوليد الأسئلة أيضاً
+      const response = await withTimeout(
+          InvokeLLM({
+            prompt: `نص: "${text}". أنشئ 3 أسئلة اختيار من متعدد بسيطة جداً للأطفال. JSON: {questions: [{question, options:[], correct_index}]}`,
+            response_json_schema: { type: "object", properties: { questions: { type: "array" } } }
+          }),
+          15000,
+          "تأخر توليد الأسئلة"
+      );
+      
       const data = typeof response === "string" ? JSON.parse(response) : response;
       if (data?.questions) setQuizQuestions(data.questions);
     } catch (e) {
-      console.error(e);
+      console.error("Quiz generation error:", e);
+      // لا نظهر خطأ للطالب هنا لأن الكويز اختياري، فقط ننتقل بدون أسئلة
     } finally {
       setIsGeneratingQuiz(false);
     }
@@ -494,7 +577,6 @@ export default function ExercisePage() {
     }
   };
 
-  // Error View
   if (error && !recordingSubmitted) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-red-50 p-4">
@@ -505,16 +587,18 @@ export default function ExercisePage() {
           </CardHeader>
           <CardContent className="text-center space-y-4">
             <p className="text-red-600 arabic-text">{error}</p>
-            <Link to={createPageUrl("StudentDashboard")}>
-              <Button variant="outline" className="arabic-text">العودة للوحة الطالب</Button>
-            </Link>
+            <div className="flex gap-2 justify-center">
+                <Button onClick={retryRecording} variant="default" className="arabic-text bg-red-600 hover:bg-red-700">المحاولة مرة أخرى</Button>
+                <Link to={createPageUrl("StudentDashboard")}>
+                  <Button variant="outline" className="arabic-text">الخروج</Button>
+                </Link>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  // Loading View
   if (!exercise || !student) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
@@ -588,8 +672,20 @@ export default function ExercisePage() {
                                             <Button onClick={playRecording} variant="outline" className="rounded-full px-6"><Play className="ml-2" /> استمع</Button>
                                             <Button onClick={retryRecording} variant="outline" className="rounded-full px-6"><RotateCcw className="ml-2" /> إعادة</Button>
                                         </div>
-                                        {isAnalyzing && <div className="text-indigo-600 arabic-text font-bold">جارٍ تحليل أدائك... <Progress value={analysisProgress} className="mt-2" /></div>}
-                                        <Button onClick={submitRecording} disabled={isSending} className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-6 text-lg shadow-lg rounded-xl">
+                                        
+                                        {/* ✅ عرض حالة التحليل بشكل واضح */}
+                                        {isAnalyzing && (
+                                          <div className="space-y-3 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                                            <div className="flex items-center justify-center gap-2 text-indigo-700 arabic-text font-bold text-lg animate-pulse">
+                                               {statusMessage || "جارٍ المعالجة..."} 
+                                               <Loader2 className="w-5 h-5 animate-spin"/>
+                                            </div>
+                                            <Progress value={analysisProgress} className="h-3 w-full rounded-full" />
+                                            <p className="text-xs text-indigo-400 text-center">قد يستغرق الأمر بضع ثوانٍ...</p>
+                                          </div>
+                                        )}
+                                        
+                                        <Button onClick={submitRecording} disabled={isSending} className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-6 text-lg shadow-lg rounded-xl transition-all hover:scale-[1.02]">
                                             {isSending ? "جارٍ الإرسال..." : "إرسال للمعلم 🚀"}
                                         </Button>
                                     </div>
@@ -632,6 +728,20 @@ export default function ExercisePage() {
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* ✅ إشعار بالحصول على شهادة */}
+                                    {earnedCertificate && (
+                                        <div className="bg-gradient-to-r from-amber-100 to-yellow-100 p-4 rounded-xl border-2 border-amber-300 animate-bounce">
+                                            <p className="text-xl font-bold text-amber-800 flex items-center justify-center gap-2">
+                                                🏆 مبروك! لقد حصلت على شهادة جديدة!
+                                            </p>
+                                            <Link to={createPageUrl("Certificates")}>
+                                                <Button variant="link" className="text-amber-900 underline mt-1">
+                                                    اضغط هنا لمشاهدة وتنزيل شهادتك
+                                                </Button>
+                                            </Link>
+                                        </div>
+                                    )}
                                 </div>
                              )}
                              
@@ -644,7 +754,6 @@ export default function ExercisePage() {
                                 </div>
                              ) : (
                                 <div className="space-y-6">
-                                    {/* أزرار الإجراءات - "التمرين التالي" بارز جداً */}
                                     <div className="flex flex-col gap-4">
                                         {nextExercise && (
                                             <Button onClick={goToNextExercise} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-8 text-xl rounded-2xl shadow-xl transform transition-all hover:scale-105 hover:shadow-2xl">
@@ -661,7 +770,6 @@ export default function ExercisePage() {
                                         )}
                                     </div>
 
-                                    {/* قسم الاختبار الاختياري */}
                                     {showQuiz && (
                                         <div className="mt-8 text-right bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 animate-in slide-in-from-bottom-4">
                                             <h3 className="font-bold text-xl mb-4 text-slate-800 border-b pb-2">🧠 اختبار الفهم السريع</h3>
