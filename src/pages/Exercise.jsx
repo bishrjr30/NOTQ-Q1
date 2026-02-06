@@ -1,5 +1,3 @@
-// src/pages/Exercise.jsx
-
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +21,8 @@ import {
   TrendingUp,
   ChevronRight,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  Star
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -34,15 +33,13 @@ import { Label } from "@/components/ui/label";
 // ✅ Supabase entities
 import { Exercise as ExerciseEntity, Student, Recording } from "@/api/entities";
 
-// ✅ تكامل الذكاء الاصطناعي
+// ✅ Integrations
 import { UploadFile, InvokeLLM } from "@/api/integrations";
 
-// ✅ استيراد التمارين المحلية
+// ✅ Local Exercises
 import { staticExercises } from "@/data/staticExercises";
 
-/* =========================================================
-   ✅ Helpers
-========================================================= */
+/* ================= Helpers ================= */
 function normalizeArabicText(input = "") {
   if (!input || typeof input !== "string") return "";
   return (
@@ -62,18 +59,14 @@ function normalizeArabicText(input = "") {
 function wordMatchRatio(expectedRaw = "", heardRaw = "") {
   const expected = normalizeArabicText(expectedRaw);
   const heard = normalizeArabicText(heardRaw);
-
   const expWords = expected.split(" ").filter(Boolean);
   const heardWords = heard.split(" ").filter(Boolean);
-
   if (expWords.length === 0) return 0;
-
   const heardSet = new Set(heardWords);
   let matched = 0;
   for (const w of expWords) {
     if (heardSet.has(w)) matched++;
   }
-
   return matched / expWords.length;
 }
 
@@ -133,7 +126,7 @@ export default function ExercisePage() {
         // 1. البحث في التمارين المحلية
         let foundExercise = staticExercises.find((ex) => ex.id === exerciseId);
 
-        // 2. البحث في قاعدة البيانات إذا لم يوجد محلياً
+        // 2. البحث في قاعدة البيانات
         if (!foundExercise) {
             const isLocalId = exerciseId.startsWith("local-") || exerciseId.startsWith("ex-");
             if (!isLocalId) {
@@ -300,36 +293,38 @@ export default function ExercisePage() {
       const heardNorm = normalizeArabicText(transcribedText);
       const matchRatio = wordMatchRatio(expectedRaw, transcribedText);
 
-      // ✅ التعديل هنا: Prompt مفصل وواقعي
+      // ✅ البرومبت المعدل ليكون عادلاً ومشجعاً (Fair & Encouraging AI)
       const analysisPrompt = `
-      أنت معلم لغة عربية متميز وداعم، تهدف لتعليم الطلاب النطق الصحيح بأسلوب مشجع وواقعي.
+      أنت معلم لغة عربية طيب القلب ومشجع جداً للأطفال. هدفك هو تحفيز الطالب وليس إحباطه.
 
       **المهمة:**
-      تحليل تسجيل صوتي لطالب يقرأ النص التالي.
-      النص المطلوب: "${expectedRaw}"
-      النص المسموع (تقريباً): "${transcribedText}"
-      نسبة التطابق التقريبية: ${(matchRatio * 100).toFixed(0)}%
+      قيم قراءة الطالب للنص التالي.
+      - النص المطلوب: "${expectedRaw}"
+      - النص المسموع (تقريباً): "${transcribedText}"
+      - نسبة التطابق التقريبية: ${(matchRatio * 100).toFixed(0)}%
 
-      **معايير التقييم (كن واقعياً ومتوسط الصرامة):**
-      1. **الدرجة (Score):** امنح درجة تعكس الجهد والوضوح.
-         - قراءة ممتازة (حتى مع أخطاء بسيطة جداً): 90-100.
-         - قراءة جيدة ومفهومة (أخطاء تشكيل أو كلمة): 75-89.
-         - قراءة مقبولة (أخطاء متعددة لكن المعنى واضح): 50-74.
-         - قراءة غير صحيحة أو نص مختلف: أقل من 50.
-         - صمت تام: 0.
+      **قواعد التقييم (العدالة والتشجيع):**
+      1. **حالات الصفر (فقط):**
+         - إذا كان التسجيل صامتاً تماماً أو ضجيجاً فقط -> Score: 0, Status: silence
+         - إذا قرأ نصاً مختلفاً كلياً عن الموضوع (مثلاً يتحدث عن اللعب بدلاً من القراءة) -> Score: 0, Status: wrong_text
 
-      2. **التعليق (Feedback):**
-         - يجب أن يكون باللغة العربية، متوسط الطول (3-4 جمل)، وبنبرة محفزة.
-         - ابدأ بمدح واضح.
-         - اذكر **نقاط القوة** (مثلاً: وضوح الصوت، نطق حروف معينة).
-         - اذكر **نقاط الضعف/التحسين** بلطف (مثلاً: الانتباه للمدود، التشكيل في كلمة كذا).
-         - اختم بتشجيع.
+      2. **التقييم العادل (لأي محاولة قراءة):**
+         - **ممتاز (90-100):** قراءة صحيحة وواضحة، حتى لو أخطأ في تشكيل حرف أو حرفين بسيطين. كافئه على الجرأة والوضوح.
+         - **جيد جداً (75-89):** قراءة مفهومة، المعنى واضح، لكن توجد بعض الأخطاء في التشكيل أو استبدال كلمة بمرادف.
+         - **جيد/مقبول (50-74):** الطالب يحاول، نطق بعض الكلمات بشكل صحيح وتعثر في أخرى. لا تعطه صفراً أبداً طالما حاول القراءة من النص.
+         - **ضعيف (10-49):** قرأ كلمة واحدة فقط صحيحة أو تهجى بصعوبة بالغة. (أعطه درجة صغيرة تشجيعاً للمحاولة).
+
+      3. **أسلوب التعليق (Feedback):**
+         - اكتب 3 جمل قصيرة بلهجة مشجعة جداً.
+         - ابدأ بكلمة مثل: "يا بطل!"، "أحسنت!"، "محاولة رائعة!".
+         - اذكر نقطة قوة حقيقية (مثلاً: "صوتك واضح"، "نطقت كلمة ... بشكل ممتاز").
+         - اذكر نصيحة بسيطة للتحسين (مثلاً: "انتبه لحركة الضمة"، "حاول المد في كلمة ...").
 
       **المطلوب إرجاع JSON فقط:**
       {
         "score": number,
         "status": "valid" | "silence" | "wrong_text",
-        "feedback": "نص التعليق المفصل...",
+        "feedback": "نص التعليق...",
         "analysis_details": {
           "word_match_score": number,
           "pronunciation_score": number,
@@ -338,7 +333,7 @@ export default function ExercisePage() {
           "rhythm": "string",
           "tone": "string",
           "breathing": "string",
-          "suggestions": "نصيحة قصيرة ومفيدة"
+          "suggestions": "نصيحة قصيرة"
         }
       }
       `;
@@ -377,19 +372,15 @@ export default function ExercisePage() {
         },
       };
 
-      // محاولة الحفظ في قاعدة البيانات (مع معالجة خطأ UUID إذا لم يتم تحديث القاعدة)
-      let createdRecording = null;
       try {
-        createdRecording = await Recording.create(recordingData);
+        const createdRecording = await Recording.create(recordingData);
         setLastRecordingId(createdRecording?.id || null);
       } catch (dbErr) {
-        console.warn("DB Save Error (possibly UUID issue):", dbErr);
-        // نتابع حتى لو فشل الحفظ في القاعدة لكي لا نعطل الطالب، لكن لن يتم حفظ السجل
+        console.warn("DB Save warning:", dbErr);
       }
 
       setAnalysisProgress(100);
 
-      // تحديث بيانات الطالب
       await Student.update(student.id, {
         last_activity: new Date().toISOString(),
         total_exercises: (student.total_exercises || 0) + 1,
@@ -405,7 +396,6 @@ export default function ExercisePage() {
       setAnalysisPassed(passed);
       setMustRetry(!passed);
 
-      // تحميل التمرين التالي فوراً ليكون الزر جاهزاً
       await loadNextExercise();
 
       if (passed) {
@@ -414,8 +404,8 @@ export default function ExercisePage() {
     } catch (err) {
       console.error("Submission error:", err);
       let msg = err.message;
-      if (msg.includes("uuid")) msg = "حدث خطأ في قاعدة البيانات (UUID). يرجى إبلاغ المعلم بتحديث النظام.";
-      setError(`فشل: ${msg}`);
+      if (msg.includes("uuid")) msg = "حدث خطأ تقني في حفظ البيانات. لكن نتيجتك ظهرت!";
+      setError(`تنبيه: ${msg}`);
       setIsSending(false);
       setIsAnalyzing(false);
     }
@@ -429,33 +419,21 @@ export default function ExercisePage() {
       if (!student || !exercise || allExercises.length === 0) return;
 
       const currentStage = parseInt(exercise.stage) || 1;
-      
-      // نبحث عن تمرين آخر في نفس المرحلة لم يحله الطالب بعد، أو ننتقل للمرحلة التالية
-      // للتبسيط هنا: نختار التمرين التالي في القائمة بناءً على الترتيب أو المرحلة
-      
-      // العثور على التمارين المرشحة (نفس المرحلة، غير التمرين الحالي)
       const sameStageCandidates = allExercises.filter(ex => 
         (parseInt(ex.stage) || 1) === currentStage && ex.id !== exercise.id
       );
-
-      // العثور على تمارين المرحلة التالية
       const nextStageCandidates = allExercises.filter(ex => 
         (parseInt(ex.stage) || 1) === currentStage + 1
       );
 
       let nextEx = null;
-
-      // منطق بسيط: اختر عشوائياً من نفس المرحلة، إذا لم يوجد فاختر من المرحلة التالية
       if (sameStageCandidates.length > 0) {
         nextEx = sameStageCandidates[Math.floor(Math.random() * sameStageCandidates.length)];
       } else if (nextStageCandidates.length > 0) {
         nextEx = nextStageCandidates[0];
-        // تحديث مرحلة الطالب إذا انتقل
         await Student.update(student.id, { current_stage: currentStage + 1 });
       }
-
       setNextExercise(nextEx);
-
     } catch (err) {
       console.error("Failed to load next exercise:", err);
     }
@@ -466,7 +444,7 @@ export default function ExercisePage() {
     const text = exercise.sentence || exercise.text || "";
     try {
       const response = await InvokeLLM({
-        prompt: `نص: "${text}". أنشئ 3 أسئلة اختيار من متعدد بسيطة. JSON: {questions: [{question, options:[], correct_index}]}`,
+        prompt: `نص: "${text}". أنشئ 3 أسئلة اختيار من متعدد بسيطة جداً للأطفال. JSON: {questions: [{question, options:[], correct_index}]}`,
         response_json_schema: { type: "object", properties: { questions: { type: "array" } } }
       });
       const data = typeof response === "string" ? JSON.parse(response) : response;
@@ -484,7 +462,6 @@ export default function ExercisePage() {
       if (quizAnswers[idx] === q.correct_index) correct++;
     });
     setQuizScore((correct / quizQuestions.length) * 100);
-    // تحديث السجل إذا وجد
     if (lastRecordingId) {
         try {
             await Recording.update(lastRecordingId, { 
@@ -504,13 +481,11 @@ export default function ExercisePage() {
 
   const goToNextExercise = () => {
     if (nextExercise && student) {
-      // إعادة توجيه وتحديث الصفحة لضمان تحميل التمرين الجديد
       window.location.href = createPageUrl(`Exercise?id=${nextExercise.id}&studentId=${student.id}`);
     }
   };
 
-  // Error View
-  if (error) {
+  if (error && !recordingSubmitted) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-red-50 p-4">
         <Card className="max-w-md w-full border-red-200 shadow-xl">
@@ -529,7 +504,6 @@ export default function ExercisePage() {
     );
   }
 
-  // Loading View
   if (!exercise || !student) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
@@ -594,8 +568,8 @@ export default function ExercisePage() {
                         <Card className="border-0 shadow-xl bg-white/90">
                             <CardContent className="p-8 text-center">
                                 {!audioBlob ? (
-                                    <Button onClick={isRecording ? stopRecording : startRecording} size="lg" className={`w-24 h-24 rounded-full ${isRecording ? "bg-red-500 animate-pulse" : "bg-indigo-600"}`}>
-                                        {isRecording ? <Square className="w-10 h-10" /> : <Mic className="w-10 h-10" />}
+                                    <Button onClick={isRecording ? stopRecording : startRecording} size="lg" className={`w-24 h-24 rounded-full ${isRecording ? "bg-red-500 animate-pulse" : "bg-indigo-600 hover:bg-indigo-700 shadow-xl hover:shadow-2xl transition-all"}`}>
+                                        {isRecording ? <Square className="w-10 h-10 text-white" /> : <Mic className="w-10 h-10 text-white" />}
                                     </Button>
                                 ) : (
                                     <div className="space-y-4">
@@ -603,8 +577,8 @@ export default function ExercisePage() {
                                             <Button onClick={playRecording} variant="outline" className="rounded-full px-6"><Play className="ml-2" /> استمع</Button>
                                             <Button onClick={retryRecording} variant="outline" className="rounded-full px-6"><RotateCcw className="ml-2" /> إعادة</Button>
                                         </div>
-                                        {isAnalyzing && <div className="text-indigo-600 arabic-text">جارٍ التحليل... <Progress value={analysisProgress} className="mt-2" /></div>}
-                                        <Button onClick={submitRecording} disabled={isSending} className="w-full bg-green-600 hover:bg-green-700 py-6 text-lg shadow-lg">
+                                        {isAnalyzing && <div className="text-indigo-600 arabic-text font-bold">جارٍ تحليل أدائك... <Progress value={analysisProgress} className="mt-2" /></div>}
+                                        <Button onClick={submitRecording} disabled={isSending} className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-6 text-lg shadow-lg rounded-xl">
                                             {isSending ? "جارٍ الإرسال..." : "إرسال للمعلم 🚀"}
                                         </Button>
                                     </div>
@@ -614,33 +588,36 @@ export default function ExercisePage() {
                     </div>
                 ) : (
                     // Result View
-                    <Card className="border-0 shadow-xl bg-white/90 animate-in fade-in zoom-in duration-300">
+                    <Card className="border-0 shadow-xl bg-white/90 animate-in fade-in zoom-in duration-500">
                         <CardHeader className="bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-t-xl text-center p-6">
                             <CheckCircle className="w-12 h-12 mx-auto text-white mb-2" />
-                            <CardTitle className="text-3xl arabic-text">أحسنت يا بطل! 🎉</CardTitle>
+                            <CardTitle className="text-3xl arabic-text font-bold">أداء رائع! 🎉</CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 sm:p-8 text-center space-y-6">
                              {lastAnalysis && (
                                 <div className="space-y-6">
                                     {/* النتيجة والتعليق */}
-                                    <div className="bg-indigo-50 p-6 rounded-2xl border-2 border-indigo-100 shadow-sm text-right">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <Badge className="bg-indigo-600 text-lg px-3 py-1">{lastAnalysis.score}%</Badge>
-                                            <span className="font-bold text-indigo-800">تعليق المعلم 👨‍🏫</span>
+                                    <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-6 rounded-2xl border-2 border-indigo-100 shadow-md text-right relative overflow-hidden">
+                                        <div className="absolute top-0 left-0 p-4 opacity-10"><Star className="w-24 h-24 text-indigo-500"/></div>
+                                        <div className="flex justify-between items-center mb-4 relative z-10">
+                                            <Badge className={`text-lg px-4 py-1 ${lastAnalysis.score >= 85 ? "bg-green-500" : lastAnalysis.score >= 50 ? "bg-yellow-500" : "bg-red-500"}`}>
+                                                الدرجة: {lastAnalysis.score}%
+                                            </Badge>
+                                            <span className="font-bold text-indigo-800 flex items-center gap-2"><Award className="w-5 h-5"/> تعليق المعلم</span>
                                         </div>
-                                        <p className="text-lg text-slate-800 arabic-text leading-loose">
+                                        <p className="text-lg text-slate-800 arabic-text leading-loose relative z-10 font-medium">
                                             {lastAnalysis.feedback}
                                         </p>
                                         
                                         {/* تفاصيل نقاط القوة والضعف */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                                            <div className="bg-green-100 p-3 rounded-lg border border-green-200">
-                                                <p className="font-bold text-green-800 flex items-center gap-2 mb-1"><ThumbsUp className="w-4 h-4"/> نقاط القوة:</p>
-                                                <p className="text-green-700 text-sm">{lastAnalysis.analysis_details?.rhythm || "نطق واضح وممتاز"}</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 relative z-10">
+                                            <div className="bg-white p-3 rounded-xl border border-green-200 shadow-sm">
+                                                <p className="font-bold text-green-700 flex items-center gap-2 mb-2"><ThumbsUp className="w-4 h-4"/> نقاط أبهرتني:</p>
+                                                <p className="text-slate-600 text-sm">{lastAnalysis.analysis_details?.rhythm || "نبرة صوتك واضحة وجميلة"}</p>
                                             </div>
-                                            <div className="bg-orange-100 p-3 rounded-lg border border-orange-200">
-                                                <p className="font-bold text-orange-800 flex items-center gap-2 mb-1"><ThumbsDown className="w-4 h-4"/> ركز على:</p>
-                                                <p className="text-orange-700 text-sm">{lastAnalysis.analysis_details?.suggestions || "حاول تحسين التشكيل"}</p>
+                                            <div className="bg-white p-3 rounded-xl border border-orange-200 shadow-sm">
+                                                <p className="font-bold text-orange-700 flex items-center gap-2 mb-2"><TrendingUp className="w-4 h-4"/> همسة في أذنك:</p>
+                                                <p className="text-slate-600 text-sm">{lastAnalysis.analysis_details?.suggestions || "ركز قليلاً على التشكيل"}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -648,15 +625,18 @@ export default function ExercisePage() {
                              )}
                              
                              {mustRetry ? (
-                                <Button onClick={retryRecording} className="w-full py-6 text-lg bg-red-600 hover:bg-red-700 shadow-md">
-                                    <RotateCcw className="ml-2" /> حاول مرة أخرى لتحقيق نتيجة أفضل
-                                </Button>
+                                <div className="space-y-4">
+                                    <p className="text-red-600 font-bold arabic-text">عذراً، لم نتمكن من سماعك بوضوح أو القراءة غير صحيحة. حاول مرة أخرى!</p>
+                                    <Button onClick={retryRecording} className="w-full py-6 text-lg bg-red-600 hover:bg-red-700 shadow-md rounded-xl">
+                                        <RotateCcw className="ml-2" /> إعادة المحاولة
+                                    </Button>
+                                </div>
                              ) : (
                                 <div className="space-y-6">
                                     {/* أزرار الإجراءات - "التمرين التالي" بارز جداً */}
                                     <div className="flex flex-col gap-4">
                                         {nextExercise && (
-                                            <Button onClick={goToNextExercise} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-8 text-xl rounded-2xl shadow-xl transform transition-all hover:scale-105">
+                                            <Button onClick={goToNextExercise} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-8 text-xl rounded-2xl shadow-xl transform transition-all hover:scale-105 hover:shadow-2xl">
                                                 <Sparkles className="w-6 h-6 ml-3 animate-pulse" />
                                                 الانتقال للتمرين التالي
                                                 <ChevronRight className="w-6 h-6 mr-3" />
@@ -664,7 +644,7 @@ export default function ExercisePage() {
                                         )}
                                         
                                         {quizQuestions.length > 0 && !showQuiz && (
-                                            <Button onClick={() => setShowQuiz(true)} variant="outline" className="w-full py-6 text-lg border-2 border-blue-200 text-blue-700 hover:bg-blue-50">
+                                            <Button onClick={() => setShowQuiz(true)} variant="outline" className="w-full py-6 text-lg border-2 border-blue-200 text-blue-700 hover:bg-blue-50 rounded-xl">
                                                 <Brain className="ml-2 w-5 h-5" /> أريد اختبار فهمي للنص (اختياري)
                                             </Button>
                                         )}
@@ -681,22 +661,22 @@ export default function ExercisePage() {
                                                             <p className="font-bold mb-3 text-lg text-indigo-900">{q.question}</p>
                                                             <RadioGroup onValueChange={(v) => setQuizAnswers(p => ({...p, [i]: parseInt(v)}))}>
                                                                 {q.options.map((opt, oi) => (
-                                                                    <div key={oi} className="flex items-center space-x-2 space-x-reverse mb-2 bg-white p-3 rounded-lg border hover:border-indigo-300 transition-colors">
+                                                                    <div key={oi} className="flex items-center space-x-2 space-x-reverse mb-2 bg-white p-3 rounded-lg border hover:border-indigo-300 transition-colors cursor-pointer">
                                                                         <RadioGroupItem value={oi.toString()} id={`q${i}o${oi}`} />
-                                                                        <Label htmlFor={`q${i}o${oi}`} className="flex-1 cursor-pointer mr-2">{opt}</Label>
+                                                                        <Label htmlFor={`q${i}o${oi}`} className="flex-1 cursor-pointer mr-2 text-slate-700">{opt}</Label>
                                                                     </div>
                                                                 ))}
                                                             </RadioGroup>
                                                         </div>
                                                     ))}
-                                                    <Button onClick={submitQuiz} className="w-full bg-blue-600 hover:bg-blue-700 py-4 text-lg">تحقق من الإجابات</Button>
+                                                    <Button onClick={submitQuiz} className="w-full bg-blue-600 hover:bg-blue-700 py-4 text-lg rounded-xl shadow-md">تحقق من الإجابات</Button>
                                                 </div>
                                             ) : (
                                                 <div className="text-center py-4">
                                                     <div className="text-5xl font-bold text-blue-600 mb-2">{Math.round(quizScore)}%</div>
                                                     <p className="text-lg text-slate-600 mb-4">نتيجة رائعة!</p>
                                                     {nextExercise && (
-                                                        <Button onClick={goToNextExercise} className="bg-purple-600 hover:bg-purple-700 px-8 py-3 rounded-xl">
+                                                        <Button onClick={goToNextExercise} className="bg-purple-600 hover:bg-purple-700 px-8 py-3 rounded-xl shadow-lg">
                                                             تابع الرحلة 🚀
                                                         </Button>
                                                     )}
