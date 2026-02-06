@@ -471,7 +471,6 @@ export default function ExercisePage() {
       if (quizAnswers[idx] === q.correct_index) correct++;
     });
     setQuizScore((correct / quizQuestions.length) * 100);
-    
     if (lastRecordingId) {
         try {
             await Recording.update(lastRecordingId, { 
