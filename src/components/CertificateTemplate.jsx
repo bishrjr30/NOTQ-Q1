@@ -9,27 +9,26 @@ const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
       <div
         ref={ref}
         id="certificate-print-node"
-        // أبعاد A4 العرضي (Landscape) بالبكسل
+        // أبعاد A4 العرضي
         className="relative w-[1123px] h-[794px] text-slate-900 font-bold overflow-hidden"
-        // استخدام خطوط عربية واضحة وجميلة
-        style={{ direction: "rtl", fontFamily: "'Traditional Arabic', 'Arial', sans-serif" }} 
+        // ✅ تعديل الخط: استخدام Traditional Arabic أو Arial لضمان ظهور الاسم بشكل رسمي
+        style={{ direction: "rtl", fontFamily: "'Traditional Arabic', 'Arial', sans-serif" }}
       >
-        {/* ✅ 1. صورة الخلفية */}
-        {/* تأكد أن اسم الصورة في مجلد public هو certificate-bg.jpg */}
+        {/* صورة الخلفية كما سميتها أنت */}
         <img 
-            src="/certificate-bg.jpg" 
+            src="/certificate-bg.jpg.png" 
             alt="Certificate Template" 
             className="absolute inset-0 w-full h-full object-cover z-0"
         />
 
-        {/* ✅ 2. النصوص المتغيرة */}
+        {/* النصوص المتغيرة */}
         <div className="absolute inset-0 z-10 w-full h-full">
             
-            {/* 🟢 اسم الطالب */}
+            {/* اسم الطالب */}
             <div 
                 className="absolute w-full text-center" 
                 style={{ 
-                    // 🚩 تم تعديل هذه القيمة لإنزال الاسم للأسفل ليجلس على السطر
+                    // ✅ التعديل: تم إنزال الاسم لـ 56% ليجلس فوق السطر الذهبي
                     top: '56%', 
                     left: '0', 
                     right: '0' 
@@ -37,29 +36,25 @@ const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
             >
                 <h1 
                     className="text-6xl text-black font-extrabold tracking-wide"
-                    style={{ 
-                        // جعل الخط عريضاً ومناسباً للعربية
-                        fontWeight: 'bold',
-                        // تحسين مظهر الخط
-                        textShadow: "1px 1px 0px rgba(255,255,255,0.5)"
-                    }}
+                    // إضافة ظل خفيف جداً لتمييز الاسم عن الخلفية
+                    style={{ textShadow: "1px 1px 0px rgba(255,255,255,0.5)" }}
                 >
                     {studentName || "اسم الطالب"}
                 </h1>
             </div>
 
-            {/* 🟢 التاريخ */}
+            {/* التاريخ */}
             <div 
                 className="absolute text-right" 
                 style={{ 
-                    // 🚩 تم ضبط مكان التاريخ ليكون فوق النقاط
-                    bottom: '21.5%', // الارتفاع من الأسفل
-                    right: '16%',    // المسافة من اليمين (حركناه لليسار قليلاً ليبتعد عن كلمة التاريخ)
+                    // ✅ التعديل: ضبط مكان التاريخ بدقة فوق النقاط
+                    bottom: '21.5%', 
+                    right: '16%', 
                     width: '200px',
-                    fontSize: '1.2rem'
+                    fontSize: '1.3rem' // تكبير خط التاريخ قليلاً
                 }} 
             >
-                <p className="text-xl text-slate-800 font-bold tracking-widest">
+                <p className="text-xl text-slate-800 font-bold">
                     {date || "2026/02/07"}
                 </p>
             </div>
