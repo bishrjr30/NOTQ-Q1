@@ -34,9 +34,9 @@ const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
                 className="absolute w-full text-center" 
                 style={{ 
                     // الإحداثيات (يمكنك تعديلها إذا لزم الأمر)
-                    top: '29%', 
-                    left: '8', 
-                    right: '0' 
+                    top: '33%', 
+                    left: '0', 
+                    right: '8' 
                 }} 
             >
                 <h1 
@@ -56,8 +56,8 @@ const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
             <div 
                 className="absolute" 
                 style={{ 
-                    bottom: '20%', 
-                    right: '22%', 
+                    bottom: '17%', 
+                    right: '29%', 
                     textAlign: "right", 
                     width: '200px',
                     fontSize: '1.4rem', // حجم مناسب للتاريخ
