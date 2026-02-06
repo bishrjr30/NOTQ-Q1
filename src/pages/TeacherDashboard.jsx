@@ -1,8 +1,9 @@
+// src/pages/TeacherDashboard.jsx
+
 import React, { useState, useEffect } from "react";
 import {
   Student,
   Recording,
-  Lesson,
   StudentGroup,
   Exercise,
   SystemSetting,
@@ -21,8 +22,6 @@ import {
   BookOpen,
   CheckCircle,
   Download,
-  Edit,
-  Eye,
   Filter,
   ListChecks,
   Loader2,
@@ -33,15 +32,13 @@ import {
   Users,
   Volume2,
   Star,
-  Award,
-  AlertTriangle,
-  BarChart2,
+  Activity,
   Settings,
-  MessageCircle,
   RefreshCw,
   ArrowLeft,
   Calendar,
-  FileSpreadsheet,
+  AlertTriangle,
+  MoreVertical,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -67,6 +64,13 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import DeleteConfirmDialog from "@/components/teacher/DeleteConfirmDialog";
 
 /* =========================
    ✅ Helpers (Supabase توافق)
@@ -293,6 +297,10 @@ function StudentsTab({ onSelectStudent }) {
   const [selectedGroupFilter, setSelectedGroupFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(false);
   const [expandedStudentId, setExpandedStudentId] = useState(null);
+  
+  // للحذف
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -329,6 +337,19 @@ function StudentsTab({ onSelectStudent }) {
     }
     return ok;
   });
+
+  const handleDeleteClick = (student) => {
+    setStudentToDelete(student);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (studentToDelete) {
+      await Student.delete(studentToDelete.id);
+      loadData();
+      setDeleteDialogOpen(false);
+    }
+  };
 
   const getLastActiveText = (dateStr) => {
     if (!dateStr) return "لا يوجد";
@@ -477,119 +498,73 @@ function StudentsTab({ onSelectStudent }) {
             </div>
           ) : null}
 
-          <div className="overflow-x-auto">
+          {/* ============ DESKTOP TABLE (Hidden on Mobile) ============ */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-right border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
-                    الاسم
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
-                    الصف
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
-                    المجموعة
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
-                    آخر نشاط
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
-                    مستوى النطق
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
-                    تمارين
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
-                    المتوسط
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">
-                    تفاصيل
-                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">الاسم</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">الصف</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">المجموعة</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">آخر نشاط</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">مستوى النطق</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">تمارين</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">المتوسط</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">تفاصيل</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600 arabic-text">إجراءات</th>
                 </tr>
               </thead>
-
               <tbody>
                 {filteredStudents.map((s) => (
                   <React.Fragment key={s.id}>
                     <tr className="border-b border-slate-100 hover:bg-slate-50/60 transition">
-                      <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text whitespace-nowrap">
-                        {s.name}
-                      </td>
+                      <td className="py-2 px-3 text-sm font-semibold text-slate-900 arabic-text whitespace-nowrap">{s.name}</td>
+                      <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">{s.grade}</td>
                       <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
-                        {s.grade}
+                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-slate-100 text-slate-700">{getGroupName(s.group_id)}</span>
                       </td>
-                      <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-slate-100 text-slate-700">
-                          {getGroupName(s.group_id)}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">
-                        {getLastActiveText(s.last_activity)}
-                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-700 arabic-text whitespace-nowrap">{getLastActiveText(s.last_activity)}</td>
                       <td className="py-2 px-3">
-                        <span
-                          className={cn(
-                            "inline-flex items-center px-2 py-1 rounded-full text-xs arabic-text",
-                            getLevelBadgeColor(s.level || "مبتدئ")
-                          )}
-                        >
+                        <span className={cn("inline-flex items-center px-2 py-1 rounded-full text-xs arabic-text", getLevelBadgeColor(s.level || "مبتدئ"))}>
                           <Star className="w-3 h-3 ml-1" />
                           {s.level || "مبتدئ"}
                         </span>
                       </td>
+                      <td className="py-2 px-3 text-xs text-slate-700 text-center">{s.total_exercises || 0}</td>
+                      <td className="py-2 px-3 text-xs text-slate-700 text-center">{s.average_score ? `${s.average_score}%` : "-"}</td>
                       <td className="py-2 px-3 text-xs text-slate-700 text-center">
-                        {s.total_exercises || 0}
-                      </td>
-                      <td className="py-2 px-3 text-xs text-slate-700 text-center">
-                        {s.average_score ? `${s.average_score}%` : "-"}
-                      </td>
-                      <td className="py-2 px-3 text-xs text-slate-700 text-center">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            setExpandedStudentId(
-                              expandedStudentId === s.id ? null : s.id
-                            )
-                          }
-                          className="arabic-text text-xs"
-                        >
+                        <Button size="sm" variant="outline" onClick={() => setExpandedStudentId(expandedStudentId === s.id ? null : s.id)} className="arabic-text text-xs">
                           {expandedStudentId === s.id ? "إخفاء" : "عرض"}
                         </Button>
                       </td>
+                      <td className="py-2 px-3 text-xs text-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteClick(s)}>
+                              <Trash2 className="w-4 h-4 ml-2" /> حذف الطالب
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
                     </tr>
-
                     {expandedStudentId === s.id && (
                       <tr className="bg-slate-50/50 border-b border-slate-100">
-                        <td colSpan={8} className="p-3">
+                        <td colSpan={9} className="p-3">
                           <div className="flex flex-wrap gap-2 items-center justify-between">
                             <div className="flex flex-wrap gap-2">
                               <Badge className="bg-emerald-100 text-emerald-800 arabic-text">
-                                حروف متقنة:{" "}
-                                {s.mastered_letters &&
-                                s.mastered_letters.length > 0
-                                  ? s.mastered_letters.join("، ")
-                                  : "لا يوجد"}
+                                حروف متقنة: {s.mastered_letters && s.mastered_letters.length > 0 ? s.mastered_letters.join("، ") : "لا يوجد"}
                               </Badge>
                               <Badge className="bg-orange-100 text-orange-800 arabic-text">
-                                يحتاج تدريب:{" "}
-                                {s.needs_practice_letters &&
-                                s.needs_practice_letters.length > 0
-                                  ? s.needs_practice_letters.join("، ")
-                                  : "لا يوجد"}
+                                يحتاج تدريب: {s.needs_practice_letters && s.needs_practice_letters.length > 0 ? s.needs_practice_letters.join("، ") : "لا يوجد"}
                               </Badge>
                             </div>
-
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => onSelectStudent(s)}
-                                className="arabic-text text-xs"
-                              >
-                                سجل الطالب
-                              </Button>
-                            </div>
+                            <Button size="sm" variant="outline" onClick={() => onSelectStudent(s)} className="arabic-text text-xs">
+                              سجل الطالب
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -599,8 +574,66 @@ function StudentsTab({ onSelectStudent }) {
               </tbody>
             </table>
           </div>
+
+          {/* ============ MOBILE CARDS (Visible on Mobile) ============ */}
+          <div className="md:hidden space-y-4">
+            {filteredStudents.map((s) => (
+              <Card key={s.id} className="border-none shadow-md bg-white">
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="text-lg font-bold text-indigo-900">{s.name}</h3>
+                      <p className="text-xs text-gray-500 mt-1">{s.grade} • {getGroupName(s.group_id)}</p>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="-ml-2 h-8 w-8"><MoreVertical className="w-4 h-4 text-gray-400" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => onSelectStudent(s)}>
+                           📝 سجل الطالب
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteClick(s)}>
+                          <Trash2 className="w-4 h-4 ml-2" /> حذف
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-2 text-center bg-gray-50 p-3 rounded-xl mb-3">
+                    <div>
+                      <div className="text-[10px] text-gray-500 mb-1">المرحلة</div>
+                      <div className="font-bold text-indigo-600 text-sm">{s.current_stage || 1}</div>
+                    </div>
+                    <div className="border-r border-l border-gray-200 px-2">
+                      <div className="text-[10px] text-gray-500 mb-1">التمارين</div>
+                      <div className="font-bold text-indigo-600 text-sm">{s.total_exercises || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-500 mb-1">المتوسط</div>
+                      <div className={`font-bold text-sm ${s.average_score >= 80 ? 'text-green-600' : 'text-orange-500'}`}>
+                        {s.average_score ? `${s.average_score}%` : "-"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-gray-400 text-left">
+                    آخر نشاط: {getLastActiveText(s.last_activity)}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
         </CardContent>
       </Card>
+
+      <DeleteConfirmDialog 
+        open={deleteDialogOpen} 
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleConfirmDelete}
+        studentName={studentToDelete?.name}
+      />
     </div>
   );
 }
@@ -1513,28 +1546,51 @@ function RecordingsTab() {
             </div>
           )}
 
-          <div className="overflow-x-auto">
+          {/* ============ MOBILE RECORDING CARDS ============ */}
+          <div className="md:hidden space-y-4">
+            {filteredRecordings.map((r) => {
+              const st = getStudentById(r.student_id);
+              const dateStr = r.created_date ? new Date(r.created_date).toLocaleDateString("ar-AE") : "—";
+              const scoreVal = r.score ?? null;
+              const scoreColor = scoreVal >= 90 ? "bg-emerald-100 text-emerald-800" : scoreVal >= 70 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800";
+
+              return (
+                <Card key={r.id} className="border border-slate-200 shadow-sm">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-bold text-indigo-900">{st?.name || "طالب"}</h4>
+                        <p className="text-xs text-gray-500">{dateStr}</p>
+                      </div>
+                      <Badge className={scoreColor}>{scoreVal != null ? scoreVal : "—"}</Badge>
+                    </div>
+
+                    <div className="bg-slate-50 p-2 rounded text-xs text-right">
+                      <p className="font-bold text-slate-600 mb-1">🤖 رد الذكاء:</p>
+                      <p className="line-clamp-2 text-slate-800">{pickAiFeedback(r) || "لا يوجد"}</p>
+                    </div>
+
+                    <div className="flex gap-2 justify-end">
+                      <audio controls src={r.audio_url} className="h-8 w-full max-w-[150px]" />
+                      <Button size="sm" variant="outline" onClick={() => openReplyDialog(r)}>رد</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* ============ DESKTOP RECORDING TABLE ============ */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full border-collapse text-right">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
-                    الطالب
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
-                    التاريخ
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
-                    الدرجة /100
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
-                    رد الذكاء
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
-                    محاولة الطالب
-                  </th>
-                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">
-                    رد المعلم
-                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الطالب</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">التاريخ</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">الدرجة /100</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">رد الذكاء</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">محاولة الطالب</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-600">رد المعلم</th>
                 </tr>
               </thead>
 
@@ -1653,7 +1709,6 @@ function RecordingsTab() {
                               رد نصي
                             </Button>
 
-                            {/* ✅ رد صوتي (موجود مسبقًا ويرفع للـ bucket ويحدث التسجيل) */}
                             <AudioCommentModal recording={r} />
                           </div>
                         </div>
@@ -1974,37 +2029,39 @@ export default function TeacherDashboard() {
           </motion.div>
 
           <Tabs defaultValue="dashboard" className="space-y-4">
-            <TabsList className="bg-white shadow-md rounded-2xl p-1 grid grid-cols-6">
-              <TabsTrigger value="dashboard" className="arabic-text text-xs md:text-sm">
-                <BarChart3 className="w-4 h-4 ml-1" />
-                لوحة التحكم
-              </TabsTrigger>
+            <div className="bg-white shadow-md rounded-2xl p-1 overflow-x-auto">
+              <TabsList className="flex w-full min-w-max justify-start md:justify-center">
+                <TabsTrigger value="dashboard" className="arabic-text text-xs md:text-sm flex-1">
+                  <BarChart3 className="w-4 h-4 ml-1" />
+                  لوحة التحكم
+                </TabsTrigger>
 
-              <TabsTrigger value="students" className="arabic-text text-xs md:text-sm">
-                <Users className="w-4 h-4 ml-1" />
-                الطلاب
-              </TabsTrigger>
+                <TabsTrigger value="students" className="arabic-text text-xs md:text-sm flex-1">
+                  <Users className="w-4 h-4 ml-1" />
+                  الطلاب
+                </TabsTrigger>
 
-              <TabsTrigger value="groups" className="arabic-text text-xs md:text-sm">
-                <ListChecks className="w-4 h-4 ml-1" />
-                المجموعات
-              </TabsTrigger>
+                <TabsTrigger value="groups" className="arabic-text text-xs md:text-sm flex-1">
+                  <ListChecks className="w-4 h-4 ml-1" />
+                  المجموعات
+                </TabsTrigger>
 
-              <TabsTrigger value="exercises" className="arabic-text text-xs md:text-sm">
-                <BookOpen className="w-4 h-4 ml-1" />
-                التمارين
-              </TabsTrigger>
+                <TabsTrigger value="exercises" className="arabic-text text-xs md:text-sm flex-1">
+                  <BookOpen className="w-4 h-4 ml-1" />
+                  التمارين
+                </TabsTrigger>
 
-              <TabsTrigger value="recordings" className="arabic-text text-xs md:text-sm">
-                <Mic className="w-4 h-4 ml-1" />
-                التسجيلات
-              </TabsTrigger>
+                <TabsTrigger value="recordings" className="arabic-text text-xs md:text-sm flex-1">
+                  <Mic className="w-4 h-4 ml-1" />
+                  التسجيلات
+                </TabsTrigger>
 
-              <TabsTrigger value="emergency" className="arabic-text text-xs md:text-sm">
-                <AlertTriangle className="w-4 h-4 ml-1" />
-                تمرين طارئ
-              </TabsTrigger>
-            </TabsList>
+                <TabsTrigger value="emergency" className="arabic-text text-xs md:text-sm flex-1">
+                  <AlertTriangle className="w-4 h-4 ml-1" />
+                  تمرين طارئ
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             <TabsContent value="dashboard">
               <DashboardTab />
