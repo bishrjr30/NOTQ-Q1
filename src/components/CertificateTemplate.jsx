@@ -1,15 +1,23 @@
+// src/components/CertificateTemplate.jsx
+
 import React, { forwardRef } from "react";
 
 const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
   return (
     // حاوية مخفية للطباعة
     <div style={{ position: "absolute", left: "-9999px", top: 0 }}>
+      {/* ✅ إضافة رابط الخط من Google Fonts لضمان ظهوره بشكل جميل */}
+      <style>
+        {`@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&display=swap');`}
+      </style>
+
       <div
         ref={ref}
         id="certificate-print-node"
-        // أبعاد A4 العرضي (Landscape)
+        // أبعاد A4 العرضي
         className="relative w-[1123px] h-[794px] text-slate-900 font-bold overflow-hidden"
-        style={{ direction: "rtl", fontFamily: "'Traditional Arabic', 'Arial', sans-serif" }}
+        // ✅ استخدام خط 'Amiri' للشهادة بالكامل
+        style={{ direction: "rtl", fontFamily: "'Amiri', serif" }}
       >
         {/* صورة الخلفية */}
         <img 
@@ -25,20 +33,19 @@ const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
             <div 
                 className="absolute w-full text-center" 
                 style={{ 
-                    // ⚠️ هذا الرقم (39%) هو المسؤول عن ارتفاع الاسم
-                    // كان 56% (منخفض جداً)، والآن جعلته 39% ليرتفع للأعلى فوق السطر
-                    // إذا أردت رفعه أكثر: قلل الرقم (مثلاً 35%)
-                    // إذا أردت إنزاله: زد الرقم (مثلاً 42%)
+                    // الإحداثيات (يمكنك تعديلها إذا لزم الأمر)
                     top: '39%', 
                     left: '0', 
                     right: '0' 
                 }} 
             >
                 <h1 
-                    className="text-6xl text-black font-extrabold tracking-wide"
+                    className="text-6xl text-black"
                     style={{ 
+                        // ✅ جعل الخط عريضاً جداً ليبدو مثل الخطاط
+                        fontWeight: '700', 
                         textShadow: "1px 1px 0px rgba(255,255,255,0.5)",
-                        lineHeight: "1" 
+                        lineHeight: "1.2"
                     }}
                 >
                     {studentName || "اسم الطالب"}
@@ -49,16 +56,13 @@ const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
             <div 
                 className="absolute" 
                 style={{ 
-                    // ⚠️ التحكم في موقع التاريخ
-                    // bottom: الارتفاع من الأسفل (زد الرقم لرفعه عن السطر)
                     bottom: '24%', 
-                    // right: المسافة من اليمين (زد الرقم لتحريكه نحو اليسار بعيداً عن كلمة التاريخ)
                     right: '25%', 
-                    textAlign: "right",
+                    textAlign: "right", 
                     width: '200px',
-                    fontSize: '1.3rem',
+                    fontSize: '1.4rem', // حجم مناسب للتاريخ
                     color: '#000',
-                    fontWeight: 'bold'
+                    fontWeight: '700'
                 }} 
             >
                 <p>
