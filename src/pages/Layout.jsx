@@ -89,19 +89,21 @@ export default function Layout({ children, currentPageName }) {
         }
       `}</style>
 
-        {/* Header with Centered Logo */}
-        <header className="bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600 text-white px-3 py-4 md:px-6 md:py-6 shadow-2xl sticky top-0 z-50">
-          {/* المستطيل البنفسجي - في أول الـ header */}
-          <div className="flex justify-center mb-3">
-            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 shadow-xl border border-white/20">
-              <div className="w-4 h-4 sm:w-5 sm:h-5 bg-white/30 rounded-full flex items-center justify-center flex-shrink-0">
-                <GraduationCap className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
-              </div>
-              <span className="text-white font-bold text-[10px] sm:text-xs arabic-text">
-                منصة تعلّم النطق العربي الذكية
-              </span>
-            </div>
+        {/* المستطيل البنفسجي الثابت - خارج الـ header تماماً وفوق كل شيء */}
+        <div 
+          style={{ position: 'fixed', top: '8px', left: '50%', transform: 'translateX(-50%)', zIndex: 10000 }}
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 shadow-xl border border-white/20"
+        >
+          <div className="w-4 h-4 sm:w-5 sm:h-5 bg-white/30 rounded-full flex items-center justify-center flex-shrink-0">
+            <GraduationCap className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
           </div>
+          <span className="text-white font-bold text-[10px] sm:text-xs arabic-text">
+            منصة تعلّم النطق العربي الذكية
+          </span>
+        </div>
+        
+        {/* Header with Centered Logo */}
+        <header className="bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600 text-white px-3 py-4 md:px-6 md:py-6 shadow-2xl sticky top-0 z-50" style={{ paddingTop: '3.5rem' }}>
           <div className="max-w-7xl mx-auto">
             {/* Mobile Sidebar Trigger */}
             <div className="md:hidden flex justify-between items-center mb-2">
