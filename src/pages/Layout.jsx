@@ -54,7 +54,8 @@ export default function Layout({ children, currentPageName }) {
   const bgClass = "bg-gradient-to-br from-blue-50 via-white to-indigo-50 text-slate-900";
 
   return (
-    <SidebarProvider>
+    // تعديل 1: جعل السايد بار مغلقاً افتراضياً
+    <SidebarProvider defaultOpen={false}>
       <div dir="rtl" className={`min-h-screen flex flex-col ${bgClass} relative`}>
         {/* Mascot removed as requested */}
         <style>{`
@@ -90,7 +91,8 @@ export default function Layout({ children, currentPageName }) {
       `}</style>
         
         {/* Header with Centered Logo */}
-        <header className="bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600 text-white px-3 py-4 md:px-6 md:py-6 shadow-2xl sticky top-0 z-50">
+        {/* تعديل 2: إزالة sticky top-0 وجعله relative ليتحرك مع الصفحة */}
+        <header className="bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600 text-white px-3 py-4 md:px-6 md:py-6 shadow-2xl relative z-50">
           <div className="max-w-7xl mx-auto">
             {/* Mobile Sidebar Trigger */}
             <div className="md:hidden flex justify-between items-center mb-2">
