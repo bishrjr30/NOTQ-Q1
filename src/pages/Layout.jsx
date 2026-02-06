@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -89,6 +88,16 @@ export default function Layout({ children, currentPageName }) {
           box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
         }
       `}</style>
+
+        {/* المستطيل البنفسجي الثابت في الأعلى - يظهر في جميع الصفحات */}
+        <div className="fixed top-2 right-4 z-[100] inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full px-3 py-1.5 shadow-lg">
+          <div className="w-5 h-5 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center flex-shrink-0">
+            <GraduationCap className="w-3 h-3 text-white" />
+          </div>
+          <span className="text-white font-semibold text-xs arabic-text">
+            منصة تعلّم النطق العربي الذكية
+          </span>
+        </div>
         
         {/* Header with Centered Logo */}
         <header className="bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600 text-white px-3 py-4 md:px-6 md:py-6 shadow-2xl sticky top-0 z-10">
