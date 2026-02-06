@@ -56,8 +56,8 @@ const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
             <div 
                 className="absolute" 
                 style={{ 
-                    bottom: '17%', 
-                    right: '29%', 
+                    bottom: '15%', 
+                    right: '33%', 
                     textAlign: "right", 
                     width: '200px',
                     fontSize: '1.4rem', // حجم مناسب للتاريخ
