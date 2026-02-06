@@ -45,13 +45,16 @@ import {
   Cell,
 } from "recharts";
 
-// ✅ الكيانات الجديدة بدل base44
+// ✅ الكيانات الجديدة
 import {
   Student,
   Exercise,
   Recording,
   FamilyChallenge,
 } from "@/api/entities";
+
+// ✅ استيراد التمارين الإضافية المحلية
+import { staticExercises } from "@/data/staticExercises";
 
 export default function StudentDashboard() {
   const [student, setStudent] = useState(null);
@@ -66,10 +69,6 @@ export default function StudentDashboard() {
   );
 
   const [challenges, setChallenges] = useState([]);
-  // const [activeChallenge, setActiveChallenge] = useState(null); // Unused
-  // const [challengeRecording, setChallengeRecording] = useState(false); // Unused
-  // const [mediaRecorder, setMediaRecorder] = useState(null); // Unused
-  // const [audioChunks, setAudioChunks] = useState([]); // Unused
 
   const togglePersona = () => {
     const personas = ["calm", "strict", "fun"];
@@ -106,9 +105,7 @@ export default function StudentDashboard() {
         setStudent(existingStudent);
         localStorage.setItem("studentId", existingStudent.id);
       } else {
-        // توليد كود وصول
-        const chars =
-          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         let accessCode = "";
         for (let i = 0; i < 8; i++) {
           accessCode += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -139,8 +136,14 @@ export default function StudentDashboard() {
 
     setIsLoading(true);
     try {
-      const exerciseData = await Exercise.list();
-      setExercises(exerciseData);
+      // 1. جلب التمارين من قاعدة البيانات (Supabase)
+      const dbExercises = await Exercise.list();
+      
+      // 2. دمج التمارين المحلية مع تمارين قاعدة البيانات
+      // نقوم بإضافة التمارين المحلية إلى القائمة
+      const allExercises = [...dbExercises, ...staticExercises];
+      
+      setExercises(allExercises);
 
       const allRecordings = await Recording.list("-created_date");
       const studentRecordings = allRecordings.filter(
@@ -155,7 +158,7 @@ export default function StudentDashboard() {
         .slice(0, 7)
         .reverse()
         .map((rec, idx) => ({
-          name: `ت ${idx + 1}`, // اختصار الاسم للجوال
+          name: `ت ${idx + 1}`,
           score: rec.score || 0,
           date: new Date(rec.created_date).toLocaleDateString("ar-AE", {
             weekday: "short",
@@ -231,10 +234,11 @@ export default function StudentDashboard() {
   const getCurrentStageExercises = () => {
     if (!student) return [];
 
+    // التصفية بناءً على المستوى والمرحلة الحالية للطالب
     return exercises.filter(
       (ex) =>
         ex.level === student.level &&
-        ex.stage === student.current_stage &&
+        parseInt(ex.stage) === student.current_stage && // ضمان مقارنة أرقام
         !completedExerciseIds.includes(ex.id)
     );
   };
@@ -247,8 +251,9 @@ export default function StudentDashboard() {
       const isUnlocked = i === currentStage;
       const isCompleted = i < currentStage;
 
+      // البحث عن تمارين هذه المرحلة (سواء من الداتابيس أو الملف المحلي)
       const stageExercises = exercises.filter(
-        (ex) => ex.level === student?.level && ex.stage === i
+        (ex) => ex.level === student?.level && parseInt(ex.stage) === i
       );
 
       const completedCount = stageExercises.filter((ex) =>
@@ -293,7 +298,6 @@ export default function StudentDashboard() {
   const infiniteStages = generateInfiniteStages();
 
   return (
-    // تعديل: إضافة overflow-x-hidden لمنع التمرير الأفقي غير المرغوب فيه
     <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 p-3 md:p-6">
       <div className="max-w-7xl mx-auto w-full">
         {/* Header with Gamification */}
@@ -532,7 +536,7 @@ export default function StudentDashboard() {
           </div>
         </motion.div>
 
-        {/* Stats Cards - Grid System Updated for Mobile */}
+        {/* Stats Cards */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
