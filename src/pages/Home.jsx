@@ -36,19 +36,19 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-emerald-50">
+      {/* المستطيل البنفسجي الثابت */}
+      <div className="fixed top-4 right-4 z-50 inline-flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full px-4 sm:px-6 py-2.5 sm:py-3 shadow-lg">
+        <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center flex-shrink-0">
+          <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+        </div>
+        <span className="text-white font-semibold text-sm sm:text-base arabic-text">
+          منصة تعلّم النطق العربي الذكية
+        </span>
+      </div>
+
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
         {/* Hero Section */}
-        <div className="text-center mb-12 sm:mb-16 lg:mb-20">
-          {/* Static Purple Banner - لم يعد متحركاً */}
-          <div className="inline-flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full px-4 sm:px-6 py-2.5 sm:py-3 mb-6 sm:mb-8 shadow-lg">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center flex-shrink-0">
-              <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            </div>
-            <span className="text-white font-semibold text-sm sm:text-base arabic-text">
-              منصة تعلّم النطق العربي الذكية
-            </span>
-          </div>
-          
+        <div className="text-center mb-12 sm:mb-16 lg:mb-20 mt-16 sm:mt-20">
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 mb-4 sm:mb-6 arabic-text leading-tight px-4">
             تعلّم النطق الصحيح
             <br />
