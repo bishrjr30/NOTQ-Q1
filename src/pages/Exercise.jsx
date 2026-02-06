@@ -21,6 +21,9 @@ import {
   Headphones,
   Award,
   TrendingUp,
+  ChevronRight,
+  ThumbsUp,
+  ThumbsDown
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -34,7 +37,7 @@ import { Exercise as ExerciseEntity, Student, Recording } from "@/api/entities";
 // ✅ تكامل الذكاء الاصطناعي
 import { UploadFile, InvokeLLM } from "@/api/integrations";
 
-// ✅ هام جداً: استيراد التمارين المحلية (هذا ما كان ينقصك)
+// ✅ استيراد التمارين المحلية
 import { staticExercises } from "@/data/staticExercises";
 
 /* =========================================================
@@ -110,7 +113,7 @@ export default function ExercisePage() {
     const load = async () => {
       try {
         setError(null);
-        setExercise(null); // تصفير التمرين لبدء التحميل
+        setExercise(null); 
 
         const params = new URLSearchParams(location.search);
         const exerciseId = params.get("id");
@@ -127,13 +130,11 @@ export default function ExercisePage() {
           return;
         }
 
-        // ✅ التعديل الأساسي: البحث في التمارين المحلية أولاً
-        // نبحث في المصفوفة المستوردة من الملف
+        // 1. البحث في التمارين المحلية
         let foundExercise = staticExercises.find((ex) => ex.id === exerciseId);
 
-        // إذا لم نجده في الملف المحلي، نبحث في قاعدة البيانات (للمستخدمين القدامى)
+        // 2. البحث في قاعدة البيانات إذا لم يوجد محلياً
         if (!foundExercise) {
-            // نتأكد أن المعرف ليس محلياً قبل الطلب من السيرفر لتجنب الأخطاء
             const isLocalId = exerciseId.startsWith("local-") || exerciseId.startsWith("ex-");
             if (!isLocalId) {
                 try {
@@ -202,17 +203,12 @@ export default function ExercisePage() {
         stream.getTracks().forEach((track) => track.stop());
       };
 
-      mediaRecorderRef.current.onerror = (event) => {
-        console.error("MediaRecorder error:", event.error);
-        setError("حدث خطأ أثناء التسجيل. يرجى المحاولة مرة أخرى.");
-      };
-
       mediaRecorderRef.current.start();
       setIsRecording(true);
     } catch (err) {
       console.error("Error accessing microphone:", err);
       setError(
-        "لم يتمكن من الوصول للميكروفون. يرجى التأكد من منح الإذن للموقع لاستخدام الميكروفون."
+        "لم يتمكن من الوصول للميكروفون. يرجى التأكد من منح الإذن للموقع."
       );
     }
   };
@@ -229,17 +225,10 @@ export default function ExercisePage() {
       const url = URL.createObjectURL(audioBlob);
       const audio = new Audio(url);
       setIsPlaying(true);
-
       audio.onended = () => setIsPlaying(false);
-      audio.onerror = () => {
-        setIsPlaying(false);
-        setError("حدث خطأ أثناء تشغيل التسجيل.");
-      };
-
       audio.play().catch((err) => {
         setIsPlaying(false);
         setError("لم يتمكن من تشغيل التسجيل.");
-        console.error("Audio play error:", err);
       });
     }
   };
@@ -249,16 +238,13 @@ export default function ExercisePage() {
     setRecordingSubmitted(false);
     setError(null);
     setAnalysisProgress(0);
-
     setShowQuiz(false);
     setQuizQuestions([]);
     setQuizAnswers({});
     setQuizScore(null);
     setIsGeneratingQuiz(false);
-
     setNextExercise(null);
     setLastAnalysis(null);
-
     setAnalysisPassed(false);
     setMustRetry(false);
     setLastRecordingId(null);
@@ -266,7 +252,7 @@ export default function ExercisePage() {
 
   const submitRecording = async () => {
     if (!audioBlob || !exercise || !student) {
-      setError("خطأ: بيانات التمرين أو الطالب أو التسجيل غير مكتملة.");
+      setError("خطأ: بيانات غير مكتملة.");
       return;
     }
 
@@ -276,148 +262,103 @@ export default function ExercisePage() {
     setError(null);
 
     try {
-      const fileSizeKB = audioBlob.size / 1024;
-      if (fileSizeKB < 2) {
-        setError(
-          "التسجيل فارغ أو قصير جداً. يرجى التأكد من التحدث بوضوح لمدة أطول قليلاً."
-        );
-        setIsSending(false);
-        setIsAnalyzing(false);
-        return;
+      if (audioBlob.size / 1024 < 2) {
+        throw new Error("التسجيل قصير جداً.");
       }
 
       setAnalysisProgress(10);
-
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const fileName = `recording_${student.name}_${timestamp}.webm`;
-
-      const file = new File([audioBlob], fileName, {
-        type: audioBlob.type || "audio/webm",
-      });
+      const file = new File([audioBlob], fileName, { type: audioBlob.type || "audio/webm" });
 
       setAnalysisProgress(20);
-
       const uploadResult = await UploadFile({
         file,
         bucket: "recordings",
         folder: `student_recordings/${student.id}`,
       });
 
-      if (!uploadResult || !uploadResult.file_url) {
-        throw new Error("فشل في رفع الملف الصوتي.");
-      }
+      if (!uploadResult?.file_url) throw new Error("فشل رفع الملف.");
       const file_url = uploadResult.file_url;
 
       setAnalysisProgress(40);
-
-      const audioFileForTranscribe =
-        file instanceof File
-          ? file
-          : new File([audioBlob], "recording.webm", {
-              type: audioBlob.type || "audio/webm",
-            });
-
+      const audioFileForTranscribe = file;
       const transcribeForm = new FormData();
       transcribeForm.append("file", audioFileForTranscribe);
       transcribeForm.append("language", "ar");
       transcribeForm.append("model", "whisper-1");
 
-      const transcriptionResponse = await fetch("/api/transcribe", {
-        method: "POST",
-        body: transcribeForm,
-      });
+      const transcriptionResponse = await fetch("/api/transcribe", { method: "POST", body: transcribeForm });
+      const transcriptionJson = await transcriptionResponse.json().catch(() => null);
+      const transcribedText = transcriptionJson?.text || "";
 
-      const transcriptionJson = await transcriptionResponse
-        .json()
-        .catch(() => null);
-
-      if (!transcriptionResponse.ok) {
-        const msg =
-          transcriptionJson?.error ||
-          transcriptionJson?.message ||
-          `Transcribe failed (${transcriptionResponse.status})`;
-        throw new Error(msg);
-      }
-
-      const transcribedText =
-        transcriptionJson?.text ||
-        transcriptionJson?.transcript ||
-        transcriptionJson?.result ||
-        "";
-
-      if (!transcribedText) {
-        throw new Error("لم يتم استخراج نص من الصوت.");
-      }
+      if (!transcribedText) throw new Error("لم يتم سماع أي صوت.");
 
       setAnalysisProgress(70);
-
-      // ✅ دعم الخاصية sentence أو text (لأن الملف المحلي يستخدم text والقاعدة تستخدم sentence)
       const expectedRaw = exercise.sentence || exercise.text || "";
       const expectedNorm = normalizeArabicText(expectedRaw);
       const heardNorm = normalizeArabicText(transcribedText);
       const matchRatio = wordMatchRatio(expectedRaw, transcribedText);
 
-      const analysisSchema = {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          score: { type: "number" },
-          status: { type: "string", enum: ["valid", "silence", "wrong_text"] },
-          feedback: { type: "string" },
-          analysis_details: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              word_match_score: { type: "number" },
-              pronunciation_score: { type: "number" },
-              tashkeel_score: { type: "number" },
-              fluency_score: { type: "number" },
-              rhythm: { type: "string" },
-              tone: { type: "string" },
-              breathing: { type: "string" },
-              suggestions: { type: "string" },
-            },
-            required: [
-              "word_match_score",
-              "pronunciation_score",
-              "tashkeel_score",
-              "fluency_score",
-              "rhythm",
-              "tone",
-              "breathing",
-              "suggestions",
-            ],
-          },
-        },
-        required: ["score", "status", "feedback", "analysis_details"],
-      };
+      // ✅ التعديل هنا: Prompt مفصل وواقعي
+      const analysisPrompt = `
+      أنت معلم لغة عربية متميز وداعم، تهدف لتعليم الطلاب النطق الصحيح بأسلوب مشجع وواقعي.
 
-      const analysisPrompt = `أنت معلم لغة عربية محترف. قيم قراءة الطالب:
+      **المهمة:**
+      تحليل تسجيل صوتي لطالب يقرأ النص التالي.
       النص المطلوب: "${expectedRaw}"
-      النص المقروء: "${transcribedText}"
-      نسبة التطابق: ${(matchRatio * 100).toFixed(0)}%
-      
-      قواعد صارمة:
-      1. صمت/غير مفهوم -> score=0, status="silence"
-      2. نص مختلف تماماً -> score=0, status="wrong_text"
-      3. تطابق > 70% -> ممتاز (85-100)
-      4. تطابق 50-70% -> جيد جداً (70-85)
-      5. تطابق 30-50% -> جيد (50-70)
-      
-      الرد JSON فقط كما هو محدد.`;
+      النص المسموع (تقريباً): "${transcribedText}"
+      نسبة التطابق التقريبية: ${(matchRatio * 100).toFixed(0)}%
+
+      **معايير التقييم (كن واقعياً ومتوسط الصرامة):**
+      1. **الدرجة (Score):** امنح درجة تعكس الجهد والوضوح.
+         - قراءة ممتازة (حتى مع أخطاء بسيطة جداً): 90-100.
+         - قراءة جيدة ومفهومة (أخطاء تشكيل أو كلمة): 75-89.
+         - قراءة مقبولة (أخطاء متعددة لكن المعنى واضح): 50-74.
+         - قراءة غير صحيحة أو نص مختلف: أقل من 50.
+         - صمت تام: 0.
+
+      2. **التعليق (Feedback):**
+         - يجب أن يكون باللغة العربية، متوسط الطول (3-4 جمل)، وبنبرة محفزة.
+         - ابدأ بمدح واضح.
+         - اذكر **نقاط القوة** (مثلاً: وضوح الصوت، نطق حروف معينة).
+         - اذكر **نقاط الضعف/التحسين** بلطف (مثلاً: الانتباه للمدود، التشكيل في كلمة كذا).
+         - اختم بتشجيع.
+
+      **المطلوب إرجاع JSON فقط:**
+      {
+        "score": number,
+        "status": "valid" | "silence" | "wrong_text",
+        "feedback": "نص التعليق المفصل...",
+        "analysis_details": {
+          "word_match_score": number,
+          "pronunciation_score": number,
+          "tashkeel_score": number,
+          "fluency_score": number,
+          "rhythm": "string",
+          "tone": "string",
+          "breathing": "string",
+          "suggestions": "نصيحة قصيرة ومفيدة"
+        }
+      }
+      `;
 
       const analysisResponse = await InvokeLLM({
         prompt: analysisPrompt,
-        response_json_schema: analysisSchema,
+        response_json_schema: {
+            type: "object",
+            properties: {
+                score: {type: "number"},
+                status: {type: "string"},
+                feedback: {type: "string"},
+                analysis_details: {type: "object"}
+            },
+            required: ["score", "status", "feedback"]
+        },
       });
 
-      const aiAnalysis =
-        typeof analysisResponse === "string"
-          ? JSON.parse(analysisResponse)
-          : analysisResponse;
-
+      const aiAnalysis = typeof analysisResponse === "string" ? JSON.parse(analysisResponse) : analysisResponse;
       setLastAnalysis({ ...aiAnalysis, audio_url: file_url });
-
       setAnalysisProgress(90);
 
       const recordingData = {
@@ -428,26 +369,30 @@ export default function ExercisePage() {
         feedback: aiAnalysis.feedback,
         analysis_details: {
           ...aiAnalysis.analysis_details,
-          ai_model: "GPT-4 via Vercel",
-          analyzed_at: new Date().toISOString(),
+          ai_model: "GPT-4",
           status: aiAnalysis.status,
           quiz_completed: false,
           match_ratio: matchRatio,
-          expected_norm: expectedNorm,
-          heard_norm: heardNorm,
           transcribed_text: transcribedText,
         },
       };
 
-      const createdRecording = await Recording.create(recordingData);
-      setLastRecordingId(createdRecording?.id || null);
+      // محاولة الحفظ في قاعدة البيانات (مع معالجة خطأ UUID إذا لم يتم تحديث القاعدة)
+      let createdRecording = null;
+      try {
+        createdRecording = await Recording.create(recordingData);
+        setLastRecordingId(createdRecording?.id || null);
+      } catch (dbErr) {
+        console.warn("DB Save Error (possibly UUID issue):", dbErr);
+        // نتابع حتى لو فشل الحفظ في القاعدة لكي لا نعطل الطالب، لكن لن يتم حفظ السجل
+      }
 
       setAnalysisProgress(100);
 
+      // تحديث بيانات الطالب
       await Student.update(student.id, {
         last_activity: new Date().toISOString(),
         total_exercises: (student.total_exercises || 0) + 1,
-        total_minutes: (student.total_minutes || 0) + 1,
       });
 
       setRecordingSubmitted(true);
@@ -455,83 +400,62 @@ export default function ExercisePage() {
       setIsAnalyzing(false);
 
       const scoreNum = Number(aiAnalysis?.score || 0);
-      const status = String(aiAnalysis?.status || "");
-      const passed = scoreNum > 0 && status === "valid";
+      const passed = scoreNum > 0 && aiAnalysis?.status === "valid";
 
       setAnalysisPassed(passed);
       setMustRetry(!passed);
 
-      if (!passed) {
-        setShowQuiz(false);
-        setQuizQuestions([]);
-        setNextExercise(null);
-        return;
-      }
+      // تحميل التمرين التالي فوراً ليكون الزر جاهزاً
+      await loadNextExercise();
 
-      await generateQuiz();
+      if (passed) {
+        generateQuiz();
+      }
     } catch (err) {
-      console.error("Failed to submit recording:", err);
-      let errorMessage = err.message || "خطأ غير معروف";
-      if (errorMessage.includes("quota")) errorMessage = "عذراً، تم تجاوز حد الذكاء الاصطناعي.";
-      setError(`فشل إرسال التسجيل: ${errorMessage}`);
+      console.error("Submission error:", err);
+      let msg = err.message;
+      if (msg.includes("uuid")) msg = "حدث خطأ في قاعدة البيانات (UUID). يرجى إبلاغ المعلم بتحديث النظام.";
+      setError(`فشل: ${msg}`);
       setIsSending(false);
       setIsAnalyzing(false);
-      setAnalysisProgress(0);
     }
   };
 
   const loadNextExercise = async () => {
     try {
-      // ✅ دمج التمارين لتحديد التمرين التالي بشكل صحيح
       const dbExercises = await ExerciseEntity.list();
       const allExercises = [...dbExercises, ...staticExercises];
       
       if (!student || !exercise || allExercises.length === 0) return;
 
-      const allRecordings = await Recording.list();
-
-      const studentRecordings = allRecordings.filter((r) => {
-        if (r.student_id !== student.id) return false;
-        const score = Number(r.score || 0);
-        // نعتبر التمرين مكتملاً إذا نجح فيه الطالب
-        return score > 0 && r.analysis_details?.status === "valid";
-      });
-
-      const completedExerciseIds = studentRecordings.map((r) => r.exercise_id);
-
       const currentStage = parseInt(exercise.stage) || 1;
-
-      const sameStageExercises = allExercises.filter(
-        (ex) =>
-          ex.level === exercise.level &&
-          (parseInt(ex.stage) || 1) === currentStage &&
-          ex.id !== exercise.id &&
-          !completedExerciseIds.includes(ex.id)
+      
+      // نبحث عن تمرين آخر في نفس المرحلة لم يحله الطالب بعد، أو ننتقل للمرحلة التالية
+      // للتبسيط هنا: نختار التمرين التالي في القائمة بناءً على الترتيب أو المرحلة
+      
+      // العثور على التمارين المرشحة (نفس المرحلة، غير التمرين الحالي)
+      const sameStageCandidates = allExercises.filter(ex => 
+        (parseInt(ex.stage) || 1) === currentStage && ex.id !== exercise.id
       );
 
-      if (sameStageExercises.length > 0) {
-        const randomIndex = Math.floor(
-          Math.random() * sameStageExercises.length
-        );
-        setNextExercise(sameStageExercises[randomIndex]);
-      } else {
-        const nextStage = currentStage + 1;
+      // العثور على تمارين المرحلة التالية
+      const nextStageCandidates = allExercises.filter(ex => 
+        (parseInt(ex.stage) || 1) === currentStage + 1
+      );
 
-        await Student.update(student.id, {
-          current_stage: nextStage,
-        });
+      let nextEx = null;
 
-        const nextStageExercises = allExercises.filter(
-          (ex) => ex.level === exercise.level && (parseInt(ex.stage) || 1) === nextStage
-        );
-
-        if (nextStageExercises.length > 0) {
-          const randomIndex = Math.floor(
-            Math.random() * nextStageExercises.length
-          );
-          setNextExercise(nextStageExercises[randomIndex]);
-        }
+      // منطق بسيط: اختر عشوائياً من نفس المرحلة، إذا لم يوجد فاختر من المرحلة التالية
+      if (sameStageCandidates.length > 0) {
+        nextEx = sameStageCandidates[Math.floor(Math.random() * sameStageCandidates.length)];
+      } else if (nextStageCandidates.length > 0) {
+        nextEx = nextStageCandidates[0];
+        // تحديث مرحلة الطالب إذا انتقل
+        await Student.update(student.id, { current_stage: currentStage + 1 });
       }
+
+      setNextExercise(nextEx);
+
     } catch (err) {
       console.error("Failed to load next exercise:", err);
     }
@@ -542,37 +466,13 @@ export default function ExercisePage() {
     const text = exercise.sentence || exercise.text || "";
     try {
       const response = await InvokeLLM({
-        prompt: `بناءً على النص: "${text}". أنشئ 3 أسئلة اختيار من متعدد. JSON: {questions: [{question, options:[], correct_index}]}`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            questions: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  question: { type: "string" },
-                  options: { type: "array", items: { type: "string" } },
-                  correct_index: { type: "integer" },
-                },
-                required: ["question", "options", "correct_index"],
-              },
-            },
-          },
-          required: ["questions"],
-        },
+        prompt: `نص: "${text}". أنشئ 3 أسئلة اختيار من متعدد بسيطة. JSON: {questions: [{question, options:[], correct_index}]}`,
+        response_json_schema: { type: "object", properties: { questions: { type: "array" } } }
       });
-
       const data = typeof response === "string" ? JSON.parse(response) : response;
-
-      if (data && data.questions) {
-        setQuizQuestions(data.questions);
-      } else {
-        await loadNextExercise();
-      }
+      if (data?.questions) setQuizQuestions(data.questions);
     } catch (e) {
-      console.error("Quiz gen failed", e);
-      await loadNextExercise();
+      console.error(e);
     } finally {
       setIsGeneratingQuiz(false);
     }
@@ -583,45 +483,33 @@ export default function ExercisePage() {
     quizQuestions.forEach((q, idx) => {
       if (quizAnswers[idx] === q.correct_index) correct++;
     });
-    const score = (correct / quizQuestions.length) * 100;
-    setQuizScore(score);
-
+    setQuizScore((correct / quizQuestions.length) * 100);
+    // تحديث السجل إذا وجد
     if (lastRecordingId) {
-      try {
-        const mergedDetails = {
-          ...(lastAnalysis?.analysis_details || {}),
-          quiz_score: score,
-          quiz_completed: true,
-          status: lastAnalysis?.status || lastAnalysis?.analysis_details?.status,
-        };
-
-        await Recording.update(lastRecordingId, {
-          analysis_details: mergedDetails,
-        });
-      } catch (e) {
-        console.warn("Failed to mark quiz_completed on recording:", e);
-      }
+        try {
+            await Recording.update(lastRecordingId, { 
+                analysis_details: { ...(lastAnalysis?.analysis_details || {}), quiz_completed: true, quiz_score: (correct / quizQuestions.length) * 100 } 
+            });
+        } catch(e) {}
     }
-
-    await loadNextExercise();
   };
 
   const speakText = (text) => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "ar-SA";
-    window.speechSynthesis.speak(utterance);
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "ar-SA";
+        window.speechSynthesis.speak(utterance);
+    }
   };
 
   const goToNextExercise = () => {
     if (nextExercise && student) {
-      navigate(
-        createPageUrl(`Exercise?id=${nextExercise.id}&studentId=${student.id}`)
-      );
+      // إعادة توجيه وتحديث الصفحة لضمان تحميل التمرين الجديد
+      window.location.href = createPageUrl(`Exercise?id=${nextExercise.id}&studentId=${student.id}`);
     }
   };
 
-  // ✅ عرض رسالة خطأ واضحة بدلاً من الدوران اللانهائي
+  // Error View
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-red-50 p-4">
@@ -633,9 +521,7 @@ export default function ExercisePage() {
           <CardContent className="text-center space-y-4">
             <p className="text-red-600 arabic-text">{error}</p>
             <Link to={createPageUrl("StudentDashboard")}>
-              <Button variant="outline" className="arabic-text">
-                العودة للوحة الطالب
-              </Button>
+              <Button variant="outline" className="arabic-text">العودة للوحة الطالب</Button>
             </Link>
           </CardContent>
         </Card>
@@ -643,6 +529,7 @@ export default function ExercisePage() {
     );
   }
 
+  // Loading View
   if (!exercise || !student) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
@@ -654,7 +541,6 @@ export default function ExercisePage() {
     );
   }
 
-  // ✅ دعم الخاصية sentence (للقديم) أو text (للجديد)
   const displayTitle = exercise.sentence || exercise.text || "";
 
   return (
@@ -663,15 +549,10 @@ export default function ExercisePage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
           <Link to={createPageUrl("StudentDashboard")}>
-            <Button
-              variant="outline"
-              size="icon"
-              className="rounded-full shadow-lg bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all flex-shrink-0"
-            >
+            <Button variant="outline" size="icon" className="rounded-full shadow-lg bg-white/80 backdrop-blur-sm">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          
           <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent arabic-text">
               تمرين النطق
@@ -680,248 +561,155 @@ export default function ExercisePage() {
               مستوى {exercise.level} - المرحلة {exercise.stage}
             </p>
           </div>
-          
           <div className="flex gap-2 w-full sm:w-auto">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsPracticeMode(!isPracticeMode)}
-              className={`flex-1 sm:flex-none arabic-text text-xs sm:text-sm ${
-                isPracticeMode
-                  ? "bg-yellow-100 border-yellow-300 text-yellow-800"
-                  : ""
-              }`}
-            >
-              <Headphones className="w-3 h-3 sm:w-4 sm:h-4 ml-1 sm:ml-2" />
-              <span className="hidden sm:inline">{isPracticeMode ? "وضع التدريب مفعّل" : "تفعيل وضع التدريب"}</span>
-              <span className="sm:hidden">تدريب</span>
+            <Button variant="outline" size="sm" onClick={() => setIsPracticeMode(!isPracticeMode)} className={`flex-1 sm:flex-none arabic-text ${isPracticeMode ? "bg-yellow-100" : ""}`}>
+              <Headphones className="w-4 h-4 ml-2" /> {isPracticeMode ? "تدريب" : "تدريب"}
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsFocusMode(!isFocusMode)}
-              title="وضع التركيز"
-              className="flex-shrink-0"
-            >
-              {isFocusMode ? (
-                <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" />
-              ) : (
-                <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
-              )}
+            <Button variant="ghost" size="icon" onClick={() => setIsFocusMode(!isFocusMode)}>
+                {isFocusMode ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </Button>
           </div>
         </div>
 
-        {/* Focus Mode Overlay */}
-        {isFocusMode && <div className="fixed inset-0 bg-white z-40" />}
-
-        <div
-          className={
-            isFocusMode
-              ? "fixed inset-0 z-50 flex items-center justify-center bg-white p-4 sm:p-6"
-              : ""
-          }
-        >
-          <div className={isFocusMode ? "w-full max-w-4xl" : ""}>
-            {isFocusMode && (
-              <Button
-                variant="ghost"
-                className="absolute top-4 sm:top-6 right-4 sm:right-6 text-sm sm:text-base"
-                onClick={() => setIsFocusMode(false)}
-              >
-                <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 ml-2" />
-                إلغاء التركيز
-              </Button>
-            )}
-
-            {!recordingSubmitted ? (
-              <div className="space-y-4 sm:space-y-6 md:space-y-8">
-                {/* Exercise Text Card */}
-                <Card className="border-0 shadow-xl sm:shadow-2xl bg-white/90 backdrop-blur-sm">
-                  <CardHeader className="text-center bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-t-xl p-4 sm:p-6">
-                    <CardTitle className="text-base sm:text-lg md:text-xl font-bold arabic-text leading-relaxed">
-                      اقرأ النص التالي بصوت واضح مع مراعاة تشكيل أواخر الكلمات
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 sm:p-6 md:p-8">
-                    <div className="text-center p-4 sm:p-6 md:p-8 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl sm:rounded-2xl border-2 border-indigo-200">
-                      <p
-                        className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-indigo-900 arabic-text leading-relaxed mb-4 sm:mb-6 whitespace-pre-line ${
-                          isFocusMode ? "text-4xl sm:text-5xl leading-loose" : ""
-                        }`}
-                      >
-                        {displayTitle}
-                      </p>
-
-                      {isPracticeMode && (
-                        <div className="mb-4 sm:mb-6">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => speakText(displayTitle)}
-                            className="bg-yellow-100 text-yellow-900 hover:bg-yellow-200 text-xs sm:text-sm"
-                          >
-                            <Volume2 className="w-3 h-3 sm:w-4 sm:h-4 ml-1 sm:ml-2" />
-                            استمع للنطق الصحيح
-                          </Button>
-                          <p className="text-xs text-yellow-700 mt-2 arabic-text">
-                            💡 استمع جيداً وحاول التقليد قبل التسجيل
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
-                        <Badge className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-3 sm:px-6 py-1.5 sm:py-2 text-sm sm:text-lg arabic-text shadow-lg">
-                          {displayTitle.split(/\s+/).length} كلمة
-                        </Badge>
-                        <Badge className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-3 sm:px-6 py-1.5 sm:py-2 text-sm sm:text-lg arabic-text shadow-lg">
-                          {exercise.difficulty_points || 10} نقطة
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Recording Controls Card */}
-                <Card className="border-0 shadow-xl sm:shadow-2xl bg-white/90 backdrop-blur-sm">
-                  <CardContent className="p-4 sm:p-6 md:p-8">
-                    <div className="text-center space-y-4 sm:space-y-6">
-                      {!audioBlob ? (
-                        <>
-                          <div className="w-24 h-24 sm:w-32 sm:h-32 mx-auto">
-                            <Button
-                              onClick={
-                                isRecording ? stopRecording : startRecording
-                              }
-                              size="lg"
-                              className={`w-full h-full rounded-full text-white shadow-2xl transition-all duration-300 ${
-                                isRecording
-                                  ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 animate-pulse"
-                                  : "bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 hover:scale-110"
-                              }`}
-                            >
-                              {isRecording ? (
-                                <Square className="w-8 h-8 sm:w-12 sm:h-12" />
-                              ) : (
-                                <Mic className="w-8 h-8 sm:w-12 sm:h-12" />
-                              )}
-                            </Button>
-                          </div>
-                          <div>
-                            <p className="text-lg sm:text-xl font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent arabic-text mb-2">
-                              {isRecording
-                                ? "جارٍ التسجيل..."
-                                : "اضغط للبدء في التسجيل"}
-                            </p>
-                            <p className="text-indigo-600 arabic-text text-sm sm:text-base">
-                              {isRecording
-                                ? "اضغط مرة أخرى للتوقف"
-                                : "خذ وقتك - لا يوجد حد زمني"}
-                            </p>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border-2 border-indigo-200">
-                            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-4">
-                              <Button
-                                onClick={playRecording}
-                                disabled={isPlaying}
-                                className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full px-6 sm:px-8 py-3 sm:py-4 shadow-lg text-sm sm:text-base"
-                              >
-                                {isPlaying ? (
-                                  <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 mr-2 animate-pulse" />
-                                ) : (
-                                  <Play className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                                )}
-                                <span className="arabic-text">
-                                  {isPlaying
-                                    ? "يتم التشغيل..."
-                                    : "استمع للتسجيل"}
-                                </span>
-                              </Button>
-                              <Button
-                                onClick={retryRecording}
-                                variant="outline"
-                                className="w-full sm:w-auto rounded-full px-6 sm:px-8 py-3 sm:py-4 border-2 border-indigo-300 hover:bg-indigo-50 shadow-lg text-sm sm:text-base"
-                              >
-                                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                                <span className="arabic-text">
-                                  إعادة التسجيل
-                                </span>
-                              </Button>
-                            </div>
-                          </div>
-
-                          {isAnalyzing && (
-                            <div className="space-y-2 sm:space-y-3">
-                              <div className="flex items-center justify-center gap-2">
-                                <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-indigo-500"></div>
-                                <p className="text-indigo-700 arabic-text font-semibold text-sm sm:text-base">
-                                  جاري تحليل الصوت باستخدام GPT-4...
+        {/* Content */}
+        <div className={isFocusMode ? "fixed inset-0 z-50 bg-white p-6 flex items-center justify-center" : ""}>
+            <div className={isFocusMode ? "w-full max-w-4xl" : ""}>
+                {isFocusMode && <Button variant="ghost" className="absolute top-6 right-6" onClick={() => setIsFocusMode(false)}><EyeOff className="ml-2" /> خروج</Button>}
+                
+                {!recordingSubmitted ? (
+                    <div className="space-y-6">
+                        <Card className="border-0 shadow-xl bg-white/90">
+                            <CardContent className="p-8 text-center">
+                                <p className={`text-3xl font-bold text-indigo-900 arabic-text mb-6 whitespace-pre-line leading-relaxed ${isFocusMode ? "text-5xl" : ""}`}>
+                                    {displayTitle}
                                 </p>
-                              </div>
-                              <Progress value={analysisProgress} className="h-2 sm:h-3" />
-                            </div>
-                          )}
+                                {isPracticeMode && (
+                                    <Button variant="secondary" size="sm" onClick={() => speakText(displayTitle)} className="bg-yellow-100 text-yellow-900">
+                                        <Volume2 className="w-4 h-4 ml-2" /> استمع للنطق
+                                    </Button>
+                                )}
+                            </CardContent>
+                        </Card>
 
-                          <Button
-                            onClick={submitRecording}
-                            disabled={isSending}
-                            className="w-full sm:w-auto bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 sm:px-12 py-4 sm:py-6 rounded-xl sm:rounded-2xl text-base sm:text-lg arabic-text shadow-2xl"
-                          >
-                            {isSending ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-white mr-2"></div>
-                                جارٍ الإرسال...
-                              </>
-                            ) : (
-                              <>
-                                <Send className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                                إرسال للمعلم
-                              </>
-                            )}
-                          </Button>
-                        </>
-                      )}
+                        <Card className="border-0 shadow-xl bg-white/90">
+                            <CardContent className="p-8 text-center">
+                                {!audioBlob ? (
+                                    <Button onClick={isRecording ? stopRecording : startRecording} size="lg" className={`w-24 h-24 rounded-full ${isRecording ? "bg-red-500 animate-pulse" : "bg-indigo-600"}`}>
+                                        {isRecording ? <Square className="w-10 h-10" /> : <Mic className="w-10 h-10" />}
+                                    </Button>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className="flex justify-center gap-4">
+                                            <Button onClick={playRecording} variant="outline" className="rounded-full px-6"><Play className="ml-2" /> استمع</Button>
+                                            <Button onClick={retryRecording} variant="outline" className="rounded-full px-6"><RotateCcw className="ml-2" /> إعادة</Button>
+                                        </div>
+                                        {isAnalyzing && <div className="text-indigo-600 arabic-text">جارٍ التحليل... <Progress value={analysisProgress} className="mt-2" /></div>}
+                                        <Button onClick={submitRecording} disabled={isSending} className="w-full bg-green-600 hover:bg-green-700 py-6 text-lg shadow-lg">
+                                            {isSending ? "جارٍ الإرسال..." : "إرسال للمعلم 🚀"}
+                                        </Button>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : (
-              // تم اختصار هذا الجزء لتوفير المساحة، انسخ بقية الكود من ملفك الأصلي إذا كان يحتوي على تغييرات خاصة
-              // أو استخدم ما وفرته في الإجابات السابقة
-              <Card className="border-0 shadow-xl sm:shadow-2xl bg-white/90 backdrop-blur-sm">
-                <CardHeader className="text-center bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-t-xl p-4 sm:p-6">
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                    <CheckCircle className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
-                  </div>
-                  <CardTitle className="text-2xl sm:text-3xl font-bold arabic-text">
-                    تم إرسال تسجيلك بنجاح! 🎉
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-center p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
-                  {lastAnalysis && (
-                    <div className="bg-white p-4 sm:p-6 rounded-xl border-2 border-indigo-100 shadow-sm text-right w-full">
-                        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 sm:p-6 rounded-2xl mb-4 sm:mb-6 text-center shadow-lg">
-                            <p className="text-4xl sm:text-5xl md:text-6xl font-bold">{lastAnalysis.score}%</p>
-                            <p className="text-xs sm:text-sm mt-2 opacity-80 arabic-text">{lastAnalysis.feedback}</p>
-                        </div>
-                    </div>
-                  )}
-                  
-                  <div className="flex justify-center gap-4">
-                    {!mustRetry && nextExercise && (
-                        <Button onClick={goToNextExercise} className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-4 text-lg">التمرين التالي</Button>
-                    )}
-                    {mustRetry && (
-                        <Button onClick={retryRecording} className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 text-lg">إعادة المحاولة</Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+                ) : (
+                    // Result View
+                    <Card className="border-0 shadow-xl bg-white/90 animate-in fade-in zoom-in duration-300">
+                        <CardHeader className="bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-t-xl text-center p-6">
+                            <CheckCircle className="w-12 h-12 mx-auto text-white mb-2" />
+                            <CardTitle className="text-3xl arabic-text">أحسنت يا بطل! 🎉</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 sm:p-8 text-center space-y-6">
+                             {lastAnalysis && (
+                                <div className="space-y-6">
+                                    {/* النتيجة والتعليق */}
+                                    <div className="bg-indigo-50 p-6 rounded-2xl border-2 border-indigo-100 shadow-sm text-right">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <Badge className="bg-indigo-600 text-lg px-3 py-1">{lastAnalysis.score}%</Badge>
+                                            <span className="font-bold text-indigo-800">تعليق المعلم 👨‍🏫</span>
+                                        </div>
+                                        <p className="text-lg text-slate-800 arabic-text leading-loose">
+                                            {lastAnalysis.feedback}
+                                        </p>
+                                        
+                                        {/* تفاصيل نقاط القوة والضعف */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                                            <div className="bg-green-100 p-3 rounded-lg border border-green-200">
+                                                <p className="font-bold text-green-800 flex items-center gap-2 mb-1"><ThumbsUp className="w-4 h-4"/> نقاط القوة:</p>
+                                                <p className="text-green-700 text-sm">{lastAnalysis.analysis_details?.rhythm || "نطق واضح وممتاز"}</p>
+                                            </div>
+                                            <div className="bg-orange-100 p-3 rounded-lg border border-orange-200">
+                                                <p className="font-bold text-orange-800 flex items-center gap-2 mb-1"><ThumbsDown className="w-4 h-4"/> ركز على:</p>
+                                                <p className="text-orange-700 text-sm">{lastAnalysis.analysis_details?.suggestions || "حاول تحسين التشكيل"}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                             )}
+                             
+                             {mustRetry ? (
+                                <Button onClick={retryRecording} className="w-full py-6 text-lg bg-red-600 hover:bg-red-700 shadow-md">
+                                    <RotateCcw className="ml-2" /> حاول مرة أخرى لتحقيق نتيجة أفضل
+                                </Button>
+                             ) : (
+                                <div className="space-y-6">
+                                    {/* أزرار الإجراءات - "التمرين التالي" بارز جداً */}
+                                    <div className="flex flex-col gap-4">
+                                        {nextExercise && (
+                                            <Button onClick={goToNextExercise} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-8 text-xl rounded-2xl shadow-xl transform transition-all hover:scale-105">
+                                                <Sparkles className="w-6 h-6 ml-3 animate-pulse" />
+                                                الانتقال للتمرين التالي
+                                                <ChevronRight className="w-6 h-6 mr-3" />
+                                            </Button>
+                                        )}
+                                        
+                                        {quizQuestions.length > 0 && !showQuiz && (
+                                            <Button onClick={() => setShowQuiz(true)} variant="outline" className="w-full py-6 text-lg border-2 border-blue-200 text-blue-700 hover:bg-blue-50">
+                                                <Brain className="ml-2 w-5 h-5" /> أريد اختبار فهمي للنص (اختياري)
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    {/* قسم الاختبار الاختياري */}
+                                    {showQuiz && (
+                                        <div className="mt-8 text-right bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 animate-in slide-in-from-bottom-4">
+                                            <h3 className="font-bold text-xl mb-4 text-slate-800 border-b pb-2">🧠 اختبار الفهم السريع</h3>
+                                            {quizScore === null ? (
+                                                <div className="space-y-6">
+                                                    {quizQuestions.map((q, i) => (
+                                                        <div key={i} className="pb-4">
+                                                            <p className="font-bold mb-3 text-lg text-indigo-900">{q.question}</p>
+                                                            <RadioGroup onValueChange={(v) => setQuizAnswers(p => ({...p, [i]: parseInt(v)}))}>
+                                                                {q.options.map((opt, oi) => (
+                                                                    <div key={oi} className="flex items-center space-x-2 space-x-reverse mb-2 bg-white p-3 rounded-lg border hover:border-indigo-300 transition-colors">
+                                                                        <RadioGroupItem value={oi.toString()} id={`q${i}o${oi}`} />
+                                                                        <Label htmlFor={`q${i}o${oi}`} className="flex-1 cursor-pointer mr-2">{opt}</Label>
+                                                                    </div>
+                                                                ))}
+                                                            </RadioGroup>
+                                                        </div>
+                                                    ))}
+                                                    <Button onClick={submitQuiz} className="w-full bg-blue-600 hover:bg-blue-700 py-4 text-lg">تحقق من الإجابات</Button>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-4">
+                                                    <div className="text-5xl font-bold text-blue-600 mb-2">{Math.round(quizScore)}%</div>
+                                                    <p className="text-lg text-slate-600 mb-4">نتيجة رائعة!</p>
+                                                    {nextExercise && (
+                                                        <Button onClick={goToNextExercise} className="bg-purple-600 hover:bg-purple-700 px-8 py-3 rounded-xl">
+                                                            تابع الرحلة 🚀
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                             )}
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
         </div>
       </div>
     </div>
