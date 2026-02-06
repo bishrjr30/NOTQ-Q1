@@ -19,10 +19,11 @@ import {
   Eye,
   EyeOff,
   Headphones,
+  Award,
+  TrendingUp,
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { motion, AnimatePresence } from "framer-motion";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -35,26 +36,18 @@ import { UploadFile, InvokeLLM } from "@/api/integrations";
 
 /* =========================================================
    ✅ Helpers: تطبيع النص العربي + تقدير نسبة التطابق
-   الهدف: منع "0 دائمًا" بسبب اختلاف التشكيل/الترقيم/تنويعات الحروف
 ========================================================= */
 function normalizeArabicText(input = "") {
   if (!input || typeof input !== "string") return "";
   return (
     input
-      // إزالة التشكيل
       .replace(/[\u064B-\u0652\u0670]/g, "")
-      // إزالة التطويل
       .replace(/\u0640/g, "")
-      // توحيد أشكال الألف
       .replace(/[إأآا]/g, "ا")
-      // توحيد الياء/الألف المقصورة
       .replace(/ى/g, "ي")
-      // توحيد الهمزات على واو/ياء (تقريب)
       .replace(/ؤ/g, "و")
       .replace(/ئ/g, "ي")
-      // إزالة الترقيم والرموز (نُبقي الحروف العربية والمسافات فقط)
       .replace(/[^\u0600-\u06FF\s]/g, " ")
-      // مسافات زائدة
       .replace(/\s+/g, " ")
       .trim()
   );
@@ -69,14 +62,13 @@ function wordMatchRatio(expectedRaw = "", heardRaw = "") {
 
   if (expWords.length === 0) return 0;
 
-  // عدّ الكلمات المتوقعة الموجودة في المسموع (تقريبًا)
   const heardSet = new Set(heardWords);
   let matched = 0;
   for (const w of expWords) {
     if (heardSet.has(w)) matched++;
   }
 
-  return matched / expWords.length; // 0..1
+  return matched / expWords.length;
 }
 
 export default function ExercisePage() {
@@ -96,7 +88,6 @@ export default function ExercisePage() {
   const [nextExercise, setNextExercise] = useState(null);
   const [lastAnalysis, setLastAnalysis] = useState(null);
 
-  // New Features State
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isPracticeMode, setIsPracticeMode] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
@@ -105,15 +96,13 @@ export default function ExercisePage() {
   const [quizScore, setQuizScore] = useState(null);
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
 
-  // ✅ Progress gating
-  const [analysisPassed, setAnalysisPassed] = useState(false); // قراءة صحيحة (score>0 و status=valid)
-  const [mustRetry, setMustRetry] = useState(false); // يجب الإعادة (0 أو wrong/silence)
-  const [lastRecordingId, setLastRecordingId] = useState(null); // لتعليم التسجيل أنه أتمّ الاختبار
+  const [analysisPassed, setAnalysisPassed] = useState(false);
+  const [mustRetry, setMustRetry] = useState(false);
+  const [lastRecordingId, setLastRecordingId] = useState(null);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
-  // تحميل التمرين + الطالب
   useEffect(() => {
     const load = async () => {
       try {
@@ -134,7 +123,6 @@ export default function ExercisePage() {
           return;
         }
 
-        // ✅ من Supabase عبر entities
         const exerciseData = await ExerciseEntity.get(exerciseId);
         setExercise(exerciseData);
 
@@ -240,7 +228,6 @@ export default function ExercisePage() {
     setError(null);
     setAnalysisProgress(0);
 
-    // ✅ تصفير كل ما له علاقة بالاختبار/المنع
     setShowQuiz(false);
     setQuizQuestions([]);
     setQuizAnswers({});
@@ -288,7 +275,6 @@ export default function ExercisePage() {
 
       setAnalysisProgress(20);
 
-      // 1️⃣ رفع الملف إلى Supabase Storage عبر UploadFile
       const uploadResult = await UploadFile({
         file,
         bucket: "recordings",
@@ -302,7 +288,6 @@ export default function ExercisePage() {
 
       setAnalysisProgress(40);
 
-      // 2️⃣ تحويل الصوت إلى نص عبر Vercel API (FormData كما يطلب /api/transcribe)
       const audioFileForTranscribe =
         file instanceof File
           ? file
@@ -344,13 +329,12 @@ export default function ExercisePage() {
 
       setAnalysisProgress(70);
 
-      // ✅ حساب نسبة تطابق تقريبية بعد التطبيع
       const expectedRaw = exercise.sentence || "";
       const expectedNorm = normalizeArabicText(expectedRaw);
       const heardNorm = normalizeArabicText(transcribedText);
       const matchRatio = wordMatchRatio(expectedRaw, transcribedText);
 
-      // 3️⃣ التحليل عبر InvokeLLM (يمر عبر /api/llm)
+      // ✅ التحسين الرئيسي: Prompt أكثر دقة وأقل صرامة
       const analysisSchema = {
         type: "object",
         additionalProperties: false,
@@ -386,56 +370,54 @@ export default function ExercisePage() {
         required: ["score", "status", "feedback", "analysis_details"],
       };
 
-      const analysisPrompt = `
-أنت خبير في اللغة العربية الفصحى، ومتخصص في تحليل النطق والقراءة الجهرية.
-مهمتك هي تحليل قراءة الطالب تحليلًا لغويًا واقعيًا اعتمادًا على:
-- صحة النطق
-- سلامة الكلمات
-- قرب القراءة من النص الأصلي
+      const analysisPrompt = `أنت معلم لغة عربية محترف ومشجع، تساعد الطلاب على تحسين نطقهم بطريقة إيجابية وبناءة.
 
-سيتم تزويدك بـ:
-1) النص الأصلي المطلوب قراءته
-2) النص الناتج عن تحويل صوت الطالب إلى نص
+**مهمتك:**
+تقييم قراءة الطالب بناءً على النص المطلوب والنص الذي قرأه فعلياً.
 
-====================
-النص الأصلي:
-"${expectedRaw}"
+**البيانات:**
+- النص المطلوب: "${expectedRaw}"
+- النص المقروء: "${transcribedText}"
+- نسبة التطابق: ${(matchRatio * 100).toFixed(0)}%
 
-النص المقروء:
-"${transcribedText}"
+**قواعد التقييم الصارمة (يجب إعطاء صفر في هذه الحالات فقط):**
+1. إذا كان التسجيل صامتاً تماماً أو غير مفهوم → النتيجة = 0، status = "silence"
+2. إذا قرأ الطالب نصاً مختلفاً تماماً (أقل من 30% تطابق) → النتيجة = 0، status = "wrong_text"
 
-نسخ مطبّعة للمقارنة (بدون تشكيل أو ترقيم):
-- expected_norm: "${expectedNorm}"
-- heard_norm: "${heardNorm}"
-- match_ratio: ${matchRatio}
-====================
+**قواعد التقييم الإيجابية (لجميع الحالات الأخرى):**
+- إذا كان التطابق 70% أو أكثر → درجة ممتازة (85-100)
+- إذا كان التطابق 50-70% → درجة جيدة جداً (70-85)
+- إذا كان التطابق 30-50% → درجة جيدة (50-70)
+- ركز على المجهود والتحسن وليس على الكمال
+- تجاهل الأخطاء الطفيفة في التشكيل أو الوقف
+- كن متسامحاً مع اختلافات النطق البسيطة
 
-قواعد حاسمة:
-- إذا كان النص المقروء فارغًا، أو غير مفهوم، أو يدل على صمت → النتيجة = 0
-- إذا كان النص المقروء غير مرتبط بالنص الأصلي أو يدل على قراءة نص مختلف → النتيجة = 0
-- إذا أعاد الطالب صياغة النص أو غيّر كلماته الأساسية → النتيجة = 0
+**أسلوب التغذية الراجعة:**
+- استخدم لغة مشجعة ومحفزة
+- ابدأ بالإيجابيات قبل الملاحظات
+- قدم نصائح عملية محددة للتحسين
+- كن مهذباً ومحترماً دائماً
+- تذكر أن الطالب يتعلم ويحتاج للتشجيع
 
-قواعد مهمة جدًا:
-- لا تُحاسِب الطالب على علامات الترقيم (، ؛ :)
-- لا تُحاسِب الطالب على اختلافات طفيفة في الوقف أو الوصل
-- ركّز فقط على:
-  - صحة نطق الكلمات
-  - تسلسل القراءة
-  - قرب القراءة من النص الأصلي لفظًا ومعنى
+**مثال على feedback جيد:**
+"أحسنت! قراءتك واضحة ومفهومة. لاحظت أنك نطقت معظم الكلمات بشكل صحيح. للتحسين، حاول التركيز أكثر على حركات أواخر الكلمات. استمر في التدرب وستتحسن أكثر! 🌟"
 
-طريقة التقييم:
-- إذا كانت القراءة قريبة من النص، قيّمها تقييمًا لغويًا طبيعيًا
-- لا تستخدم حسابات رياضية أو نسب جامدة
-- أعطِ نتيجة واقعية تعبّر عن مستوى القراءة الحقيقي
-- لا ترفع النتيجة لمجرد المحاولة
-- لا تُخفضها بقسوة إذا كانت القراءة مفهومة وواضحة
-
-أعد النتيجة بصيغة JSON فقط، بدون أي شرح خارجها، وبدون تنسيق:
+**الرد المطلوب (JSON فقط):**
 {
-  "score": رقم من 0 إلى 100,
-  "feedback": "تعليق لغوي مهني مختصر يوضح مستوى القراءة وما يمكن تحسينه"
-}
-`;
+  "score": [رقم من 0-100 حسب القواعد أعلاه],
+  "status": ["valid" أو "silence" أو "wrong_text"],
+  "feedback": "[تعليق مشجع ومهذب بالعربية]",
+  "analysis_details": {
+    "word_match_score": [0-100],
+    "pronunciation_score": [0-100],
+    "tashkeel_score": [0-100],
+    "fluency_score": [0-100],
+    "rhythm": "[وصف موجز]",
+    "tone": "[وصف موجز]",
+    "breathing": "[وصف موجز]",
+    "suggestions": "[نصائح عملية للتحسين]"
+  }
+}`;
 
       const analysisResponse = await InvokeLLM({
         prompt: analysisPrompt,
@@ -447,12 +429,10 @@ export default function ExercisePage() {
           ? JSON.parse(analysisResponse)
           : analysisResponse;
 
-      // نخزن رابط الصوت مع التحليل ليستفيد "وضع المرآة"
       setLastAnalysis({ ...aiAnalysis, audio_url: file_url });
 
       setAnalysisProgress(90);
 
-      // 4️⃣ حفظ التسجيل والنتيجة في جدول recordings
       const recordingData = {
         student_id: student.id,
         exercise_id: exercise.id,
@@ -461,14 +441,10 @@ export default function ExercisePage() {
         feedback: aiAnalysis.feedback,
         analysis_details: {
           ...aiAnalysis.analysis_details,
-          ai_model: "Vercel API (/api/llm)",
+          ai_model: "GPT-4 via Vercel",
           analyzed_at: new Date().toISOString(),
-
-          // ✅ gating fields
           status: aiAnalysis.status,
           quiz_completed: false,
-
-          // ✅ (اختياري) مفيد للتشخيص لاحقاً:
           match_ratio: matchRatio,
           expected_norm: expectedNorm,
           heard_norm: heardNorm,
@@ -481,7 +457,6 @@ export default function ExercisePage() {
 
       setAnalysisProgress(100);
 
-      // 5️⃣ تحديث بيانات الطالب (نتركها كما هي)
       await Student.update(student.id, {
         last_activity: new Date().toISOString(),
         total_exercises: (student.total_exercises || 0) + 1,
@@ -492,7 +467,6 @@ export default function ExercisePage() {
       setIsSending(false);
       setIsAnalyzing(false);
 
-      // ✅ Gate: لا اختبار ولا انتقال إذا صفر/خطأ نص/صمت
       const scoreNum = Number(aiAnalysis?.score || 0);
       const status = String(aiAnalysis?.status || "");
       const passed = scoreNum > 0 && status === "valid";
@@ -507,7 +481,6 @@ export default function ExercisePage() {
         return;
       }
 
-      // ✅ إذا نجح: لازم اختبار فهم (ولا ننتقل إلا بعده)
       await generateQuiz();
     } catch (err) {
       console.error("Failed to submit recording:", err);
@@ -538,7 +511,6 @@ export default function ExercisePage() {
 
       const allRecordings = await Recording.list();
 
-      // ✅ يعتبر التمرين مكتملًا فقط إذا score>0 و quiz_completed=true و status=valid
       const studentRecordings = allRecordings.filter((r) => {
         if (r.student_id !== student.id) return false;
         const score = Number(r.score || 0);
@@ -589,21 +561,25 @@ export default function ExercisePage() {
     setIsGeneratingQuiz(true);
     try {
       const response = await InvokeLLM({
-        prompt: `
-بناءً على النص التالي: "${exercise.sentence}"
-قم بإنشاء 3 أسئلة اختيار من متعدد (MCQ) لاختبار فهم الطالب للنص.
+        prompt: `بناءً على النص التالي: "${exercise.sentence}"
 
-المخرجات JSON فقط بالشكل:
+أنشئ 3 أسئلة اختيار من متعدد لاختبار فهم الطالب للنص.
+
+**متطلبات:**
+- أسئلة واضحة ومناسبة لمستوى الطالب
+- 3 خيارات لكل سؤال
+- خيار واحد صحيح فقط
+
+**JSON المطلوب:**
 {
   "questions": [
     {
-      "question": "نص السؤال",
+      "question": "نص السؤال بالعربية",
       "options": ["خيار 1", "خيار 2", "خيار 3"],
       "correct_index": 0
     }
   ]
-}
-        `,
+}`,
         response_json_schema: {
           type: "object",
           additionalProperties: false,
@@ -649,7 +625,6 @@ export default function ExercisePage() {
     const score = (correct / quizQuestions.length) * 100;
     setQuizScore(score);
 
-    // ✅ علّم آخر تسجيل بأن الاختبار اكتمل
     if (lastRecordingId) {
       try {
         const mergedDetails = {
@@ -690,65 +665,66 @@ export default function ExercisePage() {
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
         <div className="text-center arabic-text">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto mb-4"></div>
-          <p className="text-indigo-700">جارٍ تحميل التمرين...</p>
+          <p className="text-indigo-700 text-lg">جارٍ تحميل التمرين...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-6">
-      <div className="max-w-4xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-4 mb-8"
-        >
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-3 sm:p-4 md:p-6">
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
           <Link to={createPageUrl("StudentDashboard")}>
             <Button
               variant="outline"
               size="icon"
-              className="rounded-full shadow-lg bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300"
+              className="rounded-full shadow-lg bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all flex-shrink-0"
             >
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent arabic-text">
+          
+          <div className="flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent arabic-text">
               تمرين النطق
             </h1>
-            <p className="text-indigo-600 arabic-text">
+            <p className="text-indigo-600 arabic-text text-sm sm:text-base">
               مستوى {exercise.level} - المرحلة {exercise.stage}
             </p>
           </div>
-          <div className="mr-auto flex gap-2">
+          
+          <div className="flex gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsPracticeMode(!isPracticeMode)}
-              className={`arabic-text ${
+              className={`flex-1 sm:flex-none arabic-text text-xs sm:text-sm ${
                 isPracticeMode
                   ? "bg-yellow-100 border-yellow-300 text-yellow-800"
                   : ""
               }`}
             >
-              <Headphones className="w-4 h-4 ml-2" />
-              {isPracticeMode ? "وضع التدريب مفعّل" : "تفعيل وضع التدريب"}
+              <Headphones className="w-3 h-3 sm:w-4 sm:h-4 ml-1 sm:ml-2" />
+              <span className="hidden sm:inline">{isPracticeMode ? "وضع التدريب مفعّل" : "تفعيل وضع التدريب"}</span>
+              <span className="sm:hidden">تدريب</span>
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsFocusMode(!isFocusMode)}
               title="وضع التركيز"
+              className="flex-shrink-0"
             >
               {isFocusMode ? (
-                <EyeOff className="w-5 h-5" />
+                <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" />
               ) : (
-                <Eye className="w-5 h-5" />
+                <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
               )}
             </Button>
           </div>
-        </motion.div>
+        </div>
 
         {/* Focus Mode Overlay */}
         {isFocusMode && <div className="fixed inset-0 bg-white z-40" />}
@@ -756,7 +732,7 @@ export default function ExercisePage() {
         <div
           className={
             isFocusMode
-              ? "fixed inset-0 z-50 flex items-center justify-center bg-white p-6"
+              ? "fixed inset-0 z-50 flex items-center justify-center bg-white p-4 sm:p-6"
               : ""
           }
         >
@@ -764,488 +740,528 @@ export default function ExercisePage() {
             {isFocusMode && (
               <Button
                 variant="ghost"
-                className="absolute top-6 right-6"
+                className="absolute top-4 sm:top-6 right-4 sm:right-6 text-sm sm:text-base"
                 onClick={() => setIsFocusMode(false)}
               >
-                <EyeOff className="w-5 h-5 ml-2" />
+                <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 ml-2" />
                 إلغاء التركيز
               </Button>
             )}
 
+            {/* Error Alert */}
             {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-6"
-              >
+              <div className="mb-4 sm:mb-6">
                 <Card className="border-red-200 bg-red-50">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <AlertTriangle className="w-5 h-5 text-red-500" />
-                    <p className="text-red-700 arabic-text">{error}</p>
+                  <CardContent className="p-3 sm:p-4 flex items-start gap-2 sm:gap-3">
+                    <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-red-700 arabic-text text-sm sm:text-base">{error}</p>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </div>
             )}
 
-            <AnimatePresence mode="wait">
-              {!recordingSubmitted ? (
-                <motion.div
-                  key="exercise"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="space-y-8"
-                >
-                  <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm glow-effect">
-                    <CardHeader className="text-center bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-t-xl">
-                      <CardTitle className="text-xl font-bold arabic-text">
-                        اقرأ النص التالي بصوت واضح مع مراعاة تشكيل أواخر الكلمات
+            {!recordingSubmitted ? (
+              <div className="space-y-4 sm:space-y-6 md:space-y-8">
+                {/* Exercise Text Card */}
+                <Card className="border-0 shadow-xl sm:shadow-2xl bg-white/90 backdrop-blur-sm">
+                  <CardHeader className="text-center bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-t-xl p-4 sm:p-6">
+                    <CardTitle className="text-base sm:text-lg md:text-xl font-bold arabic-text leading-relaxed">
+                      اقرأ النص التالي بصوت واضح مع مراعاة تشكيل أواخر الكلمات
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 sm:p-6 md:p-8">
+                    <div className="text-center p-4 sm:p-6 md:p-8 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl sm:rounded-2xl border-2 border-indigo-200">
+                      <p
+                        className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-indigo-900 arabic-text leading-relaxed mb-4 sm:mb-6 ${
+                          isFocusMode ? "text-4xl sm:text-5xl leading-loose" : ""
+                        }`}
+                      >
+                        {exercise.sentence}
+                      </p>
+
+                      {isPracticeMode && (
+                        <div className="mb-4 sm:mb-6">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => speakText(exercise.sentence)}
+                            className="bg-yellow-100 text-yellow-900 hover:bg-yellow-200 text-xs sm:text-sm"
+                          >
+                            <Volume2 className="w-3 h-3 sm:w-4 sm:h-4 ml-1 sm:ml-2" />
+                            استمع للنطق الصحيح
+                          </Button>
+                          <p className="text-xs text-yellow-700 mt-2 arabic-text">
+                            💡 استمع جيداً وحاول التقليد قبل التسجيل
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
+                        <Badge className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-3 sm:px-6 py-1.5 sm:py-2 text-sm sm:text-lg arabic-text shadow-lg">
+                          {exercise.sentence.split(/\s+/).length} كلمة
+                        </Badge>
+                        <Badge className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-3 sm:px-6 py-1.5 sm:py-2 text-sm sm:text-lg arabic-text shadow-lg">
+                          {exercise.difficulty_points} نقطة
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Recording Controls Card */}
+                <Card className="border-0 shadow-xl sm:shadow-2xl bg-white/90 backdrop-blur-sm">
+                  <CardContent className="p-4 sm:p-6 md:p-8">
+                    <div className="text-center space-y-4 sm:space-y-6">
+                      {!audioBlob ? (
+                        <>
+                          <div className="w-24 h-24 sm:w-32 sm:h-32 mx-auto">
+                            <Button
+                              onClick={
+                                isRecording ? stopRecording : startRecording
+                              }
+                              size="lg"
+                              className={`w-full h-full rounded-full text-white shadow-2xl transition-all duration-300 ${
+                                isRecording
+                                  ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 animate-pulse"
+                                  : "bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 hover:scale-110"
+                              }`}
+                            >
+                              {isRecording ? (
+                                <Square className="w-8 h-8 sm:w-12 sm:h-12" />
+                              ) : (
+                                <Mic className="w-8 h-8 sm:w-12 sm:h-12" />
+                              )}
+                            </Button>
+                          </div>
+                          <div>
+                            <p className="text-lg sm:text-xl font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent arabic-text mb-2">
+                              {isRecording
+                                ? "جارٍ التسجيل..."
+                                : "اضغط للبدء في التسجيل"}
+                            </p>
+                            <p className="text-indigo-600 arabic-text text-sm sm:text-base">
+                              {isRecording
+                                ? "اضغط مرة أخرى للتوقف"
+                                : "خذ وقتك - لا يوجد حد زمني"}
+                            </p>
+                            <div className="mt-3 sm:mt-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 sm:p-4 border-2 border-blue-200">
+                              <div className="flex items-center justify-center gap-2 mb-2">
+                                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
+                                <p className="font-bold text-blue-900 arabic-text text-sm sm:text-base">
+                                  تقييm المعلم المتخصص
+                                </p>
+                              </div>
+                              <p className="text-xs sm:text-sm text-blue-700 arabic-text">
+                                سيراجع المعلم تسجيلك بعناية ويعطيك تقييماً
+                                دقيقاً وتوجيهات مخصصة
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border-2 border-indigo-200">
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-4">
+                              <Button
+                                onClick={playRecording}
+                                disabled={isPlaying}
+                                className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full px-6 sm:px-8 py-3 sm:py-4 shadow-lg text-sm sm:text-base"
+                              >
+                                {isPlaying ? (
+                                  <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 mr-2 animate-pulse" />
+                                ) : (
+                                  <Play className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                                )}
+                                <span className="arabic-text">
+                                  {isPlaying
+                                    ? "يتم التشغيل..."
+                                    : "استمع للتسجيل"}
+                                </span>
+                              </Button>
+                              <Button
+                                onClick={retryRecording}
+                                variant="outline"
+                                className="w-full sm:w-auto rounded-full px-6 sm:px-8 py-3 sm:py-4 border-2 border-indigo-300 hover:bg-indigo-50 shadow-lg text-sm sm:text-base"
+                              >
+                                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                                <span className="arabic-text">
+                                  إعادة التسجيل
+                                </span>
+                              </Button>
+                            </div>
+                          </div>
+
+                          {isAnalyzing && (
+                            <div className="space-y-2 sm:space-y-3">
+                              <div className="flex items-center justify-center gap-2">
+                                <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-indigo-500"></div>
+                                <p className="text-indigo-700 arabic-text font-semibold text-sm sm:text-base">
+                                  جاري تحليل الصوت باستخدام GPT-4...
+                                </p>
+                              </div>
+                              <Progress value={analysisProgress} className="h-2 sm:h-3" />
+                            </div>
+                          )}
+
+                          <Button
+                            onClick={submitRecording}
+                            disabled={isSending}
+                            className="w-full sm:w-auto bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 sm:px-12 py-4 sm:py-6 rounded-xl sm:rounded-2xl text-base sm:text-lg arabic-text shadow-2xl"
+                          >
+                            {isSending ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-white mr-2"></div>
+                                جارٍ الإرسال...
+                              </>
+                            ) : (
+                              <>
+                                <Send className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                                إرسال للمعلم
+                              </>
+                            )}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <div>
+                {showQuiz ? (
+                  <Card className="border-0 shadow-xl sm:shadow-2xl bg-white/90 backdrop-blur-sm">
+                    <CardHeader className="text-center bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-t-xl p-4 sm:p-6">
+                      <CardTitle className="text-xl sm:text-2xl font-bold arabic-text flex items-center justify-center gap-2">
+                        <Brain className="w-6 h-6 sm:w-8 sm:h-8" />
+                        اختبر فهمك للنص
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="text-center p-8 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border-2 border-indigo-200">
-                        <p
-                          className={`text-3xl md:text-4xl font-bold text-indigo-900 arabic-text leading-relaxed mb-6 ${
-                            isFocusMode ? "text-5xl leading-loose" : ""
-                          }`}
-                        >
-                          {exercise.sentence}
-                        </p>
-
-                        {isPracticeMode && (
-                          <div className="mb-6">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => speakText(exercise.sentence)}
-                              className="bg-yellow-100 text-yellow-900 hover:bg-yellow-200"
+                    <CardContent className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
+                      {quizScore === null ? (
+                        <div className="space-y-4 sm:space-y-6">
+                          {quizQuestions.map((q, qIdx) => (
+                            <div
+                              key={qIdx}
+                              className="bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-200 text-right"
                             >
-                              <Volume2 className="w-4 h-4 ml-2" />
-                              استمع للنطق الصحيح
-                            </Button>
-                            <p className="text-xs text-yellow-700 mt-2 arabic-text">
-                              💡 استمع جيداً وحاول التقليد قبل التسجيل
+                              <p className="font-bold text-base sm:text-lg text-slate-900 mb-3 arabic-text">
+                                {q.question}
+                              </p>
+
+                              <RadioGroup
+                                dir="rtl"
+                                value={
+                                  quizAnswers[qIdx] !== undefined
+                                    ? String(quizAnswers[qIdx])
+                                    : undefined
+                                }
+                                onValueChange={(val) =>
+                                  setQuizAnswers((prev) => ({
+                                    ...prev,
+                                    [qIdx]: parseInt(val, 10),
+                                  }))
+                                }
+                              >
+                                {q.options.map((opt, oIdx) => (
+                                  <div
+                                    key={oIdx}
+                                    className="flex items-center space-x-2 space-x-reverse mb-2"
+                                  >
+                                    <RadioGroupItem
+                                      value={oIdx.toString()}
+                                      id={`q${qIdx}-o${oIdx}`}
+                                    />
+                                    <Label
+                                      htmlFor={`q${qIdx}-o${oIdx}`}
+                                      className="text-slate-700 arabic-text text-sm sm:text-base lg:text-lg cursor-pointer"
+                                    >
+                                      {opt}
+                                    </Label>
+                                  </div>
+                                ))}
+                              </RadioGroup>
+                            </div>
+                          ))}
+
+                          <Button
+                            onClick={submitQuiz}
+                            disabled={quizQuestions.some(
+                              (_, idx) => quizAnswers[idx] === undefined
+                            )}
+                            className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-4 sm:py-6 text-base sm:text-lg arabic-text"
+                          >
+                            تحقق من الإجابات
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="text-center space-y-4 sm:space-y-6">
+                          <div className="w-20 h-20 sm:w-24 sm:h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
+                            <span className="text-2xl sm:text-3xl font-bold text-blue-700">
+                              {Math.round(quizScore)}%
+                            </span>
+                          </div>
+                          <h3 className="text-xl sm:text-2xl font-bold text-slate-800 arabic-text">
+                            {quizScore === 100
+                              ? "ممتاز! فهم كامل للنص 🌟"
+                              : "جيد جداً! استمر في المحاولة 👍"}
+                          </h3>
+                          <div className="flex justify-center">
+                            {nextExercise && (
+                              <Button
+                                onClick={goToNextExercise}
+                                className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 sm:px-8 py-4 sm:py-6 rounded-xl text-base sm:text-lg arabic-text shadow-lg"
+                              >
+                                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                                التمرين التالي
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="border-0 shadow-xl sm:shadow-2xl bg-white/90 backdrop-blur-sm">
+                    <CardHeader className="text-center bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-t-xl p-4 sm:p-6">
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                        <CheckCircle className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
+                      </div>
+                      <CardTitle className="text-2xl sm:text-3xl font-bold arabic-text">
+                        تم إرسال تسجيلك بنجاح! 🎉
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-center p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
+                      {/* ✅ عرض النتيجة بشكل منظم وجميل */}
+                      {lastAnalysis && (
+                        <div className="bg-white p-4 sm:p-6 rounded-xl border-2 border-indigo-100 shadow-sm text-right w-full">
+                          <div className="flex items-center justify-between mb-4 sm:mb-6 pb-3 sm:pb-4 border-b-2 border-indigo-100">
+                            <h3 className="font-bold text-indigo-800 text-lg sm:text-xl arabic-text flex items-center gap-2">
+                              <Award className="w-5 h-5 sm:w-6 sm:h-6" />
+                              نتيجة التحليل
+                            </h3>
+                            <Badge className="bg-purple-100 text-purple-800 text-xs sm:text-sm">
+                              GPT-4
+                            </Badge>
+                          </div>
+
+                          {/* النتيجة الرئيسية */}
+                          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 sm:p-6 rounded-2xl mb-4 sm:mb-6 text-center shadow-lg">
+                            <p className="text-sm sm:text-base opacity-90 arabic-text mb-2">النتيجة النهائية</p>
+                            <p className="text-4xl sm:text-5xl md:text-6xl font-bold">{lastAnalysis.score}%</p>
+                            <p className="text-xs sm:text-sm mt-2 opacity-80 arabic-text">
+                              {lastAnalysis.score >= 85 ? "ممتاز! 🌟" :
+                               lastAnalysis.score >= 70 ? "جيد جداً! 👍" :
+                               lastAnalysis.score >= 50 ? "جيد! 💪" : "يحتاج تحسين"}
                             </p>
                           </div>
-                        )}
 
-                        <div className="flex items-center justify-center gap-4 flex-wrap">
-                          <Badge className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-2 text-lg arabic-text shadow-lg">
-                            {exercise.sentence.split(/\s+/).length} كلمة
-                          </Badge>
-                          <Badge className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 py-2 text-lg arabic-text shadow-lg">
-                            {exercise.difficulty_points} نقطة
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm glow-effect">
-                    <CardContent className="p-8">
-                      <div className="text-center space-y-6">
-                        {!audioBlob ? (
-                          <>
-                            <div className="w-32 h-32 mx-auto">
-                              <Button
-                                onClick={
-                                  isRecording ? stopRecording : startRecording
-                                }
-                                size="lg"
-                                className={`w-full h-full rounded-full text-white shadow-2xl transition-all duration-300 glow-effect ${
-                                  isRecording
-                                    ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 animate-pulse"
-                                    : "bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 hover:scale-110"
-                                }`}
-                              >
-                                {isRecording ? (
-                                  <Square className="w-12 h-12" />
-                                ) : (
-                                  <Mic className="w-12 h-12" />
-                                )}
-                              </Button>
-                            </div>
-                            <div>
-                              <p className="text-xl font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent arabic-text mb-2">
-                                {isRecording
-                                  ? "جارٍ التسجيل..."
-                                  : "اضغط للبدء في التسجيل"}
-                              </p>
-                              <p className="text-indigo-600 arabic-text">
-                                {isRecording
-                                  ? "اضغط مرة أخرى للتوقف"
-                                  : "خذ وقتك - لا يوجد حد زمني"}
-                              </p>
-                              <div className="mt-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border-2 border-blue-200">
-                                <div className="flex items-center justify-center gap-2 mb-2">
-                                  <CheckCircle className="w-5 h-5 text-blue-600" />
-                                  <p className="font-bold text-blue-900 arabic-text">
-                                    تقييم المعلم المتخصص
-                                  </p>
-                                </div>
-                                <p className="text-sm text-blue-700 arabic-text">
-                                  سيراجع المعلم تسجيلك بعناية ويعطيك تقييماً
-                                  دقيقاً وتوجيهات مخصصة
+                          {/* تفاصيل الدرجات */}
+                          <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                            <div className="bg-blue-50 p-3 sm:p-4 rounded-xl border border-blue-200 text-center">
+                              <div className="flex items-center justify-center gap-2 mb-2">
+                                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                                <p className="text-blue-900 font-bold arabic-text text-xs sm:text-sm">
+                                  تطابق الكلمات
                                 </p>
                               </div>
+                              <p className="text-xl sm:text-2xl font-bold text-blue-700">
+                                {lastAnalysis.analysis_details?.word_match_score || 0}%
+                              </p>
                             </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-8 border-2 border-indigo-200">
-                              <div className="flex items-center justify-center gap-4 mb-4">
-                                <Button
-                                  onClick={playRecording}
-                                  disabled={isPlaying}
-                                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full px-8 py-4 shadow-lg glow-effect"
-                                >
-                                  {isPlaying ? (
-                                    <Volume2 className="w-5 h-5 mr-2 animate-pulse" />
-                                  ) : (
-                                    <Play className="w-5 h-5 mr-2" />
-                                  )}
-                                  <span className="arabic-text">
-                                    {isPlaying
-                                      ? "يتم التشغيل..."
-                                      : "استمع للتسجيل"}
-                                  </span>
-                                </Button>
-                                <Button
-                                  onClick={retryRecording}
-                                  variant="outline"
-                                  className="rounded-full px-8 py-4 border-2 border-indigo-300 hover:bg-indigo-50 shadow-lg"
-                                >
-                                  <RotateCcw className="w-5 h-5 mr-2" />
-                                  <span className="arabic-text">
-                                    إعادة التسجيل
-                                  </span>
-                                </Button>
-                              </div>
-                            </div>
-
-                            {isAnalyzing && (
-                              <div className="space-y-3">
-                                <div className="flex items-center justify-center gap-2">
-                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-500"></div>
-                                  <p className="text-indigo-700 arabic-text font-semibold">
-                                    جاري تحليل الصوت باستخدام CHAT GPT 5...
-                                  </p>
-                                </div>
-                                <Progress value={analysisProgress} className="h-3" />
-                              </div>
-                            )}
-
-                            <Button
-                              onClick={submitRecording}
-                              disabled={isSending}
-                              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-12 py-6 rounded-2xl text-lg arabic-text shadow-2xl glow-effect"
-                            >
-                              {isSending ? (
-                                <>
-                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                                  جارٍ الإرسال...
-                                </>
-                              ) : (
-                                <>
-                                  <Send className="w-5 h-5 mr-2" />
-                                  إرسال للمعلم
-                                </>
-                              )}
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="submitted"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                >
-                  {showQuiz ? (
-                    <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm glow-effect">
-                      <CardHeader className="text-center bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-t-xl">
-                        <CardTitle className="text-2xl font-bold arabic-text flex items-center justify-center gap-2">
-                          <Brain className="w-8 h-8" />
-                          اختبر فهمك للنص
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-8 space-y-6">
-                        {quizScore === null ? (
-                          <div className="space-y-6">
-                            {quizQuestions.map((q, qIdx) => (
-                              <div
-                                key={qIdx}
-                                className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-right"
-                              >
-                                <p className="font-bold text-lg text-slate-900 mb-3 arabic-text">
-                                  {q.question}
+                            
+                            <div className="bg-green-50 p-3 sm:p-4 rounded-xl border border-green-200 text-center">
+                              <div className="flex items-center justify-center gap-2 mb-2">
+                                <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+                                <p className="text-green-900 font-bold arabic-text text-xs sm:text-sm">
+                                  جودة النطق
                                 </p>
-
-                                {/* ✅ Controlled RadioGroup (يحل مشكلة عدم النقر) */}
-                                <RadioGroup
-                                  dir="rtl"
-                                  value={
-                                    quizAnswers[qIdx] !== undefined
-                                      ? String(quizAnswers[qIdx])
-                                      : undefined
-                                  }
-                                  onValueChange={(val) =>
-                                    setQuizAnswers((prev) => ({
-                                      ...prev,
-                                      [qIdx]: parseInt(val, 10),
-                                    }))
-                                  }
-                                >
-                                  {q.options.map((opt, oIdx) => (
-                                    <div
-                                      key={oIdx}
-                                      className="flex items-center space-x-2 space-x-reverse mb-2"
-                                    >
-                                      <RadioGroupItem
-                                        value={oIdx.toString()}
-                                        id={`q${qIdx}-o${oIdx}`}
-                                      />
-                                      <Label
-                                        htmlFor={`q${qIdx}-o${oIdx}`}
-                                        className="text-slate-700 arabic-text text-lg cursor-pointer"
-                                      >
-                                        {opt}
-                                      </Label>
-                                    </div>
-                                  ))}
-                                </RadioGroup>
                               </div>
-                            ))}
-
-                            <Button
-                              onClick={submitQuiz}
-                              disabled={quizQuestions.some(
-                                (_, idx) => quizAnswers[idx] === undefined
-                              )}
-                              className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-6 text-lg arabic-text"
-                            >
-                              تحقق من الإجابات
-                            </Button>
+                              <p className="text-xl sm:text-2xl font-bold text-green-700">
+                                {lastAnalysis.analysis_details?.pronunciation_score || 0}%
+                              </p>
+                            </div>
+                            
+                            <div className="bg-purple-50 p-3 sm:p-4 rounded-xl border border-purple-200 text-center">
+                              <div className="flex items-center justify-center gap-2 mb-2">
+                                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
+                                <p className="text-purple-900 font-bold arabic-text text-xs sm:text-sm">
+                                  التشكيل
+                                </p>
+                              </div>
+                              <p className="text-xl sm:text-2xl font-bold text-purple-700">
+                                {lastAnalysis.analysis_details?.tashkeel_score || 0}%
+                              </p>
+                            </div>
+                            
+                            <div className="bg-orange-50 p-3 sm:p-4 rounded-xl border border-orange-200 text-center">
+                              <div className="flex items-center justify-center gap-2 mb-2">
+                                <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
+                                <p className="text-orange-900 font-bold arabic-text text-xs sm:text-sm">
+                                  الطلاقة
+                                </p>
+                              </div>
+                              <p className="text-xl sm:text-2xl font-bold text-orange-700">
+                                {lastAnalysis.analysis_details?.fluency_score || 0}%
+                              </p>
+                            </div>
                           </div>
-                        ) : (
-                          <div className="text-center space-y-6">
-                            <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
-                              <span className="text-3xl font-bold text-blue-700">
-                                {Math.round(quizScore)}%
+
+                          {/* معلومات إضافية */}
+                          <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
+                            <div className="bg-slate-50 p-2 sm:p-3 rounded-lg border border-slate-200 flex justify-between items-center">
+                              <span className="text-slate-600 arabic-text text-xs sm:text-sm">🎵 الإيقاع:</span>
+                              <span className="text-slate-800 font-semibold arabic-text text-xs sm:text-sm">
+                                {lastAnalysis.analysis_details?.rhythm || "جيد"}
                               </span>
                             </div>
-                            <h3 className="text-2xl font-bold text-slate-800 arabic-text">
-                              {quizScore === 100
-                                ? "ممتاز! فهم كامل للنص 🌟"
-                                : "جيد جداً! استمر في المحاولة 👍"}
-                            </h3>
-                            <div className="flex justify-center">
-                              {nextExercise && (
-                                <Button
-                                  onClick={goToNextExercise}
-                                  className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-8 py-6 rounded-xl text-lg arabic-text shadow-lg"
-                                >
-                                  <Sparkles className="w-5 h-5 mr-2" />
-                                  التمرين التالي
-                                </Button>
-                              )}
+                            <div className="bg-slate-50 p-2 sm:p-3 rounded-lg border border-slate-200 flex justify-between items-center">
+                              <span className="text-slate-600 arabic-text text-xs sm:text-sm">🗣️ النبرة:</span>
+                              <span className="text-slate-800 font-semibold arabic-text text-xs sm:text-sm">
+                                {lastAnalysis.analysis_details?.tone || "واضحة"}
+                              </span>
+                            </div>
+                            <div className="bg-slate-50 p-2 sm:p-3 rounded-lg border border-slate-200 flex justify-between items-center">
+                              <span className="text-slate-600 arabic-text text-xs sm:text-sm">💨 التنفس:</span>
+                              <span className="text-slate-800 font-semibold arabic-text text-xs sm:text-sm">
+                                {lastAnalysis.analysis_details?.breathing || "منتظم"}
+                              </span>
                             </div>
                           </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm glow-effect">
-                      <CardHeader className="text-center bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-t-xl">
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ type: "spring", duration: 0.6 }}
-                          className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4"
-                        >
-                          <CheckCircle className="w-12 h-12 text-white" />
-                        </motion.div>
-                        <CardTitle className="text-3xl font-bold arabic-text">
-                          تم إرسال تسجيلك بنجاح! 🎉
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="text-center p-8 space-y-6">
-                        {lastAnalysis && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="bg-white p-6 rounded-xl border-2 border-indigo-100 shadow-sm text-right w-full mb-6"
-                          >
-                            <h3 className="font-bold text-indigo-800 text-xl mb-4 arabic-text border-b pb-2">
-                              📊 نتيجة التحليل (Chat GPT 5):
-                            </h3>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                              <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200 text-center">
-                                <p className="text-indigo-900 font-bold arabic-text mb-1">
-                                  🎯 النتيجة النهائية
+                          {/* تعليقات الذكاء الاصطناعي */}
+                          <div className="bg-gradient-to-r from-yellow-50 to-amber-50 p-4 sm:p-5 rounded-xl border-2 border-yellow-200 mb-4 sm:mb-6">
+                            <div className="flex items-start gap-2 sm:gap-3 mb-3">
+                              <Brain className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-700 flex-shrink-0 mt-1" />
+                              <div className="flex-1">
+                                <p className="text-yellow-900 font-bold arabic-text text-sm sm:text-base mb-2">
+                                  💡 ملاحظات المعلم الذكي:
                                 </p>
-                                <p className="text-4xl font-bold text-indigo-700">
-                                  {lastAnalysis.score}%
-                                </p>
-                              </div>
-                              <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
-                                <p className="text-purple-900 font-bold arabic-text mb-2">
-                                  📝 النص الذي تم تقييمه:
-                                </p>
-                                <p className="text-purple-800 arabic-text text-sm leading-relaxed">
-                                  "{exercise.sentence}"
+                                <p className="text-yellow-800 arabic-text text-sm sm:text-base lg:text-lg leading-relaxed">
+                                  {lastAnalysis.feedback}
                                 </p>
                               </div>
                             </div>
-
-                            <div className="space-y-4 mb-6">
-                              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                <p className="text-blue-900 font-bold arabic-text">
-                                  🎵 الإيقاع:
+                            
+                            {lastAnalysis.analysis_details?.suggestions && (
+                              <div className="bg-white/50 p-3 sm:p-4 rounded-lg border border-yellow-200 mt-3">
+                                <p className="text-yellow-900 font-bold arabic-text text-xs sm:text-sm mb-2">
+                                  🎯 نصائح للتحسين:
                                 </p>
-                                <p className="text-blue-700 arabic-text">
-                                  {lastAnalysis.analysis_details?.rhythm || "جيد"}
-                                </p>
-                              </div>
-                              <div className="bg-green-50 p-3 rounded-lg border border-green-100">
-                                <p className="text-green-900 font-bold arabic-text">
-                                  🗣️ النبرة:
-                                </p>
-                                <p className="text-green-700 arabic-text">
-                                  {lastAnalysis.analysis_details?.tone || "واضحة"}
-                                </p>
-                              </div>
-                              <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
-                                <p className="text-orange-900 font-bold arabic-text">
-                                  💨 التنفس:
-                                </p>
-                                <p className="text-orange-700 arabic-text">
-                                  {lastAnalysis.analysis_details?.breathing ||
-                                    "منتظم"}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="bg-yellow-50 p-4 rounded-lg border-2 border-yellow-200 mb-4">
-                              <p className="text-yellow-900 font-bold arabic-text mb-2 text-lg">
-                                💡 ملاحظات الذكاء الاصطناعي:
-                              </p>
-                              <p className="text-yellow-800 arabic-text text-lg leading-relaxed">
-                                {lastAnalysis.feedback}
-                              </p>
-                              {lastAnalysis.analysis_details?.suggestions && (
-                                <p className="text-yellow-700 arabic-text mt-2 pt-2 border-t border-yellow-200">
-                                  <strong>كيفية التطوير:</strong>{" "}
+                                <p className="text-yellow-700 arabic-text text-xs sm:text-sm lg:text-base leading-relaxed">
                                   {lastAnalysis.analysis_details.suggestions}
                                 </p>
-                              )}
-                            </div>
-
-                            <p className="text-xs text-gray-400 text-center mt-4 arabic-text">
-                              تم التحليل عبر Vercel API بدقة عالية
-                            </p>
-                          </motion.div>
-                        )}
-
-                        {/* ✅ إذا فشل: منع الاختبار والانتقال + إعادة التسجيل */}
-                        {mustRetry && (
-                          <Card className="border-red-200 bg-red-50">
-                            <CardContent className="p-4 text-right">
-                              <p className="text-red-700 arabic-text">
-                                لا يمكنك الانتقال: يجب قراءة النص نفسه والحصول على
-                                درجة فوق الصفر.
-                              </p>
-                              <Button onClick={retryRecording} className="mt-3 arabic-text">
-                                إعادة التسجيل
-                              </Button>
-                            </CardContent>
-                          </Card>
-                        )}
-
-                        <p className="text-xl text-indigo-700 arabic-text leading-relaxed">
-                          تسجيلك محفوظ ووصل للمعلم للمراجعة والتقييم
-                        </p>
-
-                        {/* وضع المرآة */}
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 w-full mb-6">
-                          <h4 className="font-bold text-slate-800 mb-3 arabic-text flex items-center justify-center gap-2">
-                            <Headphones className="w-5 h-5" />
-                            وضع المرآة (قارن نطقك)
-                          </h4>
-                          <div className="flex justify-center gap-4">
-                            <Button
-                              variant="outline"
-                              onClick={() => {
-                                const audio = new Audio(
-                                  lastAnalysis?.audio_url ||
-                                    URL.createObjectURL(audioBlob)
-                                );
-                                audio.play();
-                              }}
-                              className="arabic-text"
-                            >
-                              <Play className="w-4 h-4 ml-2" />
-                              اسمع صوتك
-                            </Button>
-                            <Button
-                              variant="default"
-                              onClick={() => speakText(exercise.sentence)}
-                              className="arabic-text bg-indigo-600 hover:bg-indigo-700"
-                            >
-                              <Volume2 className="w-4 h-4 ml-2" />
-                              اسمع النطق الصحيح
-                            </Button>
+                              </div>
+                            )}
                           </div>
-                        </div>
 
-                        <div className="flex gap-4 justify-center flex-wrap">
-                          {isGeneratingQuiz ? (
-                            <Button
-                              disabled
-                              className="bg-gray-100 text-gray-600 px-8 py-6 rounded-xl text-lg arabic-text border-2 border-gray-200"
-                            >
-                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600 ml-2"></div>
-                              جارٍ تحضير الأسئلة...
-                            </Button>
-                          ) : quizQuestions.length > 0 && analysisPassed ? (
-                            <Button
-                              onClick={() => setShowQuiz(true)}
-                              className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white px-10 py-6 rounded-xl text-xl arabic-text shadow-xl animate-pulse"
-                            >
-                              <Brain className="w-6 h-6 mr-2" />
-                              ابدأ اختبار الفهم
-                            </Button>
-                          ) : nextExercise ? (
-                            <Button
-                              onClick={goToNextExercise}
-                              className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-8 py-6 rounded-xl text-lg arabic-text shadow-lg glow-effect"
-                            >
-                              <Sparkles className="w-5 h-5 mr-2" />
-                              التمرين التالي
-                            </Button>
-                          ) : null}
-
-                          <Link to={createPageUrl("StudentDashboard")}>
-                            <Button
-                              variant="outline"
-                              className="px-8 py-6 rounded-xl text-lg arabic-text border-2"
-                            >
-                              <ArrowLeft className="w-5 h-5 mr-2" />
-                              العودة للرئيسية
-                            </Button>
-                          </Link>
+                          <p className="text-xs text-gray-400 text-center mt-3 sm:mt-4 arabic-text">
+                            تم التحليل بواسطة GPT-4 • دقة عالية
+                          </p>
                         </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
+                      )}
+
+                      {/* رسالة فشل */}
+                      {mustRetry && (
+                        <Card className="border-red-200 bg-red-50">
+                          <CardContent className="p-3 sm:p-4 text-right">
+                            <p className="text-red-700 arabic-text text-sm sm:text-base mb-3">
+                              لا يمكنك الانتقال: يجب قراءة النص نفسه والحصول على
+                              درجة فوق الصفر.
+                            </p>
+                            <Button 
+                              onClick={retryRecording} 
+                              className="w-full sm:w-auto arabic-text text-sm sm:text-base"
+                            >
+                              <RotateCcw className="w-4 h-4 mr-2" />
+                              إعادة التسجيل
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {!mustRetry && (
+                        <>
+                          <p className="text-lg sm:text-xl text-indigo-700 arabic-text leading-relaxed">
+                            تسجيلك محفوظ ووصل للمعلم للمراجعة والتقييم
+                          </p>
+
+                          {/* وضع المرآة */}
+                          <div className="bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-200 w-full">
+                            <h4 className="font-bold text-slate-800 mb-3 arabic-text flex items-center justify-center gap-2 text-sm sm:text-base">
+                              <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />
+                              وضع المرآة (قارن نطقك)
+                            </h4>
+                            <div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-4">
+                              <Button
+                                variant="outline"
+                                onClick={() => {
+                                  const audio = new Audio(
+                                    lastAnalysis?.audio_url ||
+                                      URL.createObjectURL(audioBlob)
+                                  );
+                                  audio.play();
+                                }}
+                                className="w-full sm:w-auto arabic-text text-xs sm:text-sm"
+                              >
+                                <Play className="w-3 h-3 sm:w-4 sm:h-4 ml-1 sm:ml-2" />
+                                اسمع صوتك
+                              </Button>
+                              <Button
+                                variant="default"
+                                onClick={() => speakText(exercise.sentence)}
+                                className="w-full sm:w-auto arabic-text bg-indigo-600 hover:bg-indigo-700 text-xs sm:text-sm"
+                              >
+                                <Volume2 className="w-3 h-3 sm:w-4 sm:h-4 ml-1 sm:ml-2" />
+                                اسمع النطق الصحيح
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* أزرار التنقل */}
+                          <div className="flex gap-2 sm:gap-4 justify-center flex-wrap">
+                            {isGeneratingQuiz ? (
+                              <Button
+                                disabled
+                                className="w-full sm:w-auto bg-gray-100 text-gray-600 px-6 sm:px-8 py-4 sm:py-6 rounded-xl text-sm sm:text-lg arabic-text border-2 border-gray-200"
+                              >
+                                <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-gray-600 ml-2"></div>
+                                جارٍ تحضير الأسئلة...
+                              </Button>
+                            ) : quizQuestions.length > 0 && analysisPassed ? (
+                              <Button
+                                onClick={() => setShowQuiz(true)}
+                                className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white px-8 sm:px-10 py-4 sm:py-6 rounded-xl text-base sm:text-xl arabic-text shadow-xl animate-pulse"
+                              >
+                                <Brain className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
+                                ابدأ اختبار الفهم
+                              </Button>
+                            ) : nextExercise && !mustRetry ? (
+                              <Button
+                                onClick={goToNextExercise}
+                                className="w-full sm:w-auto bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-6 sm:px-8 py-4 sm:py-6 rounded-xl text-base sm:text-lg arabic-text shadow-lg"
+                              >
+                                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                                التمرين التالي
+                              </Button>
+                            ) : null}
+
+                            <Link to={createPageUrl("StudentDashboard")} className="w-full sm:w-auto">
+                              <Button
+                                variant="outline"
+                                className="w-full px-6 sm:px-8 py-4 sm:py-6 rounded-xl text-base sm:text-lg arabic-text border-2"
+                              >
+                                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                                العودة للرئيسية
+                              </Button>
+                            </Link>
+                          </div>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
