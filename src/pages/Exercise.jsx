@@ -1,3 +1,5 @@
+// src/pages/Exercise.jsx
+
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -126,7 +128,7 @@ export default function ExercisePage() {
         // 1. البحث في التمارين المحلية
         let foundExercise = staticExercises.find((ex) => ex.id === exerciseId);
 
-        // 2. البحث في قاعدة البيانات
+        // 2. البحث في قاعدة البيانات إذا لم يوجد محلياً
         if (!foundExercise) {
             const isLocalId = exerciseId.startsWith("local-") || exerciseId.startsWith("ex-");
             if (!isLocalId) {
@@ -293,38 +295,36 @@ export default function ExercisePage() {
       const heardNorm = normalizeArabicText(transcribedText);
       const matchRatio = wordMatchRatio(expectedRaw, transcribedText);
 
-      // ✅ البرومبت المعدل ليكون عادلاً ومشجعاً (Fair & Encouraging AI)
+      // ✅ التعديل هنا: Prompt مفصل وواقعي (AI عادل ومشجع)
       const analysisPrompt = `
-      أنت معلم لغة عربية طيب القلب ومشجع جداً للأطفال. هدفك هو تحفيز الطالب وليس إحباطه.
+      أنت معلم لغة عربية متميز وداعم، تهدف لتعليم الطلاب النطق الصحيح بأسلوب مشجع وواقعي.
 
       **المهمة:**
-      قيم قراءة الطالب للنص التالي.
-      - النص المطلوب: "${expectedRaw}"
-      - النص المسموع (تقريباً): "${transcribedText}"
-      - نسبة التطابق التقريبية: ${(matchRatio * 100).toFixed(0)}%
+      تحليل تسجيل صوتي لطالب يقرأ النص التالي.
+      النص المطلوب: "${expectedRaw}"
+      النص المسموع (تقريباً): "${transcribedText}"
+      نسبة التطابق التقريبية: ${(matchRatio * 100).toFixed(0)}%
 
-      **قواعد التقييم (العدالة والتشجيع):**
-      1. **حالات الصفر (فقط):**
-         - إذا كان التسجيل صامتاً تماماً أو ضجيجاً فقط -> Score: 0, Status: silence
-         - إذا قرأ نصاً مختلفاً كلياً عن الموضوع (مثلاً يتحدث عن اللعب بدلاً من القراءة) -> Score: 0, Status: wrong_text
+      **معايير التقييم (كن واقعياً ومتوسط الصرامة):**
+      1. **الدرجة (Score):** امنح درجة تعكس الجهد والوضوح.
+         - قراءة ممتازة (حتى مع أخطاء بسيطة جداً): 90-100.
+         - قراءة جيدة ومفهومة (أخطاء تشكيل أو كلمة): 75-89.
+         - قراءة مقبولة (أخطاء متعددة لكن المعنى واضح): 50-74.
+         - قراءة غير صحيحة أو نص مختلف: أقل من 50.
+         - صمت تام: 0.
 
-      2. **التقييم العادل (لأي محاولة قراءة):**
-         - **ممتاز (90-100):** قراءة صحيحة وواضحة، حتى لو أخطأ في تشكيل حرف أو حرفين بسيطين. كافئه على الجرأة والوضوح.
-         - **جيد جداً (75-89):** قراءة مفهومة، المعنى واضح، لكن توجد بعض الأخطاء في التشكيل أو استبدال كلمة بمرادف.
-         - **جيد/مقبول (50-74):** الطالب يحاول، نطق بعض الكلمات بشكل صحيح وتعثر في أخرى. لا تعطه صفراً أبداً طالما حاول القراءة من النص.
-         - **ضعيف (10-49):** قرأ كلمة واحدة فقط صحيحة أو تهجى بصعوبة بالغة. (أعطه درجة صغيرة تشجيعاً للمحاولة).
-
-      3. **أسلوب التعليق (Feedback):**
-         - اكتب 3 جمل قصيرة بلهجة مشجعة جداً.
-         - ابدأ بكلمة مثل: "يا بطل!"، "أحسنت!"، "محاولة رائعة!".
-         - اذكر نقطة قوة حقيقية (مثلاً: "صوتك واضح"، "نطقت كلمة ... بشكل ممتاز").
-         - اذكر نصيحة بسيطة للتحسين (مثلاً: "انتبه لحركة الضمة"، "حاول المد في كلمة ...").
+      2. **التعليق (Feedback):**
+         - يجب أن يكون باللغة العربية، متوسط الطول (3-4 جمل)، وبنبرة محفزة.
+         - ابدأ بمدح واضح.
+         - اذكر **نقاط القوة** (مثلاً: وضوح الصوت، نطق حروف معينة).
+         - اذكر **نقاط الضعف/التحسين** بلطف (مثلاً: الانتباه للمدود، التشكيل في كلمة كذا).
+         - اختم بتشجيع.
 
       **المطلوب إرجاع JSON فقط:**
       {
         "score": number,
         "status": "valid" | "silence" | "wrong_text",
-        "feedback": "نص التعليق...",
+        "feedback": "نص التعليق المفصل...",
         "analysis_details": {
           "word_match_score": number,
           "pronunciation_score": number,
@@ -333,7 +333,7 @@ export default function ExercisePage() {
           "rhythm": "string",
           "tone": "string",
           "breathing": "string",
-          "suggestions": "نصيحة قصيرة"
+          "suggestions": "نصيحة قصيرة ومفيدة"
         }
       }
       `;
@@ -372,11 +372,13 @@ export default function ExercisePage() {
         },
       };
 
+      // محاولة الحفظ في قاعدة البيانات
+      let createdRecording = null;
       try {
-        const createdRecording = await Recording.create(recordingData);
+        createdRecording = await Recording.create(recordingData);
         setLastRecordingId(createdRecording?.id || null);
       } catch (dbErr) {
-        console.warn("DB Save warning:", dbErr);
+        console.warn("DB Save Error:", dbErr);
       }
 
       setAnalysisProgress(100);
@@ -396,6 +398,7 @@ export default function ExercisePage() {
       setAnalysisPassed(passed);
       setMustRetry(!passed);
 
+      // تحميل التمرين التالي
       await loadNextExercise();
 
       if (passed) {
@@ -404,7 +407,7 @@ export default function ExercisePage() {
     } catch (err) {
       console.error("Submission error:", err);
       let msg = err.message;
-      if (msg.includes("uuid")) msg = "حدث خطأ تقني في حفظ البيانات. لكن نتيجتك ظهرت!";
+      if (msg.includes("uuid")) msg = "حدث خطأ تقني. لكن نتيجتك ظهرت!";
       setError(`تنبيه: ${msg}`);
       setIsSending(false);
       setIsAnalyzing(false);
@@ -413,27 +416,33 @@ export default function ExercisePage() {
 
   const loadNextExercise = async () => {
     try {
-      const dbExercises = await ExerciseEntity.list();
+      const dbExercises = await Exercise.list();
       const allExercises = [...dbExercises, ...staticExercises];
       
       if (!student || !exercise || allExercises.length === 0) return;
 
       const currentStage = parseInt(exercise.stage) || 1;
+      
+      // منطق اختيار التمرين التالي: نفس المرحلة (لم يحل بعد) أو المرحلة التالية
       const sameStageCandidates = allExercises.filter(ex => 
         (parseInt(ex.stage) || 1) === currentStage && ex.id !== exercise.id
       );
+
       const nextStageCandidates = allExercises.filter(ex => 
         (parseInt(ex.stage) || 1) === currentStage + 1
       );
 
       let nextEx = null;
+
       if (sameStageCandidates.length > 0) {
         nextEx = sameStageCandidates[Math.floor(Math.random() * sameStageCandidates.length)];
       } else if (nextStageCandidates.length > 0) {
         nextEx = nextStageCandidates[0];
         await Student.update(student.id, { current_stage: currentStage + 1 });
       }
+
       setNextExercise(nextEx);
+
     } catch (err) {
       console.error("Failed to load next exercise:", err);
     }
@@ -462,6 +471,7 @@ export default function ExercisePage() {
       if (quizAnswers[idx] === q.correct_index) correct++;
     });
     setQuizScore((correct / quizQuestions.length) * 100);
+    
     if (lastRecordingId) {
         try {
             await Recording.update(lastRecordingId, { 
@@ -485,6 +495,7 @@ export default function ExercisePage() {
     }
   };
 
+  // Error View
   if (error && !recordingSubmitted) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-red-50 p-4">
@@ -504,6 +515,7 @@ export default function ExercisePage() {
     );
   }
 
+  // Loading View
   if (!exercise || !student) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
