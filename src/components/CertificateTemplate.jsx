@@ -1,5 +1,3 @@
-// src/components/CertificateTemplate.jsx
-
 import React, { forwardRef } from "react";
 
 const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
@@ -9,9 +7,8 @@ const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
       <div
         ref={ref}
         id="certificate-print-node"
-        // أبعاد A4 Landscape بالبكسل (تقريباً 1123x794 عند 96 DPI)
+        // أبعاد A4 العرضي (Landscape)
         className="relative w-[1123px] h-[794px] text-slate-900 font-bold overflow-hidden"
-        // استخدام خط عربي أنيق
         style={{ direction: "rtl", fontFamily: "'Traditional Arabic', 'Arial', sans-serif" }}
       >
         {/* صورة الخلفية */}
@@ -28,9 +25,11 @@ const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
             <div 
                 className="absolute w-full text-center" 
                 style={{ 
-                    // ✅ التعديل الحاسم: تم رفع الاسم للأعلى ليكون في الفراغ المخصص
-                    // كانت 56% وهي منخفضة جداً، الآن 44.5% هي المكان الصحيح فوق السطر
-                    top: '44.5%', 
+                    // ⚠️ هذا الرقم (39%) هو المسؤول عن ارتفاع الاسم
+                    // كان 56% (منخفض جداً)، والآن جعلته 39% ليرتفع للأعلى فوق السطر
+                    // إذا أردت رفعه أكثر: قلل الرقم (مثلاً 35%)
+                    // إذا أردت إنزاله: زد الرقم (مثلاً 42%)
+                    top: '39%', 
                     left: '0', 
                     right: '0' 
                 }} 
@@ -39,7 +38,7 @@ const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
                     className="text-6xl text-black font-extrabold tracking-wide"
                     style={{ 
                         textShadow: "1px 1px 0px rgba(255,255,255,0.5)",
-                        lineHeight: "1" // منع تباعد الأسطر الزائد
+                        lineHeight: "1" 
                     }}
                 >
                     {studentName || "اسم الطالب"}
@@ -50,16 +49,19 @@ const CertificateTemplate = forwardRef(({ studentName, date }, ref) => {
             <div 
                 className="absolute" 
                 style={{ 
-                    // ✅ التعديل: ضبط المكان بدقة بجانب كلمة "التاريخ"
-                    bottom: '22%', 
-                    right: '24%', // تم التحريك لليمين أكثر ليقترب من كلمة "التاريخ"
+                    // ⚠️ التحكم في موقع التاريخ
+                    // bottom: الارتفاع من الأسفل (زد الرقم لرفعه عن السطر)
+                    bottom: '24%', 
+                    // right: المسافة من اليمين (زد الرقم لتحريكه نحو اليسار بعيداً عن كلمة التاريخ)
+                    right: '25%', 
                     textAlign: "right",
-                    width: '150px',
-                    fontSize: '1.2rem',
-                    color: '#333'
+                    width: '200px',
+                    fontSize: '1.3rem',
+                    color: '#000',
+                    fontWeight: 'bold'
                 }} 
             >
-                <p className="font-bold">
+                <p>
                     {date || "2026/02/07"}
                 </p>
             </div>
