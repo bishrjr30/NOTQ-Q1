@@ -1,8 +1,8 @@
 // src/api/entities.js
-console.log("✅ entities.js NEW loaded v3");
+console.log("✅ entities.js v4 loaded (Certificate support)");
 import { supabase } from "./supabaseClient";
 
-const ENTITIES_VERSION = "entities.js v3 (safe list args + safe order)";
+const ENTITIES_VERSION = "entities.js v4";
 
 /* =========================================================
    🧰 Helper عام للتعامل مع أخطاء Supabase
@@ -153,7 +153,7 @@ export const StudentGroup = createEntity("student_groups");
 export const SystemSetting = createEntity("system_settings");
 export const FamilyChallenge = createEntity("family_challenges");
 export const ClassAnnouncement = createEntity("class_announcements");
-export const Certificate = createEntity("certificates");
+export const Certificate = createEntity("certificates"); // ✅ الكيان الجديد
 
 /* =========================================================
    👤 Auth (Supabase)
@@ -195,9 +195,7 @@ export const User = {
 };
 
 /* =========================================================
-   🤖 InvokeLLM — عبر Vercel API
-   ✅ إصلاح: السيرفر يطلب messages (وليس prompt)
-   ✅ نحافظ على توافق الاستدعاءات القديمة التي ترسل prompt كنص
+   🤖 InvokeLLM
 ========================================================= */
 export async function InvokeLLM({
   prompt,
