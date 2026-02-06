@@ -11,8 +11,6 @@ import {
   ArrowLeft,
   Volume2,
   RotateCcw,
-  Send,
-  AlertTriangle,
   CheckCircle,
   Sparkles,
   Brain,
@@ -23,9 +21,9 @@ import {
   TrendingUp,
   ChevronRight,
   ThumbsUp,
-  ThumbsDown,
   Star,
-  Loader2 // أيقونة التحميل
+  Loader2,
+  AlertTriangle
 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -270,7 +268,7 @@ export default function ExercisePage() {
     setIsSending(true);
     setIsAnalyzing(true);
     setAnalysisProgress(5);
-    setStatusMessage("جارٍ تجهيز الملف..."); // رسالة أولية
+    setStatusMessage("جارٍ التجهيز..."); // رسالة أولية
     setError(null);
 
     try {
@@ -301,7 +299,7 @@ export default function ExercisePage() {
 
       // 2. تحويل الصوت لنص (Transcribe)
       setAnalysisProgress(40);
-      setStatusMessage("جارٍ تحويل الصوت إلى نص...");
+      setStatusMessage("جارٍ تحويل الصوت...");
 
       const audioFileForTranscribe = file;
       const transcribeForm = new FormData();
@@ -322,7 +320,7 @@ export default function ExercisePage() {
 
       // 3. تحليل الذكاء الاصطناعي (LLM)
       setAnalysisProgress(70);
-      setStatusMessage("المعلم الذكي يقوم بالتقييم...");
+      setStatusMessage("المعلم الذكي يصحح...");
 
       const expectedRaw = exercise.sentence || exercise.text || "";
       const expectedNorm = normalizeArabicText(expectedRaw);
@@ -343,7 +341,7 @@ export default function ExercisePage() {
          - إذا كان التسجيل صامتاً تماماً أو ضجيجاً فقط -> Score: 0, Status: silence
          - إذا قرأ نصاً مختلفاً كلياً عن الموضوع -> Score: 0, Status: wrong_text
 
-      2. **التقييم العادل (لأي محاولة قراءة):**
+      2. **التقييم العادل:**
          - **ممتاز (90-100):** قراءة صحيحة وواضحة.
          - **جيد جداً (75-89):** قراءة مفهومة مع أخطاء بسيطة.
          - **جيد/مقبول (50-74):** الطالب يحاول، نطق بعض الكلمات بشكل صحيح.
@@ -437,9 +435,9 @@ export default function ExercisePage() {
       setAnalysisPassed(passed);
       setMustRetry(!passed);
 
-      // ✅ منطق إصدار الشهادات
+      // ✅ منطق إصدار الشهادات المعدل (70% فما فوق)
       if (passed) {
-        if (scoreNum >= 90) {
+        if (scoreNum >= 70) {
            try {
              await Certificate.create({
                student_id: student.id,
@@ -453,13 +451,15 @@ export default function ExercisePage() {
            } catch(e) { console.error("Cert error", e); }
         }
 
+        // شهادة المرحلة
         try {
             const dbExercises = await ExerciseEntity.list();
             const allExercises = [...dbExercises, ...staticExercises];
             const allRecordings = await Recording.list();
-            const myPassedRecordings = allRecordings.filter(r => r.student_id === student.id && Number(r.score) > 0);
+            const myPassedRecordings = allRecordings.filter(r => r.student_id === student.id && Number(r.score) >= 70); // شرط النجاح 70
             const passedIds = myPassedRecordings.map(r => r.exercise_id);
-            if (!passedIds.includes(exercise.id)) passedIds.push(exercise.id);
+            // نضيف التمرين الحالي إذا نجح
+            if (scoreNum >= 70 && !passedIds.includes(exercise.id)) passedIds.push(exercise.id);
 
             const stageExs = allExercises.filter(ex => 
                 (parseInt(ex.stage) || 1) === (parseInt(exercise.stage) || 1) &&
@@ -754,6 +754,7 @@ export default function ExercisePage() {
                                 </div>
                              ) : (
                                 <div className="space-y-6">
+                                    {/* أزرار الإجراءات - "التمرين التالي" بارز جداً */}
                                     <div className="flex flex-col gap-4">
                                         {nextExercise && (
                                             <Button onClick={goToNextExercise} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-8 text-xl rounded-2xl shadow-xl transform transition-all hover:scale-105 hover:shadow-2xl">
@@ -770,6 +771,7 @@ export default function ExercisePage() {
                                         )}
                                     </div>
 
+                                    {/* قسم الاختبار الاختياري */}
                                     {showQuiz && (
                                         <div className="mt-8 text-right bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 animate-in slide-in-from-bottom-4">
                                             <h3 className="font-bold text-xl mb-4 text-slate-800 border-b pb-2">🧠 اختبار الفهم السريع</h3>
