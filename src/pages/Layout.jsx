@@ -27,7 +27,7 @@ const navigationItems = [
   },
   {
     title: "واجهة الطالب",
-    url: createPageUrl("StudentDashboard"), 
+    url: createPageUrl("StudentDashboard"),
     icon: GraduationCap,
   },
   {
@@ -49,58 +49,51 @@ const navigationItems = [
 
 export default function Layout({ children, currentPageName }) {
   const location = useLocation();
-  // Dark mode removed as per requirements - Light mode only
-
   const bgClass = "bg-gradient-to-br from-blue-50 via-white to-indigo-50 text-slate-900";
 
   return (
-    // تعديل 1: جعل السايد بار مغلقاً افتراضياً
+    // defaultOpen={false} يجعله مغلقاً في البداية (خاصة للديسكتوب)
     <SidebarProvider defaultOpen={false}>
       <div dir="rtl" className={`min-h-screen flex flex-col ${bgClass} relative`}>
-        {/* Mascot removed as requested */}
         <style>{`
-        :root {
-          --primary: 99 102 241;
-          --primary-foreground: 255 255 255;
-          --secondary: 139 92 246;
-          --secondary-foreground: 255 255 255;
-          --accent: 236 72 153;
-          --accent-foreground: 255 255 255;
-          --success: 34 197 94;
-          --warning: 251 146 60;
-        }
+          :root {
+            --primary: 99 102 241;
+            --primary-foreground: 255 255 255;
+            --secondary: 139 92 246;
+            --secondary-foreground: 255 255 255;
+            --accent: 236 72 153;
+            --accent-foreground: 255 255 255;
+            --success: 34 197 94;
+            --warning: 251 146 60;
+          }
+          * {
+            font-family: 'Cairo', 'Segoe UI', system-ui, -apple-system, sans-serif;
+          }
+          .arabic-text {
+            font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+            text-rendering: optimizeLegibility;
+            line-height: 1.8;
+          }
+          .glow-effect {
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+            transition: all 0.3s ease;
+          }
+          .glow-effect:hover {
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+          }
+        `}</style>
         
-        * {
-          font-family: 'Cairo', 'Segoe UI', system-ui, -apple-system, sans-serif;
-        }
-        
-        .arabic-text {
-          font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
-          text-rendering: optimizeLegibility;
-          line-height: 1.8;
-        }
-        
-        .glow-effect {
-          box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
-          transition: all 0.3s ease;
-        }
-        
-        .glow-effect:hover {
-          box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
-        }
-      `}</style>
-        
-        {/* Header with Centered Logo */}
-        {/* تعديل 2: إزالة sticky top-0 وجعله relative ليتحرك مع الصفحة */}
+        {/* Header (المستطيل البنفسجي) - يتحرك مع الصفحة (relative) */}
         <header className="bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600 text-white px-3 py-4 md:px-6 md:py-6 shadow-2xl relative z-50">
           <div className="max-w-7xl mx-auto">
-            {/* Mobile Sidebar Trigger */}
+            {/* زر القائمة للموبايل (الأربع شرطات) */}
             <div className="md:hidden flex justify-between items-center mb-2">
               <p className="text-xs text-blue-100 font-bold arabic-text">المدرسة الأمريكية للإبداع العلمي</p>
+              {/* هذا الزر هو الذي يفتح القائمة في الجوال */}
               <SidebarTrigger className="hover:bg-white/20 p-2 rounded-lg transition-colors duration-200" />
             </div>
 
-            {/* Centered Logo with Better Background */}
+            {/* اللوجو والعنوان */}
             <div className="flex flex-col items-center justify-center gap-3 md:gap-4 mb-2 md:mb-4">
               <div className="relative bg-gradient-to-br from-white via-blue-50 to-indigo-50 backdrop-blur-lg rounded-2xl md:rounded-3xl p-4 md:p-8 shadow-2xl border-2 md:border-4 border-white/40">
                 <img 
@@ -119,7 +112,7 @@ export default function Layout({ children, currentPageName }) {
               </div>
             </div>
             
-            {/* Teacher Attribution */}
+            {/* اسم المعلمة */}
             <div className="text-center">
               <p className="text-sm text-blue-100 arabic-text bg-white/20 rounded-lg px-4 py-2 inline-block backdrop-blur-sm">
                 إعداد المعلّمة: ديمة الرشدان 👩‍🏫
@@ -129,7 +122,14 @@ export default function Layout({ children, currentPageName }) {
         </header>
         
         <div className="flex w-full flex-1">
-          <Sidebar className="border-l border-indigo-200 hidden md:flex bg-white/70 backdrop-blur-md shadow-xl" side="right">
+          {/* تعديل هام: حذفنا hidden md:flex 
+              الآن المكون سيدير ظهوره بنفسه (يختفي في الجوال ويظهر كقائمة جانبية عند الضغط)
+          */}
+          <Sidebar 
+            className="border-l border-indigo-200 bg-white/95 backdrop-blur-md shadow-xl z-50" 
+            side="right" 
+            collapsible="offcanvas"
+          >
             <SidebarHeader className="border-b border-indigo-200 p-6">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -182,7 +182,7 @@ export default function Layout({ children, currentPageName }) {
               {children}
             </div>
             
-            {/* Footer with Better Logo Background */}
+            {/* الفوتر (Footer) */}
             <footer className="bg-gradient-to-r from-indigo-800 via-purple-800 to-pink-800 text-white py-10 shadow-2xl">
               <div className="max-w-7xl mx-auto px-6 text-center">
                 <div className="mb-6">
