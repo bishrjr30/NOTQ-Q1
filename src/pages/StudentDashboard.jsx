@@ -66,10 +66,10 @@ export default function StudentDashboard() {
   );
 
   const [challenges, setChallenges] = useState([]);
-  const [activeChallenge, setActiveChallenge] = useState(null);
-  const [challengeRecording, setChallengeRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [audioChunks, setAudioChunks] = useState([]);
+  // const [activeChallenge, setActiveChallenge] = useState(null); // Unused
+  // const [challengeRecording, setChallengeRecording] = useState(false); // Unused
+  // const [mediaRecorder, setMediaRecorder] = useState(null); // Unused
+  // const [audioChunks, setAudioChunks] = useState([]); // Unused
 
   const togglePersona = () => {
     const personas = ["calm", "strict", "fun"];
@@ -155,7 +155,7 @@ export default function StudentDashboard() {
         .slice(0, 7)
         .reverse()
         .map((rec, idx) => ({
-          name: `تمرين ${idx + 1}`,
+          name: `ت ${idx + 1}`, // اختصار الاسم للجوال
           score: rec.score || 0,
           date: new Date(rec.created_date).toLocaleDateString("ar-AE", {
             weekday: "short",
@@ -293,8 +293,9 @@ export default function StudentDashboard() {
   const infiniteStages = generateInfiniteStages();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 p-3 md:p-6">
-      <div className="max-w-7xl mx-auto">
+    // تعديل: إضافة overflow-x-hidden لمنع التمرير الأفقي غير المرغوب فيه
+    <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 p-3 md:p-6">
+      <div className="max-w-7xl mx-auto w-full">
         {/* Header with Gamification */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -317,7 +318,7 @@ export default function StudentDashboard() {
                   </h1>
 
                   {/* Access Code Display */}
-                  <div className="mt-4 md:mt-6 w-full max-w-md md:mx-0 bg-white rounded-xl md:rounded-2xl p-4 md:p-6 shadow-2xl border-2 md:border-4 border-yellow-400 text-center mx-auto">
+                  <div className="mt-4 md:mt-6 w-full max-w-md md:mx-0 bg-white rounded-xl md:rounded-2xl p-4 md:p-6 shadow-2xl border-2 md:border-4 border-yellow-400 text-center mx-auto md:mr-0">
                     <p className="text-indigo-900 font-bold text-sm md:text-lg arabic-text mb-2 md:mb-3">
                       🔑 كود ولي الأمر (Access Code)
                     </p>
@@ -335,7 +336,7 @@ export default function StudentDashboard() {
                       </p>
                     </div>
                     <p className="text-indigo-600 text-xs md:text-sm arabic-text font-semibold">
-                      انسخ هذا الكود وأعطه لوالديك للدخول ومتابعتك
+                      انسخ هذا الكود وأعطه لوالديك
                     </p>
                   </div>
 
@@ -392,7 +393,7 @@ export default function StudentDashboard() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="mb-8 grid md:grid-cols-2 gap-6"
+          className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6"
         >
           <Card className="border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-100">
             <CardHeader>
@@ -402,21 +403,21 @@ export default function StudentDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex justify-between items-center mb-4 bg-white p-3 rounded-lg shadow-sm">
-                <div className="text-right">
+              <div className="flex flex-col sm:flex-row justify-between items-center mb-4 bg-white p-3 rounded-lg shadow-sm gap-4 sm:gap-0">
+                <div className="text-center sm:text-right w-full sm:w-auto">
                   <p className="text-gray-500 text-xs arabic-text">الاسم</p>
                   <p className="font-bold text-indigo-900 arabic-text">
                     {student?.name}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="text-center sm:text-right w-full sm:w-auto">
                   <p className="text-gray-500 text-xs arabic-text">الصف</p>
                   <p className="font-bold text-indigo-900 arabic-text">
-                    {student?.grade}
+                    {student?.grade || "غير محدد"}
                   </p>
                 </div>
-                <div className="text-center">
-                  <div className="flex text-yellow-400">
+                <div className="text-center w-full sm:w-auto">
+                  <div className="flex justify-center sm:justify-start text-yellow-400">
                     {[...Array(5)].map((_, i) => (
                       <Star
                         key={i}
@@ -432,7 +433,7 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-center">
                   <p className="text-green-800 text-sm font-bold mb-2 arabic-text">
                     🌟 حروف أتقنتها
@@ -531,15 +532,15 @@ export default function StudentDashboard() {
           </div>
         </motion.div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards - Grid System Updated for Mobile */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-8"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 mb-8"
         >
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Card className="border-0 shadow-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+            <Card className="border-0 shadow-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white h-full">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -557,7 +558,7 @@ export default function StudentDashboard() {
           </motion.div>
 
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Card className="border-0 shadow-xl bg-gradient-to-br from-green-500 to-green-600 text-white">
+            <Card className="border-0 shadow-xl bg-gradient-to-br from-green-500 to-green-600 text-white h-full">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -575,7 +576,7 @@ export default function StudentDashboard() {
           </motion.div>
 
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Card className="border-0 shadow-xl bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+            <Card className="border-0 shadow-xl bg-gradient-to-br from-purple-500 to-purple-600 text-white h-full">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -593,14 +594,14 @@ export default function StudentDashboard() {
           </motion.div>
 
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Card className="border-0 shadow-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white">
+            <Card className="border-0 shadow-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white h-full">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-orange-100 text-sm arabic-text">
                       الشارة التالية
                     </p>
-                    <p className="text-lg font-bold">{getNextBadge()}</p>
+                    <p className="text-lg font-bold truncate max-w-[100px]">{getNextBadge()}</p>
                   </div>
                   <Gift className="w-12 h-12 text-orange-200" />
                 </div>
@@ -608,34 +609,17 @@ export default function StudentDashboard() {
             </Card>
           </motion.div>
 
-          <Link to={createPageUrl("StudentLessons")} className="block">
+          <Link to={createPageUrl("StudentLessons")} className="block h-full">
             <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="h-full"
             >
               <Card className="border-0 shadow-xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white h-full cursor-pointer">
-                <CardContent className="p-6 flex flex-col justify-center items-center h-full">
+                <CardContent className="p-6 flex flex-col justify-center items-center h-full text-center">
                   <BookOpen className="w-12 h-12 text-indigo-200 mb-2" />
-                  <p className="text-indigo-100 text-center arabic-text font-semibold">
+                  <p className="text-indigo-100 arabic-text font-semibold">
                     شروحات المعلم
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Link>
-
-          <Link to={createPageUrl("Certificates")} className="block">
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="h-full"
-            >
-              <Card className="border-0 shadow-xl bg-gradient-to-br from-teal-500 to-teal-600 text-white h-full cursor-pointer">
-                <CardContent className="p-6 flex flex-col justify-center items-center h-full">
-                  <Medal className="w-12 h-12 text-teal-200 mb-2" />
-                  <p className="text-teal-100 text-center arabic-text font-semibold">
-                    الشهادات والإنجازات
                   </p>
                 </CardContent>
               </Card>
@@ -791,7 +775,7 @@ export default function StudentDashboard() {
         </motion.div>
 
         {/* Infinite Journey Map & Skills */}
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
@@ -806,7 +790,7 @@ export default function StudentDashboard() {
                   🗺️ خريطة رحلة النطق
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-8">
+              <CardContent className="p-4 md:p-8">
                 <div className="relative">
                   <div className="absolute left-1/2 top-0 bottom-0 w-2 bg-indigo-100 -ml-1 rounded-full hidden md:block"></div>
 
@@ -821,10 +805,10 @@ export default function StudentDashboard() {
                           index % 2 === 0
                             ? "md:flex-row"
                             : "md:flex-row-reverse"
-                        } flex-col gap-8`}
+                        } flex-col gap-4 md:gap-8`}
                       >
                         <div
-                          className={`z-10 w-24 h-24 rounded-full flex items-center justify-center border-8 shadow-xl transition-all duration-500 ${
+                          className={`z-10 w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center border-8 shadow-xl transition-all duration-500 ${
                             stage.isCompleted
                               ? "bg-green-500 border-green-200 scale-100"
                               : stage.isUnlocked
@@ -832,7 +816,7 @@ export default function StudentDashboard() {
                               : "bg-gray-200 border-gray-300 grayscale"
                           }`}
                         >
-                          <span className="text-3xl">
+                          <span className="text-2xl md:text-3xl">
                             {stage.isCompleted
                               ? "⭐"
                               : stage.isUnlocked
@@ -841,7 +825,7 @@ export default function StudentDashboard() {
                           </span>
                         </div>
 
-                        <div className="md:w-5/12 w-full">
+                        <div className="w-full md:w-5/12">
                           <Card
                             className={`border-2 transform transition-all hover:scale-105 ${
                               stage.isUnlocked
@@ -885,7 +869,7 @@ export default function StudentDashboard() {
             </Card>
 
             {/* Skill Cards */}
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3 mb-4">
