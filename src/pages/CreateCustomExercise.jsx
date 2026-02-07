@@ -336,10 +336,8 @@ export default function CreateCustomExercisePage() {
                         min={30}
                         max={200}
                         step={10}
-                        className="flex-1 cursor-pointer"
-                        thumbClassName="bg-orange-600 border-4 border-white shadow-xl w-6 h-6 hover:scale-110 transition-transform"
-                        trackClassName="bg-orange-200 h-2"
-                        rangeClassName="bg-orange-500 h-2"
+                        // 👇 التعديل هنا: أضفنا أكواد خاصة لتلوين الشريط بالقوة
+                        className="flex-1 cursor-pointer [&>span:first-child]:h-3 [&>span:first-child]:bg-orange-200 [&>span:first-child_span]:bg-orange-600 [&>span:last-child]:bg-white [&>span:last-child]:border-4 [&>span:last-child]:border-orange-600 [&>span:last-child]:w-6 [&>span:last-child]:h-6"
                       />
                       <span className="font-black text-3xl text-orange-600 bg-white px-4 py-2 rounded-xl min-w-[80px] text-center shadow-md border border-orange-200">
                         {wordCount[0]}
