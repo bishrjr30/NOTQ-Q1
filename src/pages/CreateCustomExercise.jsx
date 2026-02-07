@@ -22,17 +22,22 @@ import {
   FileText,
   AlertCircle,
   BookOpen,
-  Settings
+  Settings,
+  Lightbulb,
+  GraduationCap,
+  Brain,
+  Target,
+  CheckCircle2
 } from "lucide-react";
 import { motion } from "framer-motion";
 
 const TEXT_TYPES = [
-  { value: "علمي", label: "نص علمي 🔬", description: "معلومات علمية مبسطة" },
-  { value: "أدبي", label: "نص أدبي 📚", description: "قصة أو نص أدبي جميل" },
-  { value: "وصفي", label: "نص وصفي 🎨", description: "وصف لمكان أو شيء" },
-  { value: "حواري", label: "نص حواري 💬", description: "حوار بين شخصيات" },
-  { value: "تاريخي", label: "نص تاريخي 🏛️", description: "حدث أو شخصية تاريخية" },
-  { value: "ديني", label: "نص ديني 📿", description: "حديث أو قصة دينية" },
+  { value: "علمي", label: "نص علمي 🔬", description: "معلومات علمية مبسطة وحقائق" },
+  { value: "أدبي", label: "نص أدبي 📚", description: "قصة قصيرة أو نص نثري جميل" },
+  { value: "وصفي", label: "نص وصفي 🎨", description: "وصف دقيق لمكان أو شيء" },
+  { value: "حواري", label: "نص حواري 💬", description: "حوار متبادل بين شخصيات" },
+  { value: "تاريخي", label: "نص تاريخي 🏛️", description: "سرد لحدث أو شخصية تاريخية" },
+  { value: "ديني", label: "نص ديني 📿", description: "حديث شريف أو قصة دينية" },
   {
     value: "نص خاص",
     label: "نص من اختيارك ✍️",
@@ -167,7 +172,6 @@ export default function CreateCustomExercisePage() {
       className="min-h-screen bg-gradient-to-br from-orange-50 via-pink-50 to-purple-50 p-4 md:p-8"
       dir="rtl"
     >
-      {/* 🟢 توسيع الحاوية لتملأ الشاشة في اللابتوب (max-w-7xl) */}
       <div className="max-w-7xl mx-auto w-full">
         
         {/* Header */}
@@ -188,32 +192,33 @@ export default function CreateCustomExercisePage() {
             <div>
               <h1 className="text-3xl md:text-4xl font-black bg-gradient-to-r from-orange-600 to-pink-600 bg-clip-text text-transparent arabic-text flex items-center gap-3">
                 <Wand2 className="text-orange-600 w-8 h-8 md:w-10 md:h-10" />
-                تحدي إضافي
+                تحدي إضافي (مخصص)
               </h1>
               <p className="text-gray-500 arabic-text text-base md:text-lg mt-1">
-                صمم تمرينك الخاص واختبر قدراتك!
+                أنت المؤلف والقارئ! صمم تمرينك الخاص واختبر قدراتك في النطق.
               </p>
             </div>
           </div>
         </motion.div>
 
+        {/* Main Tool Section */}
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
+          className="mb-16"
         >
           <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur-sm overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-orange-500 to-pink-600 text-white p-6">
               <CardTitle className="arabic-text text-xl md:text-2xl flex items-center gap-2">
                 <Settings className="w-6 h-6" />
-                إعدادات التمرين
+                إعدادات التمرين الجديد
               </CardTitle>
             </CardHeader>
             
             <CardContent className="p-6 md:p-8">
-              {/* 🟢 تقسيم الشاشة إلى قسمين في اللابتوب (Grid) */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 
-                {/* العمود الأيمن: اختيار نوع النص (يأخذ 5 أجزاء من 12) */}
+                {/* Right Column: Text Types (5/12) */}
                 <div className="lg:col-span-5 space-y-4">
                   <Label className="arabic-text text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
                     <BookOpen className="w-5 h-5 text-orange-600" />
@@ -238,11 +243,11 @@ export default function CreateCustomExercisePage() {
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl ${
                              textType === type.value ? "bg-white shadow-sm" : "bg-slate-100"
                           }`}>
-                            {type.label.split(" ").pop()} {/* استخراج الإيموجي */}
+                            {type.label.split(" ").pop()} 
                           </div>
                           <div>
                             <h3 className={`font-bold arabic-text ${textType === type.value ? "text-orange-900" : "text-gray-700"}`}>
-                              {type.label.replace(/ .*/,'')} {/* استخراج الكلمة الأولى */}
+                              {type.label.replace(/ .*/,'')} 
                             </h3>
                             <p className="text-xs text-gray-500 arabic-text">
                               {type.description}
@@ -259,26 +264,24 @@ export default function CreateCustomExercisePage() {
                   </div>
                 </div>
 
-                {/* فاصل عمودي في الشاشات الكبيرة */}
+                {/* Vertical Divider */}
                 <div className="hidden lg:block w-px bg-slate-200 mx-auto"></div>
 
-                {/* العمود الأيسر: الإعدادات والتوليد (يأخذ 6 أجزاء من 12) */}
+                {/* Left Column: Settings (6/12) */}
                 <div className="lg:col-span-6 space-y-8">
                   
-                  {/* قسم ضمان الجودة */}
                   <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3 shadow-sm">
                     <AlertCircle className="w-5 h-5 text-blue-600 mt-1 flex-shrink-0" />
                     <div>
                       <h3 className="font-bold text-blue-900 arabic-text text-sm mb-1">
-                        ✨ ضمان جودة المحتوى
+                        ✨ ميزة المصحح التلقائي
                       </h3>
                       <p className="text-xs text-blue-700 arabic-text leading-relaxed opacity-90">
-                        سواء اخترت نصاً جاهزاً أو كتبت نصك الخاص، سيقوم المعلم الذكي بمراجعته وتصحيح التشكيل والإعراب تلقائياً.
+                        يقوم النظام تلقائياً بضبط التشكيل ومراجعة القواعد النحوية لأي نص تختاره أو تكتبه، لضمان تجربة تعلم خالية من الأخطاء.
                       </p>
                     </div>
                   </div>
 
-                  {/* منطقة الإدخال المشروط */}
                   <div className="space-y-6">
                     {textType === "نص خاص" ? (
                       <motion.div
@@ -288,13 +291,13 @@ export default function CreateCustomExercisePage() {
                       >
                         <Label className="arabic-text text-lg font-bold text-gray-800 flex items-center gap-2">
                           <FileText className="w-5 h-5 text-orange-600" />
-                          2. اكتب نصك هنا
+                          2. مساحة الكتابة الحرة
                         </Label>
                         <Textarea
-                          placeholder="الصق النص هنا أو اكتبه..."
+                          placeholder="اكتب هنا النص الذي تريد التدرب عليه (مثلاً: قطعة من كتاب مدرسي، قصة مفضلة)..."
                           value={customText}
                           onChange={(e) => setCustomText(e.target.value)}
-                          className="arabic-text min-h-[200px] text-lg p-4 border-2 border-orange-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-100 transition-all bg-slate-50"
+                          className="arabic-text min-h-[200px] text-lg p-4 border-2 border-orange-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-100 transition-all bg-slate-50 leading-loose"
                         />
                       </motion.div>
                     ) : (
@@ -306,18 +309,17 @@ export default function CreateCustomExercisePage() {
                         >
                           <Label className="arabic-text text-lg font-bold text-gray-800 flex items-center gap-2">
                             <Settings className="w-5 h-5 text-orange-600" />
-                            2. خصائص النص
+                            2. تخصيص الطول والمستوى
                           </Label>
                           
                           <div className="bg-orange-50/50 p-6 rounded-2xl border border-orange-100">
                             <div className="flex justify-between items-center mb-6">
-                              <span className="text-sm font-bold text-gray-600 arabic-text">طول النص</span>
+                              <span className="text-sm font-bold text-gray-600 arabic-text">عدد الكلمات التقريبي</span>
                               <span className="font-black text-2xl text-orange-600 bg-white px-4 py-1 rounded-lg border border-orange-200 shadow-sm">
                                 {wordCount[0]} <span className="text-xs font-normal text-gray-400">كلمة</span>
                               </span>
                             </div>
 
-                            {/* 🟢 إصلاح لون الشريط (Slider) */}
                             <Slider
                               value={wordCount}
                               onValueChange={setWordCount}
@@ -337,14 +339,12 @@ export default function CreateCustomExercisePage() {
                       )
                     )}
 
-                    {/* عرض رسائل الخطأ */}
                     {error && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-bold flex items-center gap-2">
                         <AlertCircle className="w-4 h-4" /> {error}
                       </motion.div>
                     )}
 
-                    {/* زر الإنشاء */}
                     <div className="pt-4">
                       <Button
                         onClick={handleGenerate}
@@ -376,6 +376,102 @@ export default function CreateCustomExercisePage() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* ✅ قسم المحتوى التعليمي الإضافي (لتحسين تجربة المستخدم و SEO) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            
+            {/* Card 1 */}
+            <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white group">
+                <CardHeader>
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <Target className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <CardTitle className="arabic-text text-lg font-bold text-slate-800">كيف تختار النص المناسب؟</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-slate-600 arabic-text text-sm leading-relaxed mb-4">
+                        اختيار النص يعتمد على هدفك التعليمي. إذا كنت مبتدئاً، ننصحك بالبدء بـ <strong>النصوص القصصية</strong> لأنها تستخدم لغة سهلة وسردية ممتعة.
+                    </p>
+                    <ul className="space-y-2">
+                        <li className="text-xs text-slate-500 flex items-center gap-2">
+                            <CheckCircle2 className="w-3 h-3 text-green-500" /> للمبتدئين: قصص، حوارات.
+                        </li>
+                        <li className="text-xs text-slate-500 flex items-center gap-2">
+                            <CheckCircle2 className="w-3 h-3 text-green-500" /> للمتوسطين: نصوص وصفية، دينية.
+                        </li>
+                        <li className="text-xs text-slate-500 flex items-center gap-2">
+                            <CheckCircle2 className="w-3 h-3 text-green-500" /> للمتقدمين: نصوص علمية، تاريخية.
+                        </li>
+                    </ul>
+                </CardContent>
+            </Card>
+
+            {/* Card 2 */}
+            <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white group">
+                <CardHeader>
+                    <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <Brain className="w-6 h-6 text-purple-600" />
+                    </div>
+                    <CardTitle className="arabic-text text-lg font-bold text-slate-800">فوائد التنويع في القراءة</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-slate-600 arabic-text text-sm leading-relaxed">
+                        لا تكتفِ بنوع واحد من النصوص! التنويع بين النصوص العلمية والأدبية يوسع مداركك اللغوية.
+                        <br/><br/>
+                        <strong>النص العلمي</strong> يعلمك الدقة والمصطلحات التقنية، بينما <strong>النص الأدبي</strong> ينمي ذائقتك البلاغية ويحسن أسلوبك في التعبير.
+                    </p>
+                </CardContent>
+            </Card>
+
+            {/* Card 3 */}
+            <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white group">
+                <CardHeader>
+                    <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <Lightbulb className="w-6 h-6 text-yellow-600" />
+                    </div>
+                    <CardTitle className="arabic-text text-lg font-bold text-slate-800">نصيحة المعلم الذكي</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-slate-600 arabic-text text-sm leading-relaxed mb-3">
+                        عند إنشاء تمرين مخصص، حاول أن تختار كلمات تحتوي على الحروف التي تواجه صعوبة في نطقها.
+                    </p>
+                    <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-xs text-yellow-800 font-medium">
+                        "التدريب المستمر على نقاط الضعف هو أسرع طريق للإتقان."
+                    </div>
+                </CardContent>
+            </Card>
+
+        </div>
+
+        {/* SEO & AdSense Content Block */}
+        <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 mb-8">
+            <h2 className="text-2xl font-bold text-slate-900 arabic-text mb-4">لماذا نستخدم الذكاء الاصطناعي في تعليم القراءة؟</h2>
+            <div className="prose prose-slate max-w-none arabic-text text-slate-600 leading-loose">
+                <p>
+                    تعتبر القراءة الجهرية من أهم المهارات التي يجب على الطالب إتقانها، ولكن المشكلة تكمن غالباً في غياب "الموجه الفوري". 
+                    هنا يأتي دور التكنولوجيا. في منصة <strong>نطق</strong>، نستخدم نماذج ذكاء اصطناعي متطورة (NLP & Speech Recognition) لتمكين الطالب من:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div className="flex gap-3">
+                        <div className="bg-green-100 w-2 h-full rounded-full"></div>
+                        <p>الحصول على تغذية راجعة فورية (Instant Feedback) بدلاً من انتظار المعلم.</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <div className="bg-green-100 w-2 h-full rounded-full"></div>
+                        <p>التدرب في بيئة آمنة وخالية من الحرج، مما يعزز الثقة بالنفس.</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <div className="bg-green-100 w-2 h-full rounded-full"></div>
+                        <p>تخصيص المحتوى التعليمي ليناسب مستوى الطالب واهتماماته الشخصية.</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <div className="bg-green-100 w-2 h-full rounded-full"></div>
+                        <p>متابعة التطور الزمني للأداء من خلال لوحات تحكم بيانية دقيقة.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
       </div>
     </div>
   );
