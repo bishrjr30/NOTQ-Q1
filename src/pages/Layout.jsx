@@ -87,7 +87,6 @@ export default function Layout({ children, currentPageName }) {
         `}</style>
         
         {/* Header (المستطيل البنفسجي المصغر) */}
-        {/* تم تقليل الـ padding (py-2) لجعله أصغر */}
         <header className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 text-white px-4 py-2 shadow-xl relative z-40">
           <div className="max-w-7xl mx-auto">
             {/* الشريط العلوي: زر القائمة + اسم المدرسة */}
@@ -133,10 +132,7 @@ export default function Layout({ children, currentPageName }) {
         
         <div className="flex w-full flex-1 relative">
           
-          {/* ✅ تعديل السايد بار: 
-              1. bg-white: لون أبيض صلب (ليس شفاف) لحل مشكلة الجوال
-              2. z-50: يظهر فوق كل شيء
-          */}
+          {/* ✅ السايد بار */}
           <Sidebar 
             className="border-l border-gray-200 bg-white shadow-2xl z-50" 
             side="right" 
@@ -193,39 +189,43 @@ export default function Layout({ children, currentPageName }) {
           </Sidebar>
 
           <main className="flex-1 flex flex-col overflow-hidden w-full">
-            <div className="flex-1 overflow-auto w-full">
+            <div className="flex-1 overflow-auto w-full p-0">
               {children}
             </div>
             
-            {/* الفوتر المصغر (Footer) */}
-            <footer className="bg-slate-900 text-white py-4 mt-auto shadow-inner">
-              <div className="max-w-7xl mx-auto px-6 text-center flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
+            {/* === Footer المصغر مع روابط AdSense الجديدة === */}
+            <footer className="bg-slate-900 text-white py-6 mt-auto shadow-inner text-xs">
+              <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
                 
-                {/* شعار صغير في الفوتر */}
-                <div className="flex items-center gap-3">
-                   <div className="bg-white p-1 rounded-lg">
+                <div className="flex items-center gap-2">
+                   <div className="bg-white p-0.5 rounded">
                       <img 
                         src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68b01fdf7ff5f03db59e7e33/48d985d52_-Screenshot_20251114-193446_Brave1_20251114_193545_0000.png" 
                         alt="Logo" 
-                        className="h-8 w-auto object-contain"
+                        className="h-6 w-auto object-contain"
                       />
                    </div>
-                   <div className="text-right hidden md:block">
-                      <p className="text-xs font-bold text-white arabic-text">المدرسة الأمريكية</p>
-                      <p className="text-[10px] text-slate-400 arabic-text">للإبداع العلمي</p>
-                   </div>
+                   <span className="text-slate-300 font-bold arabic-text">المدرسة الأمريكية للإبداع العلمي</span>
                 </div>
 
-                <div className="text-center">
-                  <p className="text-xs text-slate-300 arabic-text">
-                    جميع الحقوق محفوظة © 2025/2026
-                  </p>
+                {/* ✅ روابط AdSense الضرورية */}
+                <div className="flex flex-wrap justify-center gap-4 md:gap-6 text-slate-400 arabic-text font-medium">
+                    <Link to={createPageUrl("Blog")} className="hover:text-white transition-colors hover:underline decoration-indigo-500 decoration-2 underline-offset-4">
+                        المدونة التعليمية
+                    </Link>
+                    <Link to={createPageUrl("AboutUs")} className="hover:text-white transition-colors hover:underline decoration-indigo-500 decoration-2 underline-offset-4">
+                        من نحن
+                    </Link>
+                    <Link to={createPageUrl("ContactUs")} className="hover:text-white transition-colors hover:underline decoration-indigo-500 decoration-2 underline-offset-4">
+                        اتصل بنا
+                    </Link>
+                    <Link to={createPageUrl("privacy")} className="hover:text-white transition-colors hover:underline decoration-indigo-500 decoration-2 underline-offset-4">
+                        سياسة الخصوصية
+                    </Link>
                 </div>
 
-                <div className="text-center md:text-left">
-                  <p className="text-[10px] text-slate-500 arabic-text">
-                    ند الشبا - الإمارات العربية المتحدة 🇦🇪
-                  </p>
+                <div className="text-slate-500 text-center md:text-left arabic-text">
+                  جميع الحقوق محفوظة © 2026
                 </div>
               </div>
             </footer>
