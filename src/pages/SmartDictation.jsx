@@ -34,71 +34,72 @@ export default function SmartDictation() {
   const [result, setResult] = useState(null);
   const [student, setStudent] = useState(null);
   
-  // تخزين الأصوات المتاحة
-  const [availableVoices, setAvailableVoices] = useState([]);
+  // مرجع لمشغل الصوت
+  const audioRef = useRef(null);
 
-  // تحميل البيانات والأصوات
+  // تحميل البيانات الأولية
   useEffect(() => {
     const init = async () => {
-      // 1. التحقق من الطالب
       const storedId = localStorage.getItem("studentId");
       if (!storedId) { navigate(createPageUrl("StudentOnboarding")); return; }
       const s = await Student.get(storedId);
       setStudent(s);
 
-      // 2. جلب التمارين
       const { data } = await supabase.from('dictation_exercises').select('*');
       if (data) setExercises(data);
-
-      // 3. تحميل الأصوات الذكية من المتصفح
-      const loadVoices = () => {
-        const voices = window.speechSynthesis.getVoices();
-        // تصفية الأصوات العربية فقط
-        const arabicVoices = voices.filter(v => v.lang.includes('ar'));
-        setAvailableVoices(arabicVoices);
-      };
-
-      loadVoices();
-      // بعض المتصفحات تحتاج وقت لتحميل الأصوات
-      window.speechSynthesis.onvoiceschanged = loadVoices;
     };
     init();
   }, [navigate]);
 
-  // ✅ دالة تشغيل الصوت الذكية (بدون سيرفر)
-  const playDictation = () => {
+  // ✅ دالة تشغيل الصوت (تتصل بسيرفرنا الخاص للحصول على صوت نقي)
+  const playDictation = async () => {
     if (!currentExercise) return;
     
-    // إيقاف أي صوت سابق
-    window.speechSynthesis.cancel();
-
+    if (isPlaying) return; // منع التكرار
     setIsPlaying(true);
 
-    const utterance = new SpeechSynthesisUtterance(currentExercise.text_content);
-    utterance.lang = 'ar-SA'; // لغة عربية
-    utterance.rate = 0.85; // سرعة طبيعية للإملاء
+    try {
+      // 1. الاتصال بالسيرفر المحلي (server.js) عبر البروكسي
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: currentExercise.text_content }),
+      });
 
-    // 💡 السحر هنا: محاولة اختيار أفضل صوت متاح (Google أو Microsoft)
-    if (availableVoices.length > 0) {
-        // نفضل صوت "Google" أو "Microsoft" لأنهما الأفضل جودة
-        const bestVoice = availableVoices.find(v => v.name.includes("Google") || v.name.includes("Microsoft")) 
-                          || availableVoices[0];
-        if (bestVoice) {
-            utterance.voice = bestVoice;
-        }
+      if (!response.ok) throw new Error("فشل الاتصال بسيرفر الصوت");
+
+      // 2. تحويل الاستجابة إلى ملف صوتي (MP3)
+      const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      
+      // إيقاف أي صوت سابق إن وجد
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+
+      audioRef.current = new Audio(audioUrl);
+      
+      // 3. تشغيل الصوت
+      audioRef.current.play().catch(e => {
+          console.error("Playback failed:", e);
+          setIsPlaying(false);
+          alert("المتصفح منع التشغيل التلقائي. اضغط مرة أخرى.");
+      });
+
+      audioRef.current.onended = () => {
+        setIsPlaying(false);
+      };
+
+      audioRef.current.onerror = () => {
+        setIsPlaying(false);
+        alert("حدث خطأ أثناء تشغيل الملف الصوتي.");
+      };
+
+    } catch (error) {
+      console.error("Server Error:", error);
+      alert("⚠️ تأكد من أنك قمت تشغيل ملف server.js (اكتب node server.js في التيرمينال)");
+      setIsPlaying(false);
     }
-
-    utterance.onend = () => {
-      setIsPlaying(false);
-    };
-
-    utterance.onerror = (e) => {
-      console.error("Speech Error:", e);
-      setIsPlaying(false);
-      alert("تعذر تشغيل الصوت. تأكد من رفع صوت الجهاز.");
-    };
-
-    window.speechSynthesis.speak(utterance);
   };
 
   // إرسال الإجابة للتحليل
@@ -125,7 +126,7 @@ export default function SmartDictation() {
           "mistakes": [
             { "word_written": "الكلمة الخطأ", "correct_word": "الصواب", "rule": "شرح القاعدة" }
           ],
-          "feedback": "تعليق عام"
+          "feedback": "تعليق عام مشجع"
         }
       `;
 
@@ -175,8 +176,10 @@ export default function SmartDictation() {
   const resetExercise = () => {
     setResult(null);
     setStudentInput("");
-    window.speechSynthesis.cancel();
-    setIsPlaying(false);
+    if (audioRef.current) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+    }
   };
 
   return (
@@ -224,16 +227,14 @@ export default function SmartDictation() {
                   <Button 
                     onClick={playDictation} 
                     disabled={isPlaying}
-                    className={`h-24 w-24 rounded-full shadow-xl text-xl transition-all ${isPlaying ? "bg-green-500 hover:bg-green-600 animate-pulse" : "bg-indigo-600 hover:bg-indigo-700 hover:scale-105"}`}
+                    className={`h-24 w-24 rounded-full shadow-xl text-xl transition-all ${isPlaying ? "bg-slate-300 cursor-wait" : "bg-indigo-600 hover:bg-indigo-700 hover:scale-105"}`}
                   >
-                    {isPlaying ? <Volume2 className="h-10 w-10 animate-bounce" /> : <Play className="h-10 w-10" />}
+                    {isPlaying ? <Loader2 className="h-10 w-10 animate-spin text-indigo-700" /> : <Volume2 className="h-10 w-10" />}
                   </Button>
                   <p className="mt-4 text-slate-600 font-bold">
-                    {isPlaying ? "استمع جيداً..." : "اضغط للاستماع للجملة 🎧"}
+                    {isPlaying ? "جاري تحميل الصوت..." : "اضغط للاستماع للجملة 🎧"}
                   </p>
-                  <p className="text-xs text-slate-400">
-                    {availableVoices.length > 0 ? "صوت ذكي عالي الجودة" : "جاري تحميل الأصوات..."}
-                  </p>
+                  <p className="text-xs text-slate-400">صوت عربي أصيل (Google HQ)</p>
                 </div>
 
                 {/* منطقة الكتابة */}
@@ -273,39 +274,4 @@ export default function SmartDictation() {
                         </div>
 
                         {/* جدول الأخطاء */}
-                        {result.mistakes && result.mistakes.length > 0 ? (
-                            <div className="space-y-3">
-                                <h4 className="font-bold text-red-600 flex items-center gap-2"><AlertTriangle className="h-5 w-5"/> أخطاء تحتاج للانتباه:</h4>
-                                {result.mistakes.map((m, idx) => (
-                                    <div key={idx} className="flex flex-col sm:flex-row gap-4 p-3 bg-red-50 border border-red-100 rounded-lg items-start sm:items-center">
-                                        <div className="flex items-center gap-2 text-lg">
-                                            <span className="line-through text-red-500 decoration-2">{m.word_written}</span>
-                                            <span className="text-slate-400">←</span>
-                                            <span className="text-green-600 font-bold">{m.correct_word}</span>
-                                        </div>
-                                        <div className="text-sm text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200">
-                                            💡 {m.rule}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-green-600 font-bold flex items-center gap-2 justify-center py-4">
-                                <CheckCircle className="h-6 w-6" /> إملاء ممتاز! لا توجد أخطاء.
-                            </div>
-                        )}
-
-                        <Button onClick={resetExercise} variant="outline" className="w-full">
-                            <RotateCcw className="ml-2 h-4 w-4" /> محاولة مرة أخرى
-                        </Button>
-                    </div>
-                )}
-
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+                        {result.mistakes
