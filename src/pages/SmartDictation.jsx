@@ -1,6 +1,6 @@
 // src/pages/SmartDictation.jsx
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,15 +25,19 @@ import { Student } from "@/api/entities";
 export default function SmartDictation() {
   const navigate = useNavigate();
   
+  // States
   const [exercises, setExercises] = useState([]);
   const [currentExercise, setCurrentExercise] = useState(null);
   const [studentInput, setStudentInput] = useState("");
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false); // حالة تحميل وتشغيل الصوت
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
   const [student, setStudent] = useState(null);
+  
+  // مرجع لمشغل الصوت
+  const audioRef = useRef(null);
 
-  // تحميل البيانات
+  // تحميل البيانات الأولية
   useEffect(() => {
     const init = async () => {
       const storedId = localStorage.getItem("studentId");
@@ -41,24 +45,62 @@ export default function SmartDictation() {
       const s = await Student.get(storedId);
       setStudent(s);
 
+      // جلب التمارين من قاعدة البيانات
       const { data } = await supabase.from('dictation_exercises').select('*');
       if (data) setExercises(data);
     };
     init();
-  }, []);
+  }, [navigate]);
 
-  // تشغيل الصوت (النص إلى كلام)
-  const playDictation = () => {
+  // ✅ دالة تشغيل الصوت (تتصل بالخلفية لجلب صوت gTTS)
+  const playDictation = async () => {
     if (!currentExercise) return;
+    
+    // منع التشغيل المتكرر
+    if (isPlaying) return;
+
     setIsPlaying(true);
-    
-    // استخدام SpeechSynthesis المدمج في المتصفح
-    const utterance = new SpeechSynthesisUtterance(currentExercise.text_content);
-    utterance.lang = 'ar-SA'; // لغة عربية
-    utterance.rate = 0.8; // سرعة أبطأ قليلاً لتسهيل الكتابة
-    
-    utterance.onend = () => setIsPlaying(false);
-    window.speechSynthesis.speak(utterance);
+
+    try {
+      // 1. طلب الملف الصوتي من السيرفر (api/tts.js)
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: currentExercise.text_content }),
+      });
+
+      if (!response.ok) throw new Error("فشل في جلب الصوت");
+
+      // 2. تحويل الاستجابة إلى ملف صوتي قابل للتشغيل
+      const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      
+      // إيقاف أي صوت سابق
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+
+      audioRef.current = new Audio(audioUrl);
+      
+      // 3. تشغيل الصوت
+      audioRef.current.play();
+
+      // عند انتهاء الصوت، نوقف حالة التحميل/التشغيل
+      audioRef.current.onended = () => {
+        setIsPlaying(false);
+      };
+
+      // في حال حدوث خطأ أثناء التشغيل
+      audioRef.current.onerror = () => {
+        setIsPlaying(false);
+        alert("حدث خطأ أثناء تشغيل الملف الصوتي.");
+      };
+
+    } catch (error) {
+      console.error("Audio Playback Error:", error);
+      alert("تعذر تحميل الصوت. تأكد من تشغيل السيرفر ومن إضافة مكتبة gtts.");
+      setIsPlaying(false);
+    }
   };
 
   // إرسال الإجابة للتحليل
@@ -69,7 +111,6 @@ export default function SmartDictation() {
     try {
       const correctText = currentExercise.text_content;
       
-      // طلب تحليل دقيق للأخطاء الإملائية
       const prompt = `
         أنت مصحح إملائي خبير. قارن بين النص الأصلي والنص الذي كتبه الطالب.
         النص الأصلي: "${correctText}"
@@ -117,7 +158,7 @@ export default function SmartDictation() {
       const analysis = typeof response === "string" ? JSON.parse(response) : response;
       setResult(analysis);
 
-      // حفظ النتيجة
+      // حفظ النتيجة في قاعدة البيانات
       await supabase.from('dictation_submissions').insert({
         student_id: student.id,
         exercise_id: currentExercise.id,
@@ -134,15 +175,21 @@ export default function SmartDictation() {
     }
   };
 
+  // إعادة تعيين التمرين
   const resetExercise = () => {
     setResult(null);
     setStudentInput("");
+    if (audioRef.current) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 font-sans" style={{ fontFamily: "'Traditional Arabic', sans-serif" }}>
       <div className="max-w-4xl mx-auto">
         
+        {/* ترويسة الصفحة */}
         <div className="flex items-center justify-between mb-6">
           <Link to={createPageUrl("StudentDashboard")}>
              <Button variant="outline" size="sm"><ArrowLeft className="ml-2 h-4 w-4" /> العودة</Button>
@@ -153,7 +200,7 @@ export default function SmartDictation() {
         </div>
 
         {!currentExercise ? (
-          /* قائمة التمارين */
+          /* ================= قائمة التمارين ================= */
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {exercises.map((ex) => (
               <Card key={ex.id} className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-indigo-500" onClick={() => setCurrentExercise(ex)}>
@@ -168,7 +215,7 @@ export default function SmartDictation() {
             ))}
           </div>
         ) : (
-          /* واجهة التمرين */
+          /* ================= واجهة التمرين ================= */
           <div className="space-y-6 animate-in slide-in-from-bottom-4">
             <Card className="border-2 border-indigo-100">
               <CardHeader className="bg-indigo-50 border-b border-indigo-100">
@@ -179,17 +226,19 @@ export default function SmartDictation() {
               </CardHeader>
               <CardContent className="p-6 space-y-6">
                 
-                {/* زر التشغيل */}
+                {/* زر تشغيل الصوت */}
                 <div className="text-center py-8 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
                   <Button 
                     onClick={playDictation} 
                     disabled={isPlaying}
-                    className={`h-24 w-24 rounded-full shadow-xl text-xl ${isPlaying ? "bg-slate-400" : "bg-indigo-600 hover:bg-indigo-700 hover:scale-105 transition-transform"}`}
+                    className={`h-24 w-24 rounded-full shadow-xl text-xl transition-all ${isPlaying ? "bg-slate-300 cursor-wait" : "bg-indigo-600 hover:bg-indigo-700 hover:scale-105"}`}
                   >
-                    {isPlaying ? <Loader2 className="h-10 w-10 animate-spin" /> : <Volume2 className="h-10 w-10" />}
+                    {isPlaying ? <Loader2 className="h-10 w-10 animate-spin text-indigo-700" /> : <Volume2 className="h-10 w-10" />}
                   </Button>
-                  <p className="mt-4 text-slate-600 font-bold">اضغط للاستماع للجملة 🎧</p>
-                  <p className="text-xs text-slate-400">يمكنك الاستماع أكثر من مرة</p>
+                  <p className="mt-4 text-slate-600 font-bold">
+                    {isPlaying ? "جاري تحميل وقراءة النص..." : "اضغط للاستماع للجملة 🎧"}
+                  </p>
+                  <p className="text-xs text-slate-400">صوت عربي واضح</p>
                 </div>
 
                 {/* منطقة الكتابة */}
