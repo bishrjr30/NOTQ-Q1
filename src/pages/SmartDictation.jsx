@@ -14,13 +14,16 @@ import {
   ArrowLeft,
   Keyboard,
   Volume2,
-  Loader2
+  Loader2,
+  BookOpen,
+  Lightbulb
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { supabase } from "@/api/supabaseClient";
 import { InvokeLLM } from "@/api/integrations";
 import { Student } from "@/api/entities";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function SmartDictation() {
   const navigate = useNavigate();
@@ -34,99 +37,62 @@ export default function SmartDictation() {
   const [result, setResult] = useState(null);
   const [student, setStudent] = useState(null);
   
-  // تخزين الأصوات المتاحة
   const [availableVoices, setAvailableVoices] = useState([]);
+  const audioRef = useRef(null);
 
-  // تحميل البيانات والأصوات
   useEffect(() => {
     const init = async () => {
-      // 1. التحقق من الطالب
       const storedId = localStorage.getItem("studentId");
       if (!storedId) { navigate(createPageUrl("StudentOnboarding")); return; }
       const s = await Student.get(storedId);
       setStudent(s);
 
-      // 2. جلب التمارين
       const { data } = await supabase.from('dictation_exercises').select('*');
       if (data) setExercises(data);
 
-      // 3. تحميل الأصوات الذكية من المتصفح
       const loadVoices = () => {
         const voices = window.speechSynthesis.getVoices();
-        // تصفية الأصوات العربية فقط
         const arabicVoices = voices.filter(v => v.lang.includes('ar'));
         setAvailableVoices(arabicVoices);
       };
-
       loadVoices();
-      // بعض المتصفحات تحتاج وقت لتحميل الأصوات
       window.speechSynthesis.onvoiceschanged = loadVoices;
     };
     init();
   }, [navigate]);
 
-  // ✅ دالة تشغيل الصوت الذكية (بدون سيرفر)
   const playDictation = () => {
     if (!currentExercise) return;
-    
-    // إيقاف أي صوت سابق
     window.speechSynthesis.cancel();
-
     setIsPlaying(true);
 
     const utterance = new SpeechSynthesisUtterance(currentExercise.text_content);
-    utterance.lang = 'ar-SA'; // لغة عربية
-    utterance.rate = 0.85; // سرعة طبيعية للإملاء
+    utterance.lang = 'ar-SA'; 
+    utterance.rate = 0.85; 
 
-    // 💡 السحر هنا: محاولة اختيار أفضل صوت متاح (Google أو Microsoft)
     if (availableVoices.length > 0) {
-        // نفضل صوت "Google" أو "Microsoft" لأنهما الأفضل جودة
         const bestVoice = availableVoices.find(v => v.name.includes("Google") || v.name.includes("Microsoft")) 
                           || availableVoices[0];
-        if (bestVoice) {
-            utterance.voice = bestVoice;
-        }
+        if (bestVoice) utterance.voice = bestVoice;
     }
 
-    utterance.onend = () => {
-      setIsPlaying(false);
-    };
-
-    utterance.onerror = (e) => {
-      console.error("Speech Error:", e);
-      setIsPlaying(false);
-      alert("تعذر تشغيل الصوت. تأكد من رفع صوت الجهاز.");
-    };
-
+    utterance.onend = () => setIsPlaying(false);
+    utterance.onerror = () => { setIsPlaying(false); alert("تأكد من رفع صوت الجهاز."); };
     window.speechSynthesis.speak(utterance);
   };
 
-  // إرسال الإجابة للتحليل
   const submitDictation = async () => {
     if (!studentInput.trim()) return;
     setIsAnalyzing(true);
 
     try {
       const correctText = currentExercise.text_content;
-      
       const prompt = `
         أنت مصحح إملائي خبير. قارن بين النص الأصلي والنص الذي كتبه الطالب.
         النص الأصلي: "${correctText}"
         نص الطالب: "${studentInput}"
-
-        المهمة:
-        1. حدد الأخطاء الإملائية بدقة (خاصة الهمزات، التاء المربوطة، الهاء).
-        2. اشرح سبب الخطأ باختصار (قاعدة إملائية).
-        3. أعط درجة من 100.
-
-        Output JSON format:
-        {
-          "score": number,
-          "mistakes": [
-            { "word_written": "الكلمة الخطأ", "correct_word": "الصواب", "rule": "شرح القاعدة" }
-          ],
-          "feedback": "تعليق عام"
-        }
+        المهمة: استخرج الأخطاء الإملائية (الهمزات، التاء، الهاء) واشرح القاعدة. أعط درجة من 100.
+        Output JSON: { "score": number, "mistakes": [{ "word_written": "", "correct_word": "", "rule": "" }], "feedback": "" }
       `;
 
       const response = await InvokeLLM({
@@ -180,131 +146,224 @@ export default function SmartDictation() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 font-sans" style={{ fontFamily: "'Traditional Arabic', sans-serif" }}>
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-white p-4 md:p-8 font-sans" style={{ fontFamily: "'Traditional Arabic', sans-serif" }}>
+      <div className="max-w-7xl mx-auto flex flex-col gap-8">
         
-        <div className="flex items-center justify-between mb-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <Link to={createPageUrl("StudentDashboard")}>
-             <Button variant="outline" size="sm"><ArrowLeft className="ml-2 h-4 w-4" /> العودة</Button>
+             <Button variant="outline" size="sm" className="bg-white hover:bg-slate-100 border-slate-200 shadow-sm">
+                <ArrowLeft className="ml-2 h-4 w-4" /> العودة للوحة التحكم
+             </Button>
           </Link>
-          <h1 className="text-3xl font-bold text-indigo-900 flex items-center gap-2">
-            <Keyboard className="h-8 w-8 text-indigo-600" /> الإملاء الذكي
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-indigo-900">الإملاء الذكي</h1>
+            <div className="bg-indigo-100 p-2 rounded-lg">
+                <Keyboard className="h-6 w-6 text-indigo-600" />
+            </div>
+          </div>
         </div>
 
-        {!currentExercise ? (
-          /* قائمة التمارين */
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {exercises.map((ex) => (
-              <Card key={ex.id} className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-indigo-500" onClick={() => setCurrentExercise(ex)}>
-                <CardContent className="p-6">
-                  <h3 className="font-bold text-xl text-indigo-900 mb-2">{ex.title}</h3>
-                  <div className="flex gap-2">
-                    <Badge variant="secondary">{ex.grade_level}</Badge>
-                    <Badge variant="outline">{ex.difficulty}</Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          /* واجهة التمرين */
-          <div className="space-y-6 animate-in slide-in-from-bottom-4">
-            <Card className="border-2 border-indigo-100">
-              <CardHeader className="bg-indigo-50 border-b border-indigo-100">
-                <div className="flex justify-between items-center">
-                    <CardTitle className="text-indigo-900">{currentExercise.title}</CardTitle>
-                    <Button variant="ghost" onClick={() => {setCurrentExercise(null); resetExercise();}}>تغيير التمرين</Button>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                
-                {/* زر التشغيل */}
-                <div className="text-center py-8 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                  <Button 
-                    onClick={playDictation} 
-                    disabled={isPlaying}
-                    className={`h-24 w-24 rounded-full shadow-xl text-xl transition-all ${isPlaying ? "bg-green-500 hover:bg-green-600 animate-pulse" : "bg-indigo-600 hover:bg-indigo-700 hover:scale-105"}`}
-                  >
-                    {isPlaying ? <Volume2 className="h-10 w-10 animate-bounce" /> : <Play className="h-10 w-10" />}
-                  </Button>
-                  <p className="mt-4 text-slate-600 font-bold">
-                    {isPlaying ? "استمع جيداً..." : "اضغط للاستماع للجملة 🎧"}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    {availableVoices.length > 0 ? "صوت ذكي عالي الجودة" : "جاري تحميل الأصوات..."}
-                  </p>
-                </div>
-
-                {/* منطقة الكتابة */}
-                <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">اكتب ما سمعته هنا:</label>
-                    <Textarea 
-                        value={studentInput}
-                        onChange={(e) => setStudentInput(e.target.value)}
-                        placeholder="ابدأ الكتابة..."
-                        className="text-lg p-4 min-h-[120px] border-2 focus:border-indigo-500"
-                        dir="rtl"
-                        disabled={!!result}
-                    />
-                </div>
-
-                {/* الأزرار */}
-                {!result ? (
-                    <Button 
-                        onClick={submitDictation} 
-                        disabled={isAnalyzing || !studentInput}
-                        className="w-full py-6 text-lg bg-green-600 hover:bg-green-700"
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            {/* === Main Content Area (8 Cols) === */}
+            <div className="lg:col-span-8">
+                <AnimatePresence mode="wait">
+                {!currentExercise ? (
+                    /* Exercise Selection Grid */
+                    <motion.div 
+                        key="list"
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="grid grid-cols-1 sm:grid-cols-2 gap-6"
                     >
-                        {isAnalyzing ? "جارٍ التصحيح..." : "تصحيح الإملاء ✅"}
-                    </Button>
-                ) : (
-                    /* عرض النتيجة */
-                    <div className="space-y-6 animate-in zoom-in">
-                        <div className={`p-4 rounded-lg border text-center ${result.score === 100 ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"}`}>
-                            <div className="text-4xl font-bold mb-2">{result.score}%</div>
-                            <p className="font-bold">{result.feedback}</p>
-                        </div>
-
-                        {/* النص الصحيح */}
-                        <div className="bg-slate-100 p-4 rounded-lg border border-slate-300">
-                            <p className="text-sm text-slate-500 mb-1">النص الصحيح:</p>
-                            <p className="text-xl font-bold text-slate-800">{currentExercise.text_content}</p>
-                        </div>
-
-                        {/* جدول الأخطاء */}
-                        {result.mistakes && result.mistakes.length > 0 ? (
-                            <div className="space-y-3">
-                                <h4 className="font-bold text-red-600 flex items-center gap-2"><AlertTriangle className="h-5 w-5"/> أخطاء تحتاج للانتباه:</h4>
-                                {result.mistakes.map((m, idx) => (
-                                    <div key={idx} className="flex flex-col sm:flex-row gap-4 p-3 bg-red-50 border border-red-100 rounded-lg items-start sm:items-center">
-                                        <div className="flex items-center gap-2 text-lg">
-                                            <span className="line-through text-red-500 decoration-2">{m.word_written}</span>
-                                            <span className="text-slate-400">←</span>
-                                            <span className="text-green-600 font-bold">{m.correct_word}</span>
-                                        </div>
-                                        <div className="text-sm text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200">
-                                            💡 {m.rule}
-                                        </div>
+                        {exercises.length > 0 ? (
+                            exercises.map((ex, i) => (
+                                <motion.div key={ex.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
+                                <Card 
+                                    className="hover:shadow-xl transition-all cursor-pointer border-0 shadow-md group hover:-translate-y-1 duration-300 h-full bg-white"
+                                    onClick={() => setCurrentExercise(ex)}
+                                >
+                                    <CardHeader className="bg-gradient-to-r from-indigo-500 to-blue-600 text-white rounded-t-xl p-5">
+                                    <CardTitle className="text-lg font-bold arabic-text">{ex.title}</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-6">
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100">{ex.grade_level}</Badge>
+                                        <Badge variant="outline" className="border-indigo-200 text-slate-600">{ex.difficulty}</Badge>
                                     </div>
-                                ))}
-                            </div>
+                                    <Button className="w-full mt-6 bg-white text-indigo-600 border-2 border-indigo-100 hover:bg-indigo-50 hover:border-indigo-200 font-bold shadow-sm transition-all">
+                                        ابدأ التمرين
+                                    </Button>
+                                    </CardContent>
+                                </Card>
+                                </motion.div>
+                            ))
                         ) : (
-                            <div className="text-green-600 font-bold flex items-center gap-2 justify-center py-4">
-                                <CheckCircle className="h-6 w-6" /> إملاء ممتاز! لا توجد أخطاء.
+                            <div className="col-span-2 text-center py-12 bg-white rounded-2xl shadow-sm border border-dashed border-slate-300">
+                                <p className="text-slate-500 arabic-text">جاري تحميل التمارين...</p>
                             </div>
                         )}
-
-                        <Button onClick={resetExercise} variant="outline" className="w-full">
-                            <RotateCcw className="ml-2 h-4 w-4" /> محاولة مرة أخرى
+                    </motion.div>
+                ) : (
+                    /* Active Exercise View */
+                    <motion.div 
+                        key="exercise"
+                        initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -50, opacity: 0 }}
+                    >
+                    <Card className="border-0 shadow-2xl overflow-hidden bg-white/90 backdrop-blur-sm">
+                        <div className="h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 bg-slate-50/50">
+                        <CardTitle className="text-2xl text-indigo-900 arabic-text">{currentExercise.title}</CardTitle>
+                        <Button variant="ghost" size="sm" onClick={() => {setCurrentExercise(null); resetExercise();}} className="text-slate-500 hover:text-red-500 hover:bg-red-50">
+                            تغيير التمرين
                         </Button>
-                    </div>
-                )}
+                        </CardHeader>
+                        
+                        <CardContent className="p-6 md:p-8 space-y-8">
+                        
+                        {/* Audio Player */}
+                        <div className="flex flex-col items-center justify-center py-8 bg-slate-50 rounded-3xl border-2 border-dashed border-indigo-100 relative group transition-colors hover:border-indigo-300">
+                            <motion.button 
+                            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                            onClick={playDictation} 
+                            disabled={isPlaying}
+                            className={`relative z-10 w-24 h-24 rounded-full shadow-xl flex items-center justify-center text-white text-3xl transition-all ${isPlaying ? "bg-slate-400 cursor-not-allowed" : "bg-gradient-to-br from-indigo-500 to-purple-600 hover:shadow-2xl hover:shadow-indigo-200"}`}
+                            >
+                            {isPlaying ? <Loader2 className="animate-spin w-10 h-10" /> : <Volume2 className="w-10 h-10" />}
+                            </motion.button>
+                            <p className="mt-4 font-bold text-slate-700 relative z-10 arabic-text text-lg">
+                            {isPlaying ? "جاري الاستماع..." : "اضغط للاستماع للجملة 🎧"}
+                            </p>
+                        </div>
 
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                        {/* Input Area */}
+                        <div className="space-y-3">
+                            <label className="text-sm font-bold text-slate-600 flex items-center gap-2 arabic-text">
+                            <Keyboard className="w-4 h-4 text-indigo-500" /> مساحة الكتابة
+                            </label>
+                            <Textarea 
+                            value={studentInput}
+                            onChange={(e) => setStudentInput(e.target.value)}
+                            placeholder="اكتب الجملة التي سمعتها هنا بدقة..."
+                            className="text-xl p-5 min-h-[160px] border-2 border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 rounded-2xl resize-none shadow-inner bg-white leading-loose arabic-text"
+                            dir="rtl"
+                            disabled={!!result}
+                            />
+                        </div>
+
+                        {/* Action Button */}
+                        {!result ? (
+                            <Button 
+                            onClick={submitDictation} 
+                            disabled={isAnalyzing || !studentInput}
+                            className="w-full py-7 text-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-100 rounded-2xl transition-all arabic-text font-bold"
+                            >
+                            {isAnalyzing ? <><Loader2 className="mr-2 animate-spin" /> جاري التصحيح الذكي...</> : "تحقق من إجابتي ✅"}
+                            </Button>
+                        ) : (
+                            /* Results View */
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                            
+                            <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold border-4 ${result.score >= 90 ? "bg-green-50 border-green-500 text-green-700" : "bg-orange-50 border-orange-500 text-orange-700"}`}>
+                                {result.score}%
+                                </div>
+                                <div>
+                                <h4 className="font-bold text-lg arabic-text text-slate-800">النتيجة النهائية</h4>
+                                <p className="text-sm text-slate-500 arabic-text">{result.feedback}</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-indigo-50 p-5 rounded-xl border border-indigo-100">
+                                <p className="text-xs text-indigo-500 font-bold uppercase mb-2 arabic-text">النص الصحيح</p>
+                                <p className="text-xl font-bold text-indigo-900 arabic-text leading-relaxed">{currentExercise.text_content}</p>
+                            </div>
+
+                            {result.mistakes && result.mistakes.length > 0 ? (
+                                <div className="space-y-3">
+                                <h4 className="font-bold text-red-500 text-sm flex items-center gap-2 arabic-text"><AlertTriangle className="w-4 h-4"/> تصحيح الأخطاء</h4>
+                                {result.mistakes.map((m, idx) => (
+                                    <div key={idx} className="bg-white p-3 rounded-xl border border-red-100 flex flex-col sm:flex-row gap-4 items-start sm:items-center shadow-sm">
+                                    <div className="flex items-center gap-3 text-lg font-medium arabic-text">
+                                        <span className="text-red-500 line-through decoration-2 decoration-red-300 opacity-80">{m.word_written}</span>
+                                        <span className="text-slate-300">➜</span>
+                                        <span className="text-green-600 font-bold">{m.correct_word}</span>
+                                    </div>
+                                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-xs py-1 arabic-text">
+                                        {m.rule}
+                                    </Badge>
+                                    </div>
+                                ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-6 text-green-600 bg-green-50 rounded-xl border border-green-100 arabic-text">
+                                <CheckCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                <p className="font-bold">مذهل! إملاء صحيح 100% ✨</p>
+                                </div>
+                            )}
+
+                            <Button onClick={resetExercise} variant="outline" className="w-full border-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 h-12 rounded-xl arabic-text font-bold">
+                                <RotateCcw className="ml-2 h-4 w-4" /> محاولة تمرين آخر
+                            </Button>
+                            </motion.div>
+                        )}
+
+                        </CardContent>
+                    </Card>
+                    </motion.div>
+                )}
+                </AnimatePresence>
+            </div>
+
+            {/* === Sidebar / Educational Content (4 Cols) - New for AdSense === */}
+            <div className="lg:col-span-4 space-y-6">
+                
+                {/* Info Card 1 */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-indigo-100">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
+                            <BookOpen className="w-5 h-5" />
+                        </div>
+                        <h3 className="font-bold text-slate-800 arabic-text">لماذا الإملاء مهم؟</h3>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed arabic-text text-justify">
+                        الإملاء ليس مجرد كتابة كلمات، بل هو عملية عقلية معقدة تربط بين **الاستماع** (التمييز السمعي) و **الذاكرة** (استرجاع شكل الكلمة) و **الحركة** (الكتابة).
+                        التدريب المستمر على الإملاء يحسن من مهاراتك في القراءة والفهم، ويجعل كتابتك الأكاديمية والمهنية أكثر احترافية.
+                    </p>
+                </div>
+
+                {/* Info Card 2 */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-indigo-100">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="bg-yellow-100 p-2 rounded-lg text-yellow-600">
+                            <Lightbulb className="w-5 h-5" />
+                        </div>
+                        <h3 className="font-bold text-slate-800 arabic-text">نصائح ذهبية</h3>
+                    </div>
+                    <ul className="space-y-3">
+                        <li className="text-sm text-slate-600 flex gap-2 arabic-text">
+                            <span className="text-yellow-500">•</span>
+                            <span>استمع للجملة كاملة قبل البدء بالكتابة لفهم السياق.</span>
+                        </li>
+                        <li className="text-sm text-slate-600 flex gap-2 arabic-text">
+                            <span className="text-yellow-500">•</span>
+                            <span>انتبه للفرق بين التاء المربوطة (ـة) والهاء (ـه).</span>
+                        </li>
+                        <li className="text-sm text-slate-600 flex gap-2 arabic-text">
+                            <span className="text-yellow-500">•</span>
+                            <span>راجع الهمزات (أ، إ، ؤ، ئ) فهي أكثر الأخطاء شيوعاً.</span>
+                        </li>
+                    </ul>
+                </div>
+
+                {/* Ad Placeholder (مكان لإعلان أدسنس مستقبلاً) */}
+                <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl h-40 flex items-center justify-center text-slate-400 text-sm arabic-text">
+                    مساحة إعلانية
+                </div>
+
+            </div>
+        </div>
+
       </div>
     </div>
   );
