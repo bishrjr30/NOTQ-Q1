@@ -76,7 +76,7 @@ export default function PrivacyPolicy() {
 
                 <div className="border-t pt-6 mt-8">
                     <p className="font-bold text-indigo-900">للتواصل معنا:</p>
-                    <p>المدرسة الأمريكية للإبداع العلمي - ند الشبا</p>
+                    <p>معلّمة اللغة العربية : ديمة الرشدان</p>
                     <p>البريد الإلكتروني: bishrjr07@gmail.com</p>
                 </div>
 
