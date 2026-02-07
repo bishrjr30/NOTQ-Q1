@@ -18,7 +18,8 @@ import StudentOnboarding from "./StudentOnboarding";
 import ParentDashboard from "./ParentDashboard";
 import FeedbackLog from "./FeedbackLog";
 import Certificates from "./Certificates";
-import WritingWorkshop from "./WritingWorkshop"; // ✅ 1. تم استيراد الصفحة هنا
+import WritingWorkshop from "./WritingWorkshop"; 
+import SmartDictation from "./SmartDictation"; // ✅ 1. استيراد صفحة الإملاء الذكي
 
 const PAGES = {
   Home,
@@ -35,7 +36,8 @@ const PAGES = {
   ParentDashboard,
   FeedbackLog,
   Certificates,
-  WritingWorkshop, // ✅ 2. تمت إضافتها لقائمة الصفحات
+  WritingWorkshop,
+  SmartDictation, // ✅ 2. إضافتها للقائمة
 };
 
 function _getCurrentPage(url) {
@@ -79,9 +81,10 @@ function PagesContent() {
         <Route path="/ParentDashboard" element={<ParentDashboard />} />
         <Route path="/FeedbackLog" element={<FeedbackLog />} />
         <Route path="/Certificates" element={<Certificates />} />
-        
-        {/* ✅ 3. تم تعريف المسار (Route) الجديد هنا */}
         <Route path="/WritingWorkshop" element={<WritingWorkshop />} />
+        
+        {/* ✅ 3. إضافة المسار الجديد */}
+        <Route path="/SmartDictation" element={<SmartDictation />} />
       </Routes>
     </Layout>
   );
