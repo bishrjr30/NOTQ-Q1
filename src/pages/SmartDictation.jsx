@@ -22,8 +22,6 @@ import { supabase } from "@/api/supabaseClient";
 import { InvokeLLM } from "@/api/integrations";
 import { Student } from "@/api/entities";
 
-// ❌ تم حذف استيراد google-tts-api لأنه يسبب المشاكل
-
 export default function SmartDictation() {
   const navigate = useNavigate();
   
@@ -53,58 +51,52 @@ export default function SmartDictation() {
     init();
   }, [navigate]);
 
-  // ✅ دالة مساعدة لتوليد رابط جوجل مباشرة (بدون مكتبات)
-  const getGoogleAudioUrl = (text) => {
-    // تشفير النص ليكون صالحاً في الرابط
-    const encodedText = encodeURIComponent(text);
-    // رابط جوجل المخفي المخصص للتطبيقات (client=tw-ob)
-    return `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=ar&client=tw-ob`;
-  };
-
-  // ✅ دالة تشغيل الصوت المعدلة
-  const playDictation = () => {
+  // ✅ دالة تشغيل الصوت (تتصل بسيرفرنا الخاص)
+  const playDictation = async () => {
     if (!currentExercise) return;
     
-    if (isPlaying) {
-        if (audioRef.current) {
-            audioRef.current.pause();
-            setIsPlaying(false);
-        }
-        return;
-    }
-
+    if (isPlaying) return; // منع التكرار
     setIsPlaying(true);
 
     try {
-      // 1. استخدام الدالة المساعدة للحصول على الرابط
-      const url = getGoogleAudioUrl(currentExercise.text_content);
+      // 1. الاتصال بالسيرفر المحلي (server.js) الذي أنشأناه
+      const response = await fetch('http://localhost:3001/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: currentExercise.text_content }),
+      });
 
+      if (!response.ok) throw new Error("فشل الاتصال بسيرفر الصوت");
+
+      // 2. تحويل الاستجابة إلى صوت
+      const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      
       if (audioRef.current) {
         audioRef.current.pause();
       }
 
-      // 2. تشغيل الصوت من الرابط مباشرة
-      audioRef.current = new Audio(url);
+      audioRef.current = new Audio(audioUrl);
       
-      // التعامل مع الأخطاء (مثل حظر المتصفح)
+      // 3. التشغيل
       audioRef.current.play().catch(e => {
-          console.error("Audio Play Error:", e);
+          console.error("Playback failed:", e);
           setIsPlaying(false);
-          alert("حدث خطأ. حاول الضغط مرة أخرى (قد يحتاج المتصفح لإذن الصوت).");
+          alert("المتصفح منع التشغيل التلقائي. اضغط مرة أخرى.");
       });
 
       audioRef.current.onended = () => {
         setIsPlaying(false);
       };
 
-      audioRef.current.onerror = (e) => {
-        console.error("Audio Load Error:", e);
+      audioRef.current.onerror = () => {
         setIsPlaying(false);
-        alert("تعذر تحميل الصوت. تأكد من اتصال الإنترنت.");
+        alert("خطأ في ملف الصوت.");
       };
 
     } catch (error) {
-      console.error("Setup Error:", error);
+      console.error("Server Error:", error);
+      alert("تأكد من تشغيل ملف server.js في الخلفية!");
       setIsPlaying(false);
     }
   };
@@ -133,7 +125,7 @@ export default function SmartDictation() {
           "mistakes": [
             { "word_written": "الكلمة الخطأ", "correct_word": "الصواب", "rule": "شرح القاعدة" }
           ],
-          "feedback": "تعليق عام"
+          "feedback": "تعليق عام مشجع"
         }
       `;
 
@@ -234,14 +226,14 @@ export default function SmartDictation() {
                   <Button 
                     onClick={playDictation} 
                     disabled={isPlaying}
-                    className={`h-24 w-24 rounded-full shadow-xl text-xl transition-all ${isPlaying ? "bg-red-500 hover:bg-red-600 animate-pulse" : "bg-indigo-600 hover:bg-indigo-700 hover:scale-105"}`}
+                    className={`h-24 w-24 rounded-full shadow-xl text-xl transition-all ${isPlaying ? "bg-slate-300 cursor-wait" : "bg-indigo-600 hover:bg-indigo-700 hover:scale-105"}`}
                   >
-                    {isPlaying ? <Volume2 className="h-10 w-10" /> : <Play className="h-10 w-10" />}
+                    {isPlaying ? <Loader2 className="h-10 w-10 animate-spin text-indigo-700" /> : <Volume2 className="h-10 w-10" />}
                   </Button>
                   <p className="mt-4 text-slate-600 font-bold">
-                    {isPlaying ? "جارٍ القراءة..." : "اضغط للاستماع للجملة 🎧"}
+                    {isPlaying ? "يتم تحميل الصوت..." : "اضغط للاستماع للجملة 🎧"}
                   </p>
-                  <p className="text-xs text-slate-400">صوت عربي واضح</p>
+                  <p className="text-xs text-slate-400">نطق عربي سليم (Google TTS)</p>
                 </div>
 
                 {/* منطقة الكتابة */}
