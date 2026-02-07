@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea"; // تأكد أن لديك هذا المكون أو استخدم input عادي
+import { Textarea } from "@/components/ui/textarea"; 
 import {
   BookOpen,
   PenTool,
@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { supabase } from "@/api/supabaseClient"; // تأكد من المسار
+import { supabase } from "@/api/supabaseClient"; 
 import { InvokeLLM } from "@/api/integrations";
 import { Student } from "@/api/entities";
 
@@ -56,7 +56,6 @@ export default function WritingWorkshop() {
     setAnalysisResult(null);
 
     try {
-      // Prompt هندسة الأوامر للمعلم الذكي
       const prompt = `
         أنت معلم لغة عربية محترف ومصحح لغوي دقيق.
         قام طالب في ${selectedExercise.grade_level} بكتابة النص التالي لموضوع بعنوان "${selectedExercise.title}".
@@ -64,37 +63,43 @@ export default function WritingWorkshop() {
         النص: "${studentText}"
 
         المطلوب: قم بتحليل النص وإرجاع JSON يحتوي على:
-        1. score: درجة من 100 بناء على الجودة والإملاء والنحو.
-        2. corrections: مصفوفة للأخطاء { original: "الخطأ", correction: "الصواب", type: "إملاء/نحو", explanation: "شرح السبب" }.
-        3. feedback: تعليق عام مشجع للطالب (نقطة قوة ونقطة للتحسين).
-        4. improved_version: نسخة محسنة من النص بأسلوب أجمل (اختياري).
-
-        JSON Schema:
-        {
-          "score": number,
-          "corrections": [{ "original": string, "correction": string, "type": string, "explanation": string }],
-          "feedback": string,
-          "improved_version": string
-        }
+        1. score: درجة من 100.
+        2. corrections: قائمة الأخطاء.
+        3. feedback: تعليق عام.
+        4. improved_version: نسخة محسنة.
       `;
 
+      // ✅ التعديل المهم هنا: تعريف items داخل المصفوفة
       const response = await InvokeLLM({
         prompt: prompt,
         response_json_schema: {
             type: "object",
             properties: {
-                score: {type: "number"},
-                corrections: {type: "array"},
-                feedback: {type: "string"},
-                improved_version: {type: "string"}
-            }
+                score: { type: "number" },
+                corrections: { 
+                    type: "array",
+                    items: { // 👈 هذا ما كان ناقصاً ويسبب الخطأ
+                        type: "object",
+                        properties: {
+                            original: { type: "string" },
+                            correction: { type: "string" },
+                            type: { type: "string" },
+                            explanation: { type: "string" }
+                        },
+                        required: ["original", "correction", "type", "explanation"]
+                    }
+                },
+                feedback: { type: "string" },
+                improved_version: { type: "string" }
+            },
+            required: ["score", "corrections", "feedback", "improved_version"]
         }
       });
 
       const result = typeof response === "string" ? JSON.parse(response) : response;
       setAnalysisResult(result);
 
-      // حفظ النتيجة في قاعدة البيانات
+      // حفظ النتيجة
       await supabase.from('writing_submissions').insert({
         student_id: student.id,
         exercise_id: selectedExercise.id,
@@ -105,7 +110,7 @@ export default function WritingWorkshop() {
 
     } catch (error) {
       console.error("Analysis Error", error);
-      alert("حدث خطأ أثناء التحليل. حاول مرة أخرى.");
+      alert("حدث خطأ أثناء التحليل. يرجى المحاولة مرة أخرى.");
     } finally {
       setIsAnalyzing(false);
     }
