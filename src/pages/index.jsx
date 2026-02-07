@@ -1,3 +1,5 @@
+// src/pages/index.jsx
+
 import { BrowserRouter as Router, Route, Routes, useLocation } from "react-router-dom";
 
 import Layout from "./Layout.jsx";
@@ -16,6 +18,7 @@ import StudentOnboarding from "./StudentOnboarding";
 import ParentDashboard from "./ParentDashboard";
 import FeedbackLog from "./FeedbackLog";
 import Certificates from "./Certificates";
+import WritingWorkshop from "./WritingWorkshop"; // ✅ 1. تم استيراد الصفحة هنا
 
 const PAGES = {
   Home,
@@ -32,6 +35,7 @@ const PAGES = {
   ParentDashboard,
   FeedbackLog,
   Certificates,
+  WritingWorkshop, // ✅ 2. تمت إضافتها لقائمة الصفحات
 };
 
 function _getCurrentPage(url) {
@@ -75,6 +79,9 @@ function PagesContent() {
         <Route path="/ParentDashboard" element={<ParentDashboard />} />
         <Route path="/FeedbackLog" element={<FeedbackLog />} />
         <Route path="/Certificates" element={<Certificates />} />
+        
+        {/* ✅ 3. تم تعريف المسار (Route) الجديد هنا */}
+        <Route path="/WritingWorkshop" element={<WritingWorkshop />} />
       </Routes>
     </Layout>
   );
