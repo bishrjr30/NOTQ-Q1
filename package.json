@@ -12,9 +12,10 @@
   "dependencies": {
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.1",
-    "gtts": "^0.2.1", 
+    "google-tts-api": "^2.0.2", 
     "@hookform/resolvers": "^4.1.2",
     "@radix-ui/react-accordion": "^1.2.3",
+    // ... باقي المكتبات كما هي ...
     "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-aspect-ratio": "^1.1.2",
     "@radix-ui/react-avatar": "^1.1.3",
