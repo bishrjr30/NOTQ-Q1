@@ -1,10 +1,22 @@
 // src/pages/StudentDashboard.jsx
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { 
+  useState, 
+  useEffect, 
+  useCallback 
+} from "react";
+
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { 
+  Card, 
+  CardContent, 
+  CardHeader, 
+  CardTitle 
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+
+// استيراد الأيقونات من مكتبة lucide-react
 import {
   GraduationCap,
   Trophy,
@@ -30,7 +42,10 @@ import {
   User,
   Mic,
   Medal,
+  PenTool, // ✅ تمت إضافة أيقونة القلم لورشة الكتابة
+  Layout
 } from "lucide-react";
+
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion } from "framer-motion";
@@ -45,7 +60,7 @@ import {
   Cell,
 } from "recharts";
 
-// ✅ الكيانات الجديدة
+// ✅ استيراد الكيانات من ملف API
 import {
   Student,
   Exercise,
@@ -56,7 +71,12 @@ import {
 // ✅ استيراد التمارين الإضافية المحلية
 import { staticExercises } from "@/data/staticExercises";
 
+/**
+ * مكون لوحة تحكم الطالب (Student Dashboard)
+ * يعرض إحصائيات الطالب، التمارين، التحديات، والروابط للصفحات الأخرى.
+ */
 export default function StudentDashboard() {
+  // ================= States (الحالات) =================
   const [student, setStudent] = useState(null);
   const [exercises, setExercises] = useState([]);
   const [recentRecordings, setRecentRecordings] = useState([]);
@@ -64,12 +84,19 @@ export default function StudentDashboard() {
   const [studentName, setStudentName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [statsData, setStatsData] = useState([]);
+  
+  // شخصية المعلم الافتراضية
   const [teacherPersona, setTeacherPersona] = useState(
     localStorage.getItem("teacherPersona") || "calm"
   );
 
   const [challenges, setChallenges] = useState([]);
 
+  // ================= Functions (الدوال) =================
+
+  /**
+   * تغيير شخصية المعلم (هادئ، حازم، مرح)
+   */
   const togglePersona = () => {
     const personas = ["calm", "strict", "fun"];
     const nextIndex = (personas.indexOf(teacherPersona) + 1) % personas.length;
@@ -78,6 +105,9 @@ export default function StudentDashboard() {
     localStorage.setItem("teacherPersona", nextPersona);
   };
 
+  /**
+   * الحصول على النص المعروض لشخصية المعلم
+   */
   const getPersonaLabel = (p) => {
     switch (p) {
       case "calm":
@@ -91,6 +121,9 @@ export default function StudentDashboard() {
     }
   };
 
+  /**
+   * البحث عن حساب الطالب أو إنشاؤه إذا لم يكن موجوداً
+   */
   const findOrCreateStudent = useCallback(async (name) => {
     setIsLoading(true);
     try {
@@ -99,18 +132,21 @@ export default function StudentDashboard() {
       const existingStudent = allStudents.find((s) => s.name === trimmedName);
 
       if (existingStudent) {
+        // تحديث آخر تسجيل دخول
         await Student.update(existingStudent.id, {
           last_login: new Date().toISOString(),
         });
         setStudent(existingStudent);
         localStorage.setItem("studentId", existingStudent.id);
       } else {
+        // إنشاء كود دخول عشوائي
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         let accessCode = "";
         for (let i = 0; i < 8; i++) {
           accessCode += chars.charAt(Math.floor(Math.random() * chars.length));
         }
 
+        // إنشاء طالب جديد
         const newStudent = await Student.create({
           name: trimmedName,
           level: "مبتدئ",
@@ -131,6 +167,9 @@ export default function StudentDashboard() {
     }
   }, []);
 
+  /**
+   * تحميل بيانات الطالب (التمارين، التسجيلات، التحديات)
+   */
   const loadStudentData = useCallback(async () => {
     if (!student) return;
 
@@ -140,20 +179,22 @@ export default function StudentDashboard() {
       const dbExercises = await Exercise.list();
       
       // 2. دمج التمارين المحلية مع تمارين قاعدة البيانات
-      // نقوم بإضافة التمارين المحلية إلى القائمة
       const allExercises = [...dbExercises, ...staticExercises];
       
       setExercises(allExercises);
 
+      // جلب التسجيلات
       const allRecordings = await Recording.list("-created_date");
       const studentRecordings = allRecordings.filter(
         (r) => r.student_id === student.id
       );
       setRecentRecordings(studentRecordings.slice(0, 5));
 
+      // تحديد التمارين المكتملة
       const completedIds = studentRecordings.map((r) => r.exercise_id);
       setCompletedExerciseIds(completedIds);
 
+      // تجهيز بيانات الرسم البياني
       const chartData = studentRecordings
         .slice(0, 7)
         .reverse()
@@ -166,6 +207,7 @@ export default function StudentDashboard() {
         }));
       setStatsData(chartData);
 
+      // جلب التحديات العائلية
       try {
         const allChallenges = await FamilyChallenge.list("-created_date");
         const myChallenges = allChallenges.filter(
@@ -181,6 +223,8 @@ export default function StudentDashboard() {
       setIsLoading(false);
     }
   }, [student]);
+
+  // ================= Effects (المؤثرات) =================
 
   useEffect(() => {
     const savedStudentId = localStorage.getItem("studentId");
@@ -212,6 +256,8 @@ export default function StudentDashboard() {
     }
   }, [student, loadStudentData]);
 
+  // ================= Helpers (مساعدات) =================
+
   const getLevelProgress = () => {
     if (!student) return 0;
     const maxStage = 10;
@@ -234,11 +280,10 @@ export default function StudentDashboard() {
   const getCurrentStageExercises = () => {
     if (!student) return [];
 
-    // التصفية بناءً على المستوى والمرحلة الحالية للطالب
     return exercises.filter(
       (ex) =>
         ex.level === student.level &&
-        parseInt(ex.stage) === student.current_stage && // ضمان مقارنة أرقام
+        parseInt(ex.stage) === student.current_stage &&
         !completedExerciseIds.includes(ex.id)
     );
   };
@@ -251,7 +296,6 @@ export default function StudentDashboard() {
       const isUnlocked = i === currentStage;
       const isCompleted = i < currentStage;
 
-      // البحث عن تمارين هذه المرحلة (سواء من الداتابيس أو الملف المحلي)
       const stageExercises = exercises.filter(
         (ex) => ex.level === student?.level && parseInt(ex.stage) === i
       );
@@ -274,6 +318,7 @@ export default function StudentDashboard() {
     return stages;
   };
 
+  // ================= Loading State =================
   if (isLoading && !student) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-500">
@@ -297,10 +342,12 @@ export default function StudentDashboard() {
   const currentStageExercises = getCurrentStageExercises();
   const infiniteStages = generateInfiniteStages();
 
+  // ================= Main Render =================
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 p-3 md:p-6">
       <div className="max-w-7xl mx-auto w-full">
-        {/* Header with Gamification */}
+        
+        {/* ================= Header Section ================= */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -308,6 +355,8 @@ export default function StudentDashboard() {
         >
           <div className="bg-gradient-to-r from-purple-600 via-pink-600 to-orange-600 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl mb-4 md:mb-6">
             <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-4">
+              
+              {/* Student Info & Access Code */}
               <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-right w-full">
                 <motion.div
                   animate={{ rotate: [0, 10, -10, 0] }}
@@ -316,23 +365,22 @@ export default function StudentDashboard() {
                 >
                   <Crown className="w-6 h-6 md:w-8 md:h-8 text-yellow-300" />
                 </motion.div>
+                
                 <div className="w-full">
                   <h1 className="text-xl md:text-3xl font-bold text-white arabic-text">
                     مرحباً {student?.name}! 👋
                   </h1>
 
-                  {/* Access Code Display */}
+                  {/* Access Code Box */}
                   <div className="mt-4 md:mt-6 w-full max-w-md md:mx-0 bg-white rounded-xl md:rounded-2xl p-4 md:p-6 shadow-2xl border-2 md:border-4 border-yellow-400 text-center mx-auto md:mr-0">
                     <p className="text-indigo-900 font-bold text-sm md:text-lg arabic-text mb-2 md:mb-3">
                       🔑 كود ولي الأمر (Access Code)
                     </p>
                     <div className="bg-indigo-50 rounded-lg md:rounded-xl p-2 md:p-4 mb-2 md:mb-3 border-2 border-indigo-100 overflow-hidden">
                       <p
-                        className="text-2xl md:text-5xl font-mono font-black text-indigo-900 tracking-widest md:tracking-[0.3em] select-all break-all"
+                        className="text-2xl md:text-5xl font-mono font-black text-indigo-900 tracking-widest md:tracking-[0.3em] select-all break-all cursor-pointer hover:text-indigo-700 transition-colors"
                         onClick={() => {
-                          navigator.clipboard.writeText(
-                            student?.access_code || ""
-                          );
+                          navigator.clipboard.writeText(student?.access_code || "");
                           alert("تم نسخ الكود!");
                         }}
                       >
@@ -344,6 +392,7 @@ export default function StudentDashboard() {
                     </p>
                   </div>
 
+                  {/* Badges: Level & Stage */}
                   <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mt-4 flex-wrap">
                     <Badge className="bg-white/20 text-white text-xs md:text-sm arabic-text border-0">
                       <Star className="w-3 h-3 md:w-4 md:h-4 ml-1" />
@@ -357,6 +406,7 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
+              {/* Total Exercises & Persona Toggle */}
               <div className="flex flex-row md:flex-col items-center md:items-end gap-3 justify-center w-full md:w-auto mt-2 md:mt-0">
                 <div className="text-center md:text-right">
                   <div className="text-3xl md:text-5xl font-bold text-white mb-1">
@@ -377,7 +427,7 @@ export default function StudentDashboard() {
               </div>
             </div>
 
-            {/* Progress Bar */}
+            {/* Level Progress Bar */}
             <div className="mt-6 bg-white/20 rounded-full p-1">
               <motion.div
                 initial={{ width: 0 }}
@@ -393,7 +443,50 @@ export default function StudentDashboard() {
           </div>
         </motion.div>
 
-        {/* Linguistic Identity Card */}
+        {/* ================= NEW NAVIGATION CARDS (Writing + Certificates) ================= */}
+        {/* ✅ تمت إضافة هذا القسم الجديد لصفحات الكتابة والشهادات */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            
+            {/* 1. بطاقة ورشة الكتابة الذكية */}
+            <Link to={createPageUrl("WritingWorkshop")}>
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Card className="bg-gradient-to-r from-indigo-500 to-blue-600 text-white border-0 shadow-lg cursor-pointer hover:shadow-xl transition-all">
+                        <CardContent className="p-6 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-2xl font-bold mb-1 flex items-center gap-2 arabic-text">
+                                    <PenTool className="w-6 h-6" /> ورشة الكتابة الذكية
+                                </h3>
+                                <p className="text-blue-100 opacity-90 arabic-text">اكتب مواضيع تعبير وصححها فوراً مع المعلم الذكي! ✍️</p>
+                            </div>
+                            <div className="bg-white/20 p-3 rounded-full">
+                                <Sparkles className="w-8 h-8 text-yellow-300 animate-pulse" />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+            </Link>
+
+            {/* 2. بطاقة جدار الشهادات */}
+            <Link to={createPageUrl("Certificates")}>
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Card className="bg-gradient-to-r from-amber-400 to-orange-500 text-white border-0 shadow-lg cursor-pointer hover:shadow-xl transition-all">
+                        <CardContent className="p-6 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-2xl font-bold mb-1 flex items-center gap-2 arabic-text">
+                                    <Medal className="w-6 h-6" /> جدار الشهادات
+                                </h3>
+                                <p className="text-orange-100 opacity-90 arabic-text">شاهد إنجازاتك وشهادات التقدير التي جمعتها 🏆</p>
+                            </div>
+                            <div className="bg-white/20 p-3 rounded-full">
+                                <Trophy className="w-8 h-8 text-white" />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+            </Link>
+        </div>
+
+        {/* ================= Linguistic Identity Card ================= */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -484,6 +577,7 @@ export default function StudentDashboard() {
             </CardContent>
           </Card>
 
+          {/* Messages & Family Challenges */}
           <div className="space-y-6">
             {student?.encouragement_message && (
               <Card className="border-0 shadow-lg bg-pink-50 border-2 border-pink-100 relative overflow-hidden">
@@ -536,13 +630,14 @@ export default function StudentDashboard() {
           </div>
         </motion.div>
 
-        {/* Stats Cards */}
+        {/* ================= Stats Cards Grid ================= */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 mb-8"
         >
+          {/* Average Score */}
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Card className="border-0 shadow-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white h-full">
               <CardContent className="p-6">
@@ -561,6 +656,7 @@ export default function StudentDashboard() {
             </Card>
           </motion.div>
 
+          {/* Badges Count */}
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Card className="border-0 shadow-xl bg-gradient-to-br from-green-500 to-green-600 text-white h-full">
               <CardContent className="p-6">
@@ -579,6 +675,7 @@ export default function StudentDashboard() {
             </Card>
           </motion.div>
 
+          {/* Points */}
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Card className="border-0 shadow-xl bg-gradient-to-br from-purple-500 to-purple-600 text-white h-full">
               <CardContent className="p-6">
@@ -597,6 +694,7 @@ export default function StudentDashboard() {
             </Card>
           </motion.div>
 
+          {/* Next Badge */}
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Card className="border-0 shadow-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white h-full">
               <CardContent className="p-6">
@@ -613,6 +711,7 @@ export default function StudentDashboard() {
             </Card>
           </motion.div>
 
+          {/* Teacher Lessons */}
           <Link to={createPageUrl("StudentLessons")} className="block h-full">
             <motion.div
               whileHover={{ scale: 1.05 }}
@@ -631,7 +730,7 @@ export default function StudentDashboard() {
           </Link>
         </motion.div>
 
-        {/* Heatmap Section */}
+        {/* ================= Heatmap Section ================= */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-8">
           <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
             <CardHeader>
@@ -667,7 +766,7 @@ export default function StudentDashboard() {
           </Card>
         </motion.div>
 
-        {/* Detailed Stats Section */}
+        {/* ================= Weekly Analysis Chart ================= */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -778,15 +877,17 @@ export default function StudentDashboard() {
           </Card>
         </motion.div>
 
-        {/* Infinite Journey Map & Skills */}
+        {/* ================= Infinite Journey Map & Sidebar ================= */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Main Journey Column */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
             className="lg:col-span-2 space-y-6"
           >
-            {/* Journey Map Visual */}
+            {/* Journey Map Card */}
             <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur-sm">
               <CardHeader className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-t-xl">
                 <CardTitle className="text-2xl font-bold arabic-text flex items-center gap-2">
@@ -796,6 +897,7 @@ export default function StudentDashboard() {
               </CardHeader>
               <CardContent className="p-4 md:p-8">
                 <div className="relative">
+                  {/* Vertical Line */}
                   <div className="absolute left-1/2 top-0 bottom-0 w-2 bg-indigo-100 -ml-1 rounded-full hidden md:block"></div>
 
                   <div className="space-y-12">
@@ -811,6 +913,7 @@ export default function StudentDashboard() {
                             : "md:flex-row-reverse"
                         } flex-col gap-4 md:gap-8`}
                       >
+                        {/* Status Icon Bubble */}
                         <div
                           className={`z-10 w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center border-8 shadow-xl transition-all duration-500 ${
                             stage.isCompleted
@@ -829,6 +932,7 @@ export default function StudentDashboard() {
                           </span>
                         </div>
 
+                        {/* Stage Details Card */}
                         <div className="w-full md:w-5/12">
                           <Card
                             className={`border-2 transform transition-all hover:scale-105 ${
@@ -872,7 +976,7 @@ export default function StudentDashboard() {
               </CardContent>
             </Card>
 
-            {/* Skill Cards */}
+            {/* Additional Skill Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
                 <CardContent className="p-6">
@@ -945,13 +1049,14 @@ export default function StudentDashboard() {
             </div>
           </motion.div>
 
+          {/* Sidebar Column */}
           <motion.div
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
             className="space-y-6"
           >
-            {/* Daily Challenge Card */}
+            {/* Daily Challenge Sidebar Card */}
             <Card className="border-0 shadow-xl bg-gradient-to-br from-yellow-400 to-orange-500 text-white overflow-hidden relative">
               <div className="absolute top-0 left-0 w-full h-full bg-white/10 opacity-30 pattern-dots"></div>
               <CardContent className="p-6 relative z-10 text-center">
@@ -1000,7 +1105,7 @@ export default function StudentDashboard() {
               </CardContent>
             </Card>
 
-            {/* Recent Feedback Mini View */}
+            {/* Recent Activities Mini View */}
             <Card className="border-0 shadow-lg bg-white/90">
               <CardContent className="p-4">
                 <h4 className="font-bold text-gray-800 mb-3 arabic-text text-sm border-b pb-2">
@@ -1040,7 +1145,7 @@ export default function StudentDashboard() {
               </CardContent>
             </Card>
 
-            {/* Extra Challenge */}
+            {/* Extra Challenge / Create Custom */}
             <Link
               to={createPageUrl(`CreateCustomExercise?studentId=${student.id}`)}
               className="block"
@@ -1070,6 +1175,7 @@ export default function StudentDashboard() {
             </Link>
           </motion.div>
         </div>
+
       </div>
     </div>
   );
