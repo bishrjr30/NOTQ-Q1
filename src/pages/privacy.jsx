@@ -1,60 +1,88 @@
+// src/pages/privacy.jsx
+
 import React from "react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { ArrowLeft, Shield, Lock, Eye, FileText } from "lucide-react";
+import { createPageUrl } from "@/utils";
 
-export default function Privacy() {
+export default function PrivacyPolicy() {
   return (
-    <div dir="rtl" style={{ padding: "40px", maxWidth: "900px", margin: "auto", lineHeight: "1.9" }}>
-      <h1>سياسة الخصوصية</h1>
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans" dir="rtl" style={{ fontFamily: "'Traditional Arabic', sans-serif" }}>
+      <div className="max-w-4xl mx-auto">
+        
+        <div className="mb-8">
+            <Link to={createPageUrl("Home")}>
+                <Button variant="ghost" className="hover:bg-white"><ArrowLeft className="ml-2 h-4 w-4" /> العودة للرئيسية</Button>
+            </Link>
+        </div>
 
-      <p>
-        نحن في موقع <strong>Notq</strong> نحترم خصوصية المستخدمين، ونلتزم بحماية
-        جميع البيانات التي يتم جمعها أثناء استخدام الموقع.
-      </p>
+        <Card className="shadow-lg border-0 overflow-hidden">
+            <div className="bg-indigo-900 p-8 text-white text-center">
+                <Shield className="w-16 h-16 mx-auto mb-4 text-indigo-300" />
+                <h1 className="text-3xl font-bold mb-2">سياسة الخصوصية</h1>
+                <p className="text-indigo-200">آخر تحديث: فبراير 2026</p>
+            </div>
+            
+            <CardContent className="p-8 space-y-8 text-slate-700 leading-loose">
+                
+                <section>
+                    <h2 className="text-xl font-bold text-indigo-900 mb-3 flex items-center gap-2">
+                        <Eye className="w-5 h-5" /> 1. مقدمة
+                    </h2>
+                    <p>
+                        نحن في منصة "نُطق" التعليمية (التابعة للمدرسة الأمريكية للإبداع العلمي) نولي خصوصية طلابنا وأولياء الأمور أهمية قصوى. تشرح هذه الوثيقة كيفية جمعنا واستخدامنا وحمايتنا لمعلوماتك الشخصية عند استخدام المنصة.
+                    </p>
+                </section>
 
-      <h2>المعلومات التي نجمعها</h2>
-      <ul>
-        <li>النصوص الصوتية الناتجة عن قراءة المستخدم</li>
-        <li>بيانات استخدام الموقع لتحسين الأداء</li>
-        <li>معلومات تقنية عامة مثل نوع المتصفح والجهاز</li>
-      </ul>
+                <section>
+                    <h2 className="text-xl font-bold text-indigo-900 mb-3 flex items-center gap-2">
+                        <FileText className="w-5 h-5" /> 2. البيانات التي نجمعها
+                    </h2>
+                    <ul className="list-disc list-inside space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <li><strong>المعلومات الأساسية:</strong> الاسم، الصف الدراسي، والمرحلة التعليمية.</li>
+                        <li><strong>البيانات الصوتية:</strong> التسجيلات الصوتية للطلاب أثناء أداء تمارين القراءة (تستخدم حصراً لغرض التحليل والتقييم).</li>
+                        <li><strong>بيانات الأداء:</strong> نتائج التمارين، النقاط، والشارات التي حصل عليها الطالب.</li>
+                    </ul>
+                </section>
 
-      <h2>كيف نستخدم المعلومات</h2>
-      <ul>
-        <li>تحسين دقة تقييم النطق والقراءة</li>
-        <li>تطوير جودة المحتوى والخدمة</li>
-        <li>تحسين تجربة المستخدم</li>
-      </ul>
+                <section>
+                    <h2 className="text-xl font-bold text-indigo-900 mb-3 flex items-center gap-2">
+                        <Lock className="w-5 h-5" /> 3. كيف نستخدم بياناتك؟
+                    </h2>
+                    <p>نستخدم البيانات المجمعة للأغراض التالية فقط:</p>
+                    <ul className="list-disc list-inside space-y-1 mt-2">
+                        <li>تحليل مستوى القراءة والنطق باستخدام الذكاء الاصطناعي.</li>
+                        <li>متابعة تقدم الطالب من قبل المعلم المختص.</li>
+                        <li>تحسين تجربة المستخدم وتطوير التمارين.</li>
+                        <li><strong>تنويه هام:</strong> لا نقوم ببيع أو مشاركة بيانات الطلاب مع أي أطراف ثالثة لأغراض تجارية.</li>
+                    </ul>
+                </section>
 
-      <h2>الكوكيز</h2>
-      <p>
-        قد يستخدم الموقع ملفات تعريف الارتباط (Cookies) لتحسين التجربة،
-        ويمكنك تعطيلها من إعدادات المتصفح.
-      </p>
+                <section>
+                    <h2 className="text-xl font-bold text-indigo-900 mb-3">4. أمن البيانات</h2>
+                    <p>
+                        نطبق إجراءات أمان تقنية وإدارية صارمة لحماية بياناتك من الوصول غير المصرح به. يتم تخزين التسجيلات الصوتية في خوادم آمنة ومشفرة، ويقتصر الوصول إليها على المعلم المشرف والنظام الآلي للتحليل.
+                    </p>
+                </section>
 
-      <h2>الإعلانات</h2>
-      <p>
-        قد نعرض إعلانات من أطراف خارجية مثل Google AdSense، والتي قد تستخدم
-        ملفات تعريف الارتباط لعرض إعلانات مناسبة.
-      </p>
+                <section>
+                    <h2 className="text-xl font-bold text-indigo-900 mb-3">5. حقوقك</h2>
+                    <p>
+                        يحق لولي الأمر في أي وقت طلب الاطلاع على البيانات المسجلة لابنه/ابنته، أو طلب حذف التسجيلات الصوتية، أو تعديل البيانات الشخصية، وذلك عبر التواصل مع إدارة المدرسة.
+                    </p>
+                </section>
 
-      <h2>حماية البيانات</h2>
-      <p>
-        نستخدم إجراءات تقنية مناسبة لحماية البيانات، ولا نقوم ببيع أو مشاركة
-        بيانات المستخدمين مع أي طرف ثالث.
-      </p>
+                <div className="border-t pt-6 mt-8">
+                    <p className="font-bold text-indigo-900">للتواصل معنا:</p>
+                    <p>المدرسة الأمريكية للإبداع العلمي - ند الشبا</p>
+                    <p>البريد الإلكتروني: bishrjr07@gmail.com</p>
+                </div>
 
-      <h2>موافقة المستخدم</h2>
-      <p>
-        باستخدامك للموقع، فإنك توافق على سياسة الخصوصية هذه.
-      </p>
-
-      <h2>التعديلات</h2>
-      <p>
-        قد نقوم بتحديث سياسة الخصوصية من وقت لآخر، وسيتم نشر أي تعديل في هذه الصفحة.
-      </p>
-
-      <p style={{ marginTop: "40px", fontSize: "14px", color: "#555" }}>
-        آخر تحديث: {new Date().toLocaleDateString("ar-EG")}
-      </p>
+            </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
