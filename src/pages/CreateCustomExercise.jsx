@@ -12,7 +12,6 @@ import { InvokeLLM } from "@/api/integrations";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
@@ -66,7 +65,7 @@ export default function CreateCustomExercisePage() {
 
 **مثال مطلوب:**
 بدلاً من: "العلمُ نورٌ يُضيءُ الطريقَ"
-يجب أن يكون: "الْعِلْمُ نُورٌ يُضِيءُ الطَّرِيقَ لِلْمُتَعَلِّمِينَ."
+يجب أن يكون: "الْعِلْمُ نُورٌ يُضِيءُ الطَّرِيقَ لِلْمُتَعَلِّمِينَ."
 
 المطلوب: أعد كتابة النص مشكولاً بالكامل (Full Tashkeel) فقط، بدون أي مقدمات أو شرح.
       `;
@@ -133,7 +132,7 @@ export default function CreateCustomExercisePage() {
 
 **مثال:**
 بدلاً من "السماء صافية والشمس مشرقة" (بدون تشكيل كامل)،
-اكتب: "السَّمَاءُ صَافِيَةٌ، وَالشَّمْسُ مُشْرِقَةٌ تُرْسِلُ أَشِعَّتَهَا الذَّهَبِيَّةَ عَلَى الْأَرْضِ."
+اكتب: "السَّمَاءُ صَافِيَةٌ، وَالشَّمْسُ مُشْرِقَةٌ تُرْسِلُ أَشِعَّتَهَا الذَّهَبِيَّةَ عَلَى الْأَرْضِ."
 
 المطلوب: النص فقط، مشكولاً بالكامل وبدقة متناهية، بدون أي زيادات.
         `;
@@ -327,19 +326,27 @@ export default function CreateCustomExercisePage() {
                     📏 عدد الكلمات (حوالي{" "}
                     {Math.round(wordCount[0] / 150)} دقيقة قراءة)
                   </Label>
-                  <div className="flex items-center gap-6">
-                    <Slider
-                      value={wordCount}
-                      onValueChange={setWordCount}
-                      min={30}
-                      max={200}
-                      step={10}
-                      className="flex-1"
-                    />
-                    <span className="font-bold text-3xl text-orange-600 bg-orange-100 px-6 py-3 rounded-xl min-w-[80px] text-center shadow-lg">
-                      {wordCount[0]}
-                    </span>
+                  
+                  {/* ✅ تصميم جديد ومحسن للشريط Slider */}
+                  <div className="bg-orange-50 p-6 rounded-2xl border border-orange-200 shadow-inner">
+                    <div className="flex items-center gap-6">
+                      <Slider
+                        value={wordCount}
+                        onValueChange={setWordCount}
+                        min={30}
+                        max={200}
+                        step={10}
+                        className="flex-1 cursor-pointer"
+                        thumbClassName="bg-orange-600 border-4 border-white shadow-xl w-6 h-6 hover:scale-110 transition-transform"
+                        trackClassName="bg-orange-200 h-2"
+                        rangeClassName="bg-orange-500 h-2"
+                      />
+                      <span className="font-black text-3xl text-orange-600 bg-white px-4 py-2 rounded-xl min-w-[80px] text-center shadow-md border border-orange-200">
+                        {wordCount[0]}
+                      </span>
+                    </div>
                   </div>
+
                   <div className="bg-purple-50 rounded-xl p-4 border-2 border-purple-200">
                     <p className="text-sm text-purple-800 arabic-text font-semibold">
                       <strong>📊 المستوى المتوقع:</strong>{" "}
