@@ -19,7 +19,13 @@ import ParentDashboard from "./ParentDashboard";
 import FeedbackLog from "./FeedbackLog";
 import Certificates from "./Certificates";
 import WritingWorkshop from "./WritingWorkshop"; 
-import SmartDictation from "./SmartDictation"; // ✅ 1. استيراد صفحة الإملاء الذكي
+import SmartDictation from "./SmartDictation";
+
+// ✅ 1. استيراد الصفحات الجديدة
+import Blog from "./Blog";
+import AboutUs from "./AboutUs";
+import ContactUs from "./ContactUs";
+import PrivacyPolicy from "./privacy";
 
 const PAGES = {
   Home,
@@ -37,7 +43,12 @@ const PAGES = {
   FeedbackLog,
   Certificates,
   WritingWorkshop,
-  SmartDictation, // ✅ 2. إضافتها للقائمة
+  SmartDictation,
+  // ✅ 2. إضافتها لقائمة الصفحات (للتعرف على اسم الصفحة الحالي)
+  Blog,
+  AboutUs,
+  ContactUs,
+  PrivacyPolicy,
 };
 
 function _getCurrentPage(url) {
@@ -82,9 +93,13 @@ function PagesContent() {
         <Route path="/FeedbackLog" element={<FeedbackLog />} />
         <Route path="/Certificates" element={<Certificates />} />
         <Route path="/WritingWorkshop" element={<WritingWorkshop />} />
-        
-        {/* ✅ 3. إضافة المسار الجديد */}
         <Route path="/SmartDictation" element={<SmartDictation />} />
+        
+        {/* ✅ 3. إضافة المسارات (Routes) الجديدة */}
+        <Route path="/Blog" element={<Blog />} />
+        <Route path="/AboutUs" element={<AboutUs />} />
+        <Route path="/ContactUs" element={<ContactUs />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
       </Routes>
     </Layout>
   );
