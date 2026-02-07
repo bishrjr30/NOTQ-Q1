@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea"; 
+// import { Textarea } from "@/components/ui/textarea"; // Removed as it wasn't used/available in the uploaded context
 import {
   BookOpen,
   PenTool,
@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { supabase } from "@/api/supabaseClient"; 
+import { supabase } from "@/api/supabaseClient";
 import { InvokeLLM } from "@/api/integrations";
 import { Student } from "@/api/entities";
 
@@ -49,48 +49,63 @@ export default function WritingWorkshop() {
     loadData();
   }, []);
 
-  // دالة تحليل النص باستخدام الذكاء الاصطناعي
+  // AI Analysis Function
   const analyzeWriting = async () => {
     if (!studentText.trim()) return;
     setIsAnalyzing(true);
     setAnalysisResult(null);
 
     try {
+      // Improved Prompt for Higher Accuracy
       const prompt = `
-        أنت معلم لغة عربية محترف ومصحح لغوي دقيق.
-        قام طالب في ${selectedExercise.grade_level} بكتابة النص التالي لموضوع بعنوان "${selectedExercise.title}".
-        
-        النص: "${studentText}"
+        Act as an expert Arabic language teacher and editor. Analyze the following student submission for a writing exercise titled "${selectedExercise.title}". The student is in grade level: ${selectedExercise.grade_level}.
 
-        المطلوب: قم بتحليل النص وإرجاع JSON يحتوي على:
-        1. score: درجة من 100.
-        2. corrections: قائمة الأخطاء.
-        3. feedback: تعليق عام.
-        4. improved_version: نسخة محسنة.
+        Student Text:
+        "${studentText}"
+
+        Your task is to provide a detailed and constructive evaluation.
+        
+        1. **Score:** Assign a score out of 100 based on grammar, spelling, vocabulary, and relevance to the prompt.
+        2. **Corrections:** Identify specific errors. For each error, provide:
+           - The original text with the error.
+           - The corrected version.
+           - The type of error (e.g., Spelling, Grammar, Punctuation, Style).
+           - A brief explanation of why it is wrong.
+        3. **Feedback:** Write a short, encouraging paragraph highlighting a strength and one area for improvement.
+        4. **Improved Version:** Rewrite the student's text to demonstrate better flow and vocabulary while keeping the original meaning.
+
+        Return the response in the following JSON format:
+        {
+          "score": number,
+          "corrections": [
+            { "original": "string", "correction": "string", "type": "string", "explanation": "string" }
+          ],
+          "feedback": "string",
+          "improved_version": "string"
+        }
       `;
 
-      // ✅ التعديل المهم هنا: تعريف items داخل المصفوفة
       const response = await InvokeLLM({
         prompt: prompt,
         response_json_schema: {
             type: "object",
             properties: {
-                score: { type: "number" },
-                corrections: { 
+                score: {type: "number"},
+                corrections: {
                     type: "array",
-                    items: { // 👈 هذا ما كان ناقصاً ويسبب الخطأ
+                    items: {
                         type: "object",
                         properties: {
-                            original: { type: "string" },
-                            correction: { type: "string" },
-                            type: { type: "string" },
-                            explanation: { type: "string" }
+                            original: {type: "string"},
+                            correction: {type: "string"},
+                            type: {type: "string"},
+                            explanation: {type: "string"}
                         },
                         required: ["original", "correction", "type", "explanation"]
                     }
                 },
-                feedback: { type: "string" },
-                improved_version: { type: "string" }
+                feedback: {type: "string"},
+                improved_version: {type: "string"}
             },
             required: ["score", "corrections", "feedback", "improved_version"]
         }
@@ -99,7 +114,7 @@ export default function WritingWorkshop() {
       const result = typeof response === "string" ? JSON.parse(response) : response;
       setAnalysisResult(result);
 
-      // حفظ النتيجة
+      // Save result to database
       await supabase.from('writing_submissions').insert({
         student_id: student.id,
         exercise_id: selectedExercise.id,
@@ -110,7 +125,7 @@ export default function WritingWorkshop() {
 
     } catch (error) {
       console.error("Analysis Error", error);
-      alert("حدث خطأ أثناء التحليل. يرجى المحاولة مرة أخرى.");
+      alert("حدث خطأ أثناء التحليل. حاول مرة أخرى.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -132,7 +147,7 @@ export default function WritingWorkshop() {
         </div>
 
         {!selectedExercise ? (
-          /* ================= قائمة التمارين ================= */
+          /* ================= Exercise List ================= */
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {exercises.map((ex) => (
               <Card key={ex.id} className="hover:shadow-lg transition-all cursor-pointer border-indigo-100" onClick={() => setSelectedExercise(ex)}>
@@ -152,10 +167,10 @@ export default function WritingWorkshop() {
             ))}
           </div>
         ) : (
-          /* ================= واجهة الكتابة والتحليل ================= */
+          /* ================= Writing & Analysis Interface ================= */
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4">
             
-            {/* العمود الأيمن: التعليمات */}
+            {/* Right Column: Instructions */}
             <div className="lg:col-span-1 space-y-4">
               <Card className="bg-indigo-50 border-indigo-200">
                 <CardHeader>
@@ -183,7 +198,7 @@ export default function WritingWorkshop() {
               </Card>
             </div>
 
-            {/* العمود الأوسط: المحرر */}
+            {/* Middle Column: Editor */}
             <div className="lg:col-span-2 space-y-6">
               <Card className="border-2 border-indigo-100 shadow-sm">
                 <CardHeader>
@@ -224,11 +239,11 @@ export default function WritingWorkshop() {
                 </CardContent>
               </Card>
 
-              {/* ================= عرض النتائج ================= */}
+              {/* ================= Results Display ================= */}
               {analysisResult && (
                 <div className="space-y-6 animate-in zoom-in duration-300">
                   
-                  {/* ملخص الدرجة */}
+                  {/* Score Summary */}
                   <Card className={`border-2 ${analysisResult.score >= 80 ? "border-green-500 bg-green-50" : analysisResult.score >= 50 ? "border-yellow-500 bg-yellow-50" : "border-red-500 bg-red-50"}`}>
                     <CardContent className="p-6 flex items-center justify-between">
                       <div>
@@ -241,9 +256,9 @@ export default function WritingWorkshop() {
                     </CardContent>
                   </Card>
 
-                  {/* تفاصيل التصحيح */}
+                  {/* Correction Details */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* الأخطاء */}
+                    {/* Errors */}
                     <Card>
                       <CardHeader><CardTitle className="text-red-600 flex items-center gap-2"><AlertCircle /> ملاحظات وتصحيحات</CardTitle></CardHeader>
                       <CardContent>
@@ -269,7 +284,7 @@ export default function WritingWorkshop() {
                       </CardContent>
                     </Card>
 
-                    {/* النسخة المحسنة */}
+                    {/* Improved Version */}
                     <Card>
                       <CardHeader><CardTitle className="text-indigo-600 flex items-center gap-2"><Sparkles /> نسخة مقترحة (للفائدة)</CardTitle></CardHeader>
                       <CardContent>
