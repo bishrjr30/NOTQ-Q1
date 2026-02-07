@@ -22,8 +22,6 @@ import { supabase } from "@/api/supabaseClient";
 import { InvokeLLM } from "@/api/integrations";
 import { Student } from "@/api/entities";
 
-// ❌ تمت إزالة المكتبة المسببة للمشاكل واستبدالها بحل مباشر
-
 export default function SmartDictation() {
   const navigate = useNavigate();
   
@@ -36,73 +34,71 @@ export default function SmartDictation() {
   const [result, setResult] = useState(null);
   const [student, setStudent] = useState(null);
   
-  // مرجع لمشغل الصوت
-  const audioRef = useRef(null);
+  // تخزين الأصوات المتاحة
+  const [availableVoices, setAvailableVoices] = useState([]);
 
-  // تحميل البيانات الأولية
+  // تحميل البيانات والأصوات
   useEffect(() => {
     const init = async () => {
+      // 1. التحقق من الطالب
       const storedId = localStorage.getItem("studentId");
       if (!storedId) { navigate(createPageUrl("StudentOnboarding")); return; }
       const s = await Student.get(storedId);
       setStudent(s);
 
+      // 2. جلب التمارين
       const { data } = await supabase.from('dictation_exercises').select('*');
       if (data) setExercises(data);
+
+      // 3. تحميل الأصوات الذكية من المتصفح
+      const loadVoices = () => {
+        const voices = window.speechSynthesis.getVoices();
+        // تصفية الأصوات العربية فقط
+        const arabicVoices = voices.filter(v => v.lang.includes('ar'));
+        setAvailableVoices(arabicVoices);
+      };
+
+      loadVoices();
+      // بعض المتصفحات تحتاج وقت لتحميل الأصوات
+      window.speechSynthesis.onvoiceschanged = loadVoices;
     };
     init();
   }, [navigate]);
 
-  // ✅ دالة مساعدة لتوليد رابط صوت جوجل مباشرة
-  const getGoogleAudioUrl = (text) => {
-    const encodedText = encodeURIComponent(text);
-    return `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=ar&client=tw-ob`;
-  };
-
-  // ✅ دالة تشغيل الصوت المحدثة
+  // ✅ دالة تشغيل الصوت الذكية (بدون سيرفر)
   const playDictation = () => {
     if (!currentExercise) return;
     
-    if (isPlaying) {
-        if (audioRef.current) {
-            audioRef.current.pause();
-            setIsPlaying(false);
-        }
-        return;
-    }
+    // إيقاف أي صوت سابق
+    window.speechSynthesis.cancel();
 
     setIsPlaying(true);
 
-    try {
-      // استخدام الدالة المساعدة
-      const url = getGoogleAudioUrl(currentExercise.text_content);
+    const utterance = new SpeechSynthesisUtterance(currentExercise.text_content);
+    utterance.lang = 'ar-SA'; // لغة عربية
+    utterance.rate = 0.85; // سرعة طبيعية للإملاء
 
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-
-      audioRef.current = new Audio(url);
-      
-      audioRef.current.play().catch(e => {
-          console.error("Audio Play Error:", e);
-          setIsPlaying(false);
-          alert("حدث خطأ في التشغيل. حاول الضغط مرة أخرى.");
-      });
-
-      audioRef.current.onended = () => {
-        setIsPlaying(false);
-      };
-
-      audioRef.current.onerror = (e) => {
-        console.error("Audio Load Error:", e);
-        setIsPlaying(false);
-        alert("تعذر تحميل الصوت. تأكد من اتصال الإنترنت.");
-      };
-
-    } catch (error) {
-      console.error("Setup Error:", error);
-      setIsPlaying(false);
+    // 💡 السحر هنا: محاولة اختيار أفضل صوت متاح (Google أو Microsoft)
+    if (availableVoices.length > 0) {
+        // نفضل صوت "Google" أو "Microsoft" لأنهما الأفضل جودة
+        const bestVoice = availableVoices.find(v => v.name.includes("Google") || v.name.includes("Microsoft")) 
+                          || availableVoices[0];
+        if (bestVoice) {
+            utterance.voice = bestVoice;
+        }
     }
+
+    utterance.onend = () => {
+      setIsPlaying(false);
+    };
+
+    utterance.onerror = (e) => {
+      console.error("Speech Error:", e);
+      setIsPlaying(false);
+      alert("تعذر تشغيل الصوت. تأكد من رفع صوت الجهاز.");
+    };
+
+    window.speechSynthesis.speak(utterance);
   };
 
   // إرسال الإجابة للتحليل
@@ -179,10 +175,8 @@ export default function SmartDictation() {
   const resetExercise = () => {
     setResult(null);
     setStudentInput("");
-    if (audioRef.current) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-    }
+    window.speechSynthesis.cancel();
+    setIsPlaying(false);
   };
 
   return (
@@ -230,14 +224,16 @@ export default function SmartDictation() {
                   <Button 
                     onClick={playDictation} 
                     disabled={isPlaying}
-                    className={`h-24 w-24 rounded-full shadow-xl text-xl transition-all ${isPlaying ? "bg-red-500 hover:bg-red-600 animate-pulse" : "bg-indigo-600 hover:bg-indigo-700 hover:scale-105"}`}
+                    className={`h-24 w-24 rounded-full shadow-xl text-xl transition-all ${isPlaying ? "bg-green-500 hover:bg-green-600 animate-pulse" : "bg-indigo-600 hover:bg-indigo-700 hover:scale-105"}`}
                   >
-                    {isPlaying ? <Loader2 className="h-10 w-10 animate-spin" /> : <Volume2 className="h-10 w-10" />}
+                    {isPlaying ? <Volume2 className="h-10 w-10 animate-bounce" /> : <Play className="h-10 w-10" />}
                   </Button>
                   <p className="mt-4 text-slate-600 font-bold">
-                    {isPlaying ? "جارٍ القراءة..." : "اضغط للاستماع للجملة 🎧"}
+                    {isPlaying ? "استمع جيداً..." : "اضغط للاستماع للجملة 🎧"}
                   </p>
-                  <p className="text-xs text-slate-400">صوت عربي واضح</p>
+                  <p className="text-xs text-slate-400">
+                    {availableVoices.length > 0 ? "صوت ذكي عالي الجودة" : "جاري تحميل الأصوات..."}
+                  </p>
                 </div>
 
                 {/* منطقة الكتابة */}
