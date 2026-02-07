@@ -23,8 +23,8 @@ import { Separator } from "@/components/ui/separator";
 
 // استيراد الأيقونات
 import {
-  Trophy, // ✅ تمت إضافتها
-  Star,   // ✅ تمت إضافتها
+  Trophy,
+  Star,
   TrendingUp,
   Play,
   Wand2,
@@ -530,9 +530,9 @@ export default function StudentDashboard() {
           </Card>
         </motion.div>
 
-        {/* ================= NAVIGATION GRID ================= */}
-        {/* أزرار التنقل الرئيسية للصفحات الجديدة */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        {/* ================= NAVIGATION GRID (UPDATED) ================= */}
+        {/* أزرار التنقل الرئيسية مع زر التحدي الإضافي (Create Custom) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           
           {/* 1. الإملاء الذكي */}
           <Link to={createPageUrl("SmartDictation")}>
@@ -546,12 +546,12 @@ export default function StudentDashboard() {
                     <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mb-4">
                       <Mic className="w-6 h-6 text-white" />
                     </div>
-                    <h3 className="text-2xl font-bold mb-1 arabic-text">الإملاء الذكي</h3>
-                    <p className="text-emerald-100 text-sm opacity-90 leading-relaxed arabic-text">
-                      استمع، اكتب، وتحدى أخطائك مع المصحح الآلي الفوري 🎧
+                    <h3 className="text-xl font-bold mb-1 arabic-text">الإملاء الذكي</h3>
+                    <p className="text-emerald-100 text-xs opacity-90 leading-relaxed arabic-text">
+                      استمع واكتب بدقة لتتحدى أخطائك 🎧
                     </p>
                   </div>
-                  <div className="mt-4 flex items-center text-sm font-bold">
+                  <div className="mt-4 flex items-center text-xs font-bold">
                     ابدأ الآن <ChevronRight className="w-4 h-4 mr-1" />
                   </div>
                 </CardContent>
@@ -571,12 +571,12 @@ export default function StudentDashboard() {
                     <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mb-4">
                       <Sparkles className="w-6 h-6 text-yellow-300" />
                     </div>
-                    <h3 className="text-2xl font-bold mb-1 arabic-text">ورشة الكتابة</h3>
-                    <p className="text-indigo-100 text-sm opacity-90 leading-relaxed arabic-text">
-                      أطلق العنان لقلمك! اكتب مواضيع تعبير وصحح أسلوبك ✍️
+                    <h3 className="text-xl font-bold mb-1 arabic-text">ورشة الكتابة</h3>
+                    <p className="text-indigo-100 text-xs opacity-90 leading-relaxed arabic-text">
+                      أطلق قلمك! اكتب وصحح أسلوبك ✍️
                     </p>
                   </div>
-                  <div className="mt-4 flex items-center text-sm font-bold">
+                  <div className="mt-4 flex items-center text-xs font-bold">
                     ابدأ الآن <ChevronRight className="w-4 h-4 mr-1" />
                   </div>
                 </CardContent>
@@ -584,7 +584,32 @@ export default function StudentDashboard() {
             </motion.div>
           </Link>
 
-          {/* 3. جدار الشهادات */}
+          {/* 3. أنشئ تمرينك الخاص (كان في الأسفل وتم رفعه) */}
+          <Link to={createPageUrl(`CreateCustomExercise?studentId=${student.id}`)}>
+            <motion.div whileHover={{ y: -5 }} whileTap={{ scale: 0.98 }}>
+              <Card className="bg-gradient-to-br from-pink-500 to-rose-600 text-white border-0 shadow-lg cursor-pointer h-full relative overflow-hidden group">
+                <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-4 translate-y-4 group-hover:scale-110 transition-transform duration-500">
+                  <Wand2 className="w-32 h-32" />
+                </div>
+                <CardContent className="p-6 flex flex-col h-full justify-between relative z-10">
+                  <div>
+                    <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mb-4">
+                      <Zap className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-1 arabic-text">أنشئ تمرينك</h3>
+                    <p className="text-pink-100 text-xs opacity-90 leading-relaxed arabic-text">
+                       صمم تحدياً خاصاً بك واختبر نفسك 🪄
+                    </p>
+                  </div>
+                  <div className="mt-4 flex items-center text-xs font-bold">
+                    إنشاء <ChevronRight className="w-4 h-4 mr-1" />
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Link>
+
+          {/* 4. جدار الشهادات */}
           <Link to={createPageUrl("Certificates")}>
             <motion.div whileHover={{ y: -5 }} whileTap={{ scale: 0.98 }}>
               <Card className="bg-gradient-to-br from-amber-400 to-orange-500 text-white border-0 shadow-lg cursor-pointer h-full relative overflow-hidden group">
@@ -596,18 +621,19 @@ export default function StudentDashboard() {
                     <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mb-4">
                       <Trophy className="w-6 h-6 text-white" />
                     </div>
-                    <h3 className="text-2xl font-bold mb-1 arabic-text">جدار الشهادات</h3>
-                    <p className="text-orange-100 text-sm opacity-90 leading-relaxed arabic-text">
-                      شاهد ثمار جهدك! شهادات تقدير موثقة لكل إنجاز تحققه 🏆
+                    <h3 className="text-xl font-bold mb-1 arabic-text">جدار الشهادات</h3>
+                    <p className="text-orange-100 text-xs opacity-90 leading-relaxed arabic-text">
+                      شاهد إنجازاتك وشهاداتك الموثقة 🏆
                     </p>
                   </div>
-                  <div className="mt-4 flex items-center text-sm font-bold">
+                  <div className="mt-4 flex items-center text-xs font-bold">
                     عرض الشهادات <ChevronRight className="w-4 h-4 mr-1" />
                   </div>
                 </CardContent>
               </Card>
             </motion.div>
           </Link>
+
         </div>
 
         {/* ================= STATS ROW ================= */}
