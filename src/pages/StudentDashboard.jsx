@@ -13,7 +13,7 @@ import {
   CardContent, 
   CardHeader, 
   CardTitle, 
-  CardDescription,
+  CardDescription, 
   CardFooter
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,8 @@ import { Separator } from "@/components/ui/separator";
 
 // استيراد الأيقونات
 import {
+  Trophy, // ✅ تمت إضافتها
+  Star,   // ✅ تمت إضافتها
   TrendingUp,
   Play,
   Wand2,
@@ -49,7 +51,7 @@ import {
 
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   AreaChart,
   Area,
