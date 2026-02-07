@@ -6,28 +6,27 @@ import React, {
   useCallback 
 } from "react";
 
+// استيراد مكونات واجهة المستخدم
 import { Button } from "@/components/ui/button";
 import { 
   Card, 
   CardContent, 
   CardHeader, 
-  CardTitle 
+  CardTitle, 
+  CardDescription,
+  CardFooter
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 
-// استيراد الأيقونات من مكتبة lucide-react
+// استيراد الأيقونات
 import {
-  GraduationCap,
-  Trophy,
-  Star,
   TrendingUp,
   Play,
   Wand2,
   MessageCircle,
-  Lock,
-  Unlock,
-  Volume2,
   Crown,
   Target,
   Zap,
@@ -38,30 +37,31 @@ import {
   Gift,
   Clock,
   Activity,
-  Settings,
   User,
   Mic,
   Medal,
-  PenTool,
-  Keyboard, // ✅ استيراد أيقونة الكيبورد للإملاء
-  Layout
+  PenTool, 
+  Keyboard,
+  ChevronRight,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell,
 } from "recharts";
 
-// ✅ استيراد الكيانات من ملف API
+// استيراد الاتصال بقاعدة البيانات والكيانات
+import { supabase } from "@/api/supabaseClient";
 import {
   Student,
   Exercise,
@@ -69,34 +69,53 @@ import {
   FamilyChallenge,
 } from "@/api/entities";
 
-// ✅ استيراد التمارين الإضافية المحلية
+// استيراد التمارين المحلية (لدمجها مع تمارين قاعدة البيانات)
 import { staticExercises } from "@/data/staticExercises";
 
 /**
- * مكون لوحة تحكم الطالب (Student Dashboard)
- * يعرض إحصائيات الطالب، التمارين، التحديات، والروابط للصفحات الأخرى.
+ * 🎓 StudentDashboard - لوحة تحكم الطالب الشاملة
+ * * تعرض هذه الصفحة ملخصاً كاملاً لأداء الطالب:
+ * 1. إحصائيات دقيقة (المتوسط، النقاط، الشارات).
+ * 2. تحليل أسبوعي للتقدم في كافة الأنشطة (نطق، كتابة، إملاء).
+ * 3. خارطة الطريق التعليمية.
+ * 4. آخر النشاطات والإنجازات.
  */
 export default function StudentDashboard() {
-  // ================= States (الحالات) =================
-  const [student, setStudent] = useState(null);
-  const [exercises, setExercises] = useState([]);
-  const [recentRecordings, setRecentRecordings] = useState([]);
-  const [completedExerciseIds, setCompletedExerciseIds] = useState([]);
-  const [studentName, setStudentName] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [statsData, setStatsData] = useState([]);
+  const navigate = useNavigate();
+
+  // ==========================================
+  // 1. إدارة الحالة (State Management)
+  // ==========================================
   
-  // شخصية المعلم الافتراضية
+  // بيانات الطالب والتحميل
+  const [student, setStudent] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // البيانات التعليمية
+  const [exercises, setExercises] = useState([]); // تمارين النطق
+  const [completedExerciseIds, setCompletedExerciseIds] = useState([]);
+  
+  // سجلات النشاط (من كافة المصادر)
+  const [unifiedHistory, setUnifiedHistory] = useState([]); // السجل الموحد
+  const [recentActivities, setRecentActivities] = useState([]); // آخر 5 نشاطات
+  
+  // بيانات التحليل البياني
+  const [weeklyStats, setWeeklyStats] = useState([]);
+  const [averageScore, setAverageScore] = useState(0);
+  const [totalPoints, setTotalPoints] = useState(0);
+  
+  // التحديات والشخصية
+  const [challenges, setChallenges] = useState([]);
   const [teacherPersona, setTeacherPersona] = useState(
     localStorage.getItem("teacherPersona") || "calm"
   );
 
-  const [challenges, setChallenges] = useState([]);
-
-  // ================= Functions (الدوال) =================
+  // ==========================================
+  // 2. الدوال المساعدة (Helper Functions)
+  // ==========================================
 
   /**
-   * تغيير شخصية المعلم (هادئ، حازم، مرح)
+   * تبديل شخصية المعلم (Gamification)
    */
   const togglePersona = () => {
     const personas = ["calm", "strict", "fun"];
@@ -106,24 +125,42 @@ export default function StudentDashboard() {
     localStorage.setItem("teacherPersona", nextPersona);
   };
 
-  /**
-   * الحصول على النص المعروض لشخصية المعلم
-   */
   const getPersonaLabel = (p) => {
     switch (p) {
-      case "calm":
-        return "المعلم الهادئ 🌿";
-      case "strict":
-        return "المعلم الحازم 👨‍🏫";
-      case "fun":
-        return "المعلم المرح 🤡";
-      default:
-        return "المعلم الهادئ";
+      case "calm": return "المعلم الهادئ 🌿";
+      case "strict": return "المعلم الحازم 👨‍🏫";
+      case "fun": return "المعلم المرح 🤡";
+      default: return "المعلم الهادئ";
     }
   };
 
   /**
-   * البحث عن حساب الطالب أو إنشاؤه إذا لم يكن موجوداً
+   * حساب مستوى التقدم في المرحلة الحالية
+   */
+  const getLevelProgress = () => {
+    if (!student) return 0;
+    // نفترض أن كل مستوى يتكون من 10 مراحل
+    const maxStage = 10; 
+    const progress = ((student.current_stage - 1) / (maxStage - 1)) * 100;
+    return Math.min(Math.max(progress, 5), 100); // لا تقل عن 5% ولا تزيد عن 100%
+  };
+
+  /**
+   * تحديد الشارة التالية بناءً على النقاط
+   */
+  const getNextBadge = () => {
+    if (!totalPoints) return "البداية 🎯";
+    
+    if (totalPoints >= 5000) return "ملك اللغة 👑";
+    if (totalPoints >= 3000) return "الأديب الصغير 📜";
+    if (totalPoints >= 1000) return "خبير النطق 🏆";
+    if (totalPoints >= 500) return "قارئ ماهر 📖";
+    if (totalPoints >= 100) return "طالب مجتهد 🌟";
+    return "بداية موفقة 🚀";
+  };
+
+  /**
+   * تسجيل الدخول أو إنشاء حساب طالب جديد
    */
   const findOrCreateStudent = useCallback(async (name) => {
     setIsLoading(true);
@@ -133,7 +170,6 @@ export default function StudentDashboard() {
       const existingStudent = allStudents.find((s) => s.name === trimmedName);
 
       if (existingStudent) {
-        // تحديث آخر تسجيل دخول
         await Student.update(existingStudent.id, {
           last_login: new Date().toISOString(),
         });
@@ -147,7 +183,6 @@ export default function StudentDashboard() {
           accessCode += chars.charAt(Math.floor(Math.random() * chars.length));
         }
 
-        // إنشاء طالب جديد
         const newStudent = await Student.create({
           name: trimmedName,
           level: "مبتدئ",
@@ -162,53 +197,131 @@ export default function StudentDashboard() {
       localStorage.setItem("studentName", trimmedName);
     } catch (error) {
       console.error("Failed to find/create student:", error);
-      alert("حدث خطأ في تحميل البيانات. يرجى المحاولة مرة أخرى.");
+      alert("حدث خطأ في تحميل البيانات. يرجى التحديث.");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   /**
-   * تحميل بيانات الطالب (التمارين، التسجيلات، التحديات)
+   * 🚀 الدالة الرئيسية: تحميل ودمج جميع بيانات الطالب
+   * تقوم بجلب البيانات من 3 جداول مختلفة وتوحيدها لعرضها
    */
   const loadStudentData = useCallback(async () => {
     if (!student) return;
 
     setIsLoading(true);
     try {
-      // 1. جلب التمارين من قاعدة البيانات (Supabase)
+      // 1. جلب التمارين الأساسية (النطق)
       const dbExercises = await Exercise.list();
-      
-      // 2. دمج التمارين المحلية مع تمارين قاعدة البيانات
       const allExercises = [...dbExercises, ...staticExercises];
-      
       setExercises(allExercises);
 
-      // جلب التسجيلات
-      const allRecordings = await Recording.list("-created_date");
-      const studentRecordings = allRecordings.filter(
-        (r) => r.student_id === student.id
-      );
-      setRecentRecordings(studentRecordings.slice(0, 5));
+      // 2. جلب سجلات النطق (Voice Recordings)
+      const { data: voiceData } = await supabase
+        .from('recordings')
+        .select('*')
+        .eq('student_id', student.id)
+        .order('created_date', { ascending: false });
 
-      // تحديد التمارين المكتملة
-      const completedIds = studentRecordings.map((r) => r.exercise_id);
-      setCompletedExerciseIds(completedIds);
+      // 3. جلب سجلات الكتابة (Writing Submissions)
+      const { data: writingData } = await supabase
+        .from('writing_submissions')
+        .select('*, writing_exercises(title)')
+        .eq('student_id', student.id)
+        .order('created_at', { ascending: false });
 
-      // تجهيز بيانات الرسم البياني
-      const chartData = studentRecordings
-        .slice(0, 7)
-        .reverse()
-        .map((rec, idx) => ({
-          name: `ت ${idx + 1}`,
-          score: rec.score || 0,
-          date: new Date(rec.created_date).toLocaleDateString("ar-AE", {
-            weekday: "short",
-          }),
-        }));
-      setStatsData(chartData);
+      // 4. جلب سجلات الإملاء (Dictation Submissions)
+      const { data: dictationData } = await supabase
+        .from('dictation_submissions')
+        .select('*, dictation_exercises(title)')
+        .eq('student_id', student.id)
+        .order('created_at', { ascending: false });
 
-      // جلب التحديات العائلية
+      // 5. دمج كل البيانات في "تاريخ موحد" (Unified History)
+      let combinedHistory = [];
+
+      // أضف الصوتيات
+      if (voiceData) {
+        combinedHistory = combinedHistory.concat(voiceData.map(item => ({
+          id: `voice-${item.id}`,
+          type: 'voice',
+          title: 'تمرين نطق', // يمكن تحسينه بجلب اسم التمرين
+          score: item.score || 0,
+          date: new Date(item.created_date),
+          feedback: item.feedback || 'أحسنت المحاولة!'
+        })));
+        setCompletedExerciseIds(voiceData.map(r => r.exercise_id));
+      }
+
+      // أضف الكتابة
+      if (writingData) {
+        combinedHistory = combinedHistory.concat(writingData.map(item => ({
+          id: `write-${item.id}`,
+          type: 'writing',
+          title: item.writing_exercises?.title || 'ورشة كتابة',
+          score: item.score || 0,
+          date: new Date(item.created_at),
+          feedback: item.ai_analysis?.feedback || 'تم التصحيح'
+        })));
+      }
+
+      // أضف الإملاء
+      if (dictationData) {
+        combinedHistory = combinedHistory.concat(dictationData.map(item => ({
+          id: `dict-${item.id}`,
+          type: 'dictation',
+          title: item.dictation_exercises?.title || 'إملاء ذكي',
+          score: item.score || 0,
+          date: new Date(item.created_at),
+          feedback: item.mistakes_analysis?.feedback || 'نتيجة الإملاء'
+        })));
+      }
+
+      // ترتيب حسب التاريخ (الأحدث أولاً)
+      combinedHistory.sort((a, b) => b.date - a.date);
+      setUnifiedHistory(combinedHistory);
+      setRecentActivities(combinedHistory.slice(0, 5));
+
+      // 6. حساب الإحصائيات العامة (المتوسط والنقاط)
+      if (combinedHistory.length > 0) {
+        const totalScoreSum = combinedHistory.reduce((sum, item) => sum + item.score, 0);
+        const avg = Math.round(totalScoreSum / combinedHistory.length);
+        setAverageScore(avg);
+
+        // النقاط: كل نشاط = 10 نقاط + (الدرجة / 2)
+        const points = combinedHistory.reduce((sum, item) => sum + 10 + Math.round(item.score / 2), 0);
+        setTotalPoints(points);
+      }
+
+      // 7. تجهيز بيانات الرسم البياني (آخر 7 أيام)
+      const last7Days = [...Array(7)].map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        return d.toISOString().split('T')[0]; // YYYY-MM-DD
+      }).reverse();
+
+      const chartData = last7Days.map(dateStr => {
+        // البحث عن نشاطات في هذا اليوم
+        const daysActivities = combinedHistory.filter(item => 
+          item.date.toISOString().split('T')[0] === dateStr
+        );
+        
+        // حساب متوسط اليوم
+        let dayScore = 0;
+        if (daysActivities.length > 0) {
+          dayScore = Math.round(daysActivities.reduce((sum, act) => sum + act.score, 0) / daysActivities.length);
+        }
+
+        return {
+          date: new Date(dateStr).toLocaleDateString('ar-AE', { weekday: 'short' }), // السبت، الأحد...
+          score: dayScore,
+          fullDate: dateStr
+        };
+      });
+      setWeeklyStats(chartData);
+
+      // 8. جلب التحديات
       try {
         const allChallenges = await FamilyChallenge.list("-created_date");
         const myChallenges = allChallenges.filter(
@@ -218,6 +331,7 @@ export default function StudentDashboard() {
       } catch (e) {
         console.error("Challenges error", e);
       }
+
     } catch (error) {
       console.error("Failed to load student data:", error);
     } finally {
@@ -225,7 +339,9 @@ export default function StudentDashboard() {
     }
   }, [student]);
 
-  // ================= Effects (المؤثرات) =================
+  // ==========================================
+  // 3. Effect Hooks
+  // ==========================================
 
   useEffect(() => {
     const savedStudentId = localStorage.getItem("studentId");
@@ -257,46 +373,20 @@ export default function StudentDashboard() {
     }
   }, [student, loadStudentData]);
 
-  // ================= Helpers (مساعدات) =================
-
-  const getLevelProgress = () => {
-    if (!student) return 0;
-    const maxStage = 10;
-    return ((student.current_stage - 1) / (maxStage - 1)) * 100;
-  };
-
-  const getNextBadge = () => {
-    if (!student) return null;
-    const totalExercises = student.total_exercises || 0;
-    const averageScore = student.average_score || 0;
-
-    if (totalExercises >= 50 && averageScore >= 90) return "خبير النطق 🏆";
-    if (totalExercises >= 30 && averageScore >= 85) return "متقن القراءة ⭐";
-    if (totalExercises >= 20 && averageScore >= 80) return "قارئ ماهر 📖";
-    if (totalExercises >= 10 && averageScore >= 75) return "طالب متميز 🌟";
-    if (totalExercises >= 5) return "بداية جيدة 🎯";
-    return "أول تمرين 🎉";
-  };
-
-  const getCurrentStageExercises = () => {
-    if (!student) return [];
-
-    return exercises.filter(
-      (ex) =>
-        ex.level === student.level &&
-        parseInt(ex.stage) === student.current_stage &&
-        !completedExerciseIds.includes(ex.id)
-    );
-  };
-
+  // ==========================================
+  // 4. خوارزمية الخريطة اللانهائية (Infinite Map)
+  // ==========================================
+  
   const generateInfiniteStages = () => {
     const stages = [];
     const currentStage = student?.current_stage || 1;
 
-    for (let i = currentStage; i <= currentStage + 5; i++) {
+    // عرض 5 مراحل (الحالية + 4 بعدها)
+    for (let i = currentStage; i <= currentStage + 4; i++) {
       const isUnlocked = i === currentStage;
       const isCompleted = i < currentStage;
 
+      // تصفية التمارين الخاصة بهذه المرحلة
       const stageExercises = exercises.filter(
         (ex) => ex.level === student?.level && parseInt(ex.stage) === i
       );
@@ -315,22 +405,31 @@ export default function StudentDashboard() {
         icon: isCompleted ? "✅" : isUnlocked ? "🔓" : "🔒",
       });
     }
-
     return stages;
   };
 
-  // ================= Loading State =================
+  const infiniteStages = generateInfiniteStages();
+  const currentStageExercises = exercises.filter(
+    (ex) =>
+      ex.level === student?.level &&
+      parseInt(ex.stage) === student?.current_stage &&
+      !completedExerciseIds.includes(ex.id)
+  );
+
+  // ==========================================
+  // 5. واجهة المستخدم (Render)
+  // ==========================================
+
   if (isLoading && !student) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-500">
-        <div className="text-center arabic-text">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="w-16 h-16 border-4 border-white border-t-transparent rounded-full mx-auto mb-4"
-          />
-          <p className="text-white text-xl font-bold">جارٍ التحميل...</p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="absolute top-0 left-0 w-16 h-16 border-4 border-purple-400 border-b-transparent rounded-full animate-spin-slow opacity-60"></div>
         </div>
+        <p className="mt-4 text-indigo-900 font-bold text-lg animate-pulse arabic-text">
+          جارٍ تجهيز مساحة التعلم الخاصة بك... 🚀
+        </p>
       </div>
     );
   }
@@ -340,655 +439,335 @@ export default function StudentDashboard() {
     return null;
   }
 
-  const currentStageExercises = getCurrentStageExercises();
-  const infiniteStages = generateInfiniteStages();
-
-  // ================= Main Render =================
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 p-3 md:p-6">
-      <div className="max-w-7xl mx-auto w-full">
+    <div className="min-h-screen w-full bg-slate-50 pb-20 font-sans overflow-x-hidden" style={{ fontFamily: "'Traditional Arabic', sans-serif" }}>
+      
+      {/* خلفية جمالية */}
+      <div className="fixed top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+        <div className="absolute top-[-10%] right-[-5%] w-96 h-96 bg-purple-200/30 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-[-10%] left-[-5%] w-96 h-96 bg-blue-200/30 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         
-        {/* ================= Header Section ================= */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6 md:mb-8"
+        {/* ================= HEADER SECTION ================= */}
+        <motion.div 
+          initial={{ y: -20, opacity: 0 }} 
+          animate={{ y: 0, opacity: 1 }} 
+          transition={{ duration: 0.5 }}
+          className="mb-8"
         >
-          <div className="bg-gradient-to-r from-purple-600 via-pink-600 to-orange-600 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl mb-4 md:mb-6">
-            <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-4">
-              
-              {/* Student Info & Access Code */}
-              <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-right w-full">
-                <motion.div
-                  animate={{ rotate: [0, 10, -10, 0] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="w-12 h-12 md:w-16 md:h-16 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0"
-                >
-                  <Crown className="w-6 h-6 md:w-8 md:h-8 text-yellow-300" />
-                </motion.div>
-                
-                <div className="w-full">
-                  <h1 className="text-xl md:text-3xl font-bold text-white arabic-text">
-                    مرحباً {student?.name}! 👋
-                  </h1>
-
-                  {/* Access Code Box */}
-                  <div className="mt-4 md:mt-6 w-full max-w-md md:mx-0 bg-white rounded-xl md:rounded-2xl p-4 md:p-6 shadow-2xl border-2 md:border-4 border-yellow-400 text-center mx-auto md:mr-0">
-                    <p className="text-indigo-900 font-bold text-sm md:text-lg arabic-text mb-2 md:mb-3">
-                      🔑 كود ولي الأمر (Access Code)
-                    </p>
-                    <div className="bg-indigo-50 rounded-lg md:rounded-xl p-2 md:p-4 mb-2 md:mb-3 border-2 border-indigo-100 overflow-hidden">
-                      <p
-                        className="text-2xl md:text-5xl font-mono font-black text-indigo-900 tracking-widest md:tracking-[0.3em] select-all break-all cursor-pointer hover:text-indigo-700 transition-colors"
-                        onClick={() => {
-                          navigator.clipboard.writeText(student?.access_code || "");
-                          alert("تم نسخ الكود!");
-                        }}
-                      >
-                        {student?.access_code || "----"}
-                      </p>
-                    </div>
-                    <p className="text-indigo-600 text-xs md:text-sm arabic-text font-semibold">
-                      انسخ هذا الكود وأعطه لوالديك
-                    </p>
-                  </div>
-
-                  {/* Badges: Level & Stage */}
-                  <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mt-4 flex-wrap">
-                    <Badge className="bg-white/20 text-white text-xs md:text-sm arabic-text border-0">
-                      <Star className="w-3 h-3 md:w-4 md:h-4 ml-1" />
-                      {student?.level}
-                    </Badge>
-                    <Badge className="bg-yellow-400 text-yellow-900 text-xs md:text-sm arabic-text border-0 animate-pulse">
-                      <Flame className="w-3 h-3 md:w-4 md:h-4 ml-1" />
-                      المرحلة {student?.current_stage}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-
-              {/* Total Exercises & Persona Toggle */}
-              <div className="flex flex-row md:flex-col items-center md:items-end gap-3 justify-center w-full md:w-auto mt-2 md:mt-0">
-                <div className="text-center md:text-right">
-                  <div className="text-3xl md:text-5xl font-bold text-white mb-1">
-                    {student?.total_exercises || 0}
-                  </div>
-                  <div className="text-white/80 text-xs md:text-sm arabic-text">
-                    تمرين مكتمل 🎯
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={togglePersona}
-                  className="bg-white/20 hover:bg-white/30 text-white border-0 arabic-text backdrop-blur-md"
-                >
-                  <User className="w-4 h-4 ml-2" />
-                  {getPersonaLabel(teacherPersona)}
-                </Button>
-              </div>
+          <Card className="border-0 shadow-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 text-white overflow-hidden relative">
+            {/* زخارف الخلفية */}
+            <div className="absolute top-0 right-0 p-10 opacity-10 transform rotate-12">
+              <Trophy className="w-64 h-64 text-white" />
             </div>
-
-            {/* Level Progress Bar */}
-            <div className="mt-6 bg-white/20 rounded-full p-1">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${getLevelProgress()}%` }}
-                transition={{ duration: 1, ease: "easeOut" }}
-                className="bg-gradient-to-r from-yellow-400 to-orange-400 h-4 rounded-full flex items-center justify-end px-2"
-              >
-                <span className="text-xs font-bold text-white">
-                  {Math.round(getLevelProgress())}%
-                </span>
-              </motion.div>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* ================= NEW NAVIGATION CARDS (Writing + Certificates + Dictation) ================= */}
-        {/* ✅ تمت إضافة بطاقة الإملاء الذكي هنا */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             
-            {/* 1. بطاقة ورشة الكتابة الذكية */}
-            <Link to={createPageUrl("WritingWorkshop")}>
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Card className="bg-gradient-to-r from-indigo-500 to-blue-600 text-white border-0 shadow-lg cursor-pointer hover:shadow-xl transition-all">
-                        <CardContent className="p-6 flex items-center justify-between">
-                            <div>
-                                <h3 className="text-2xl font-bold mb-1 flex items-center gap-2 arabic-text">
-                                    <PenTool className="w-6 h-6" /> ورشة الكتابة الذكية
-                                </h3>
-                                <p className="text-blue-100 opacity-90 arabic-text">اكتب مواضيع تعبير وصححها فوراً مع المعلم الذكي! ✍️</p>
-                            </div>
-                            <div className="bg-white/20 p-3 rounded-full">
-                                <Sparkles className="w-8 h-8 text-yellow-300 animate-pulse" />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </motion.div>
-            </Link>
-
-            {/* 2. بطاقة جدار الشهادات */}
-            <Link to={createPageUrl("Certificates")}>
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Card className="bg-gradient-to-r from-amber-400 to-orange-500 text-white border-0 shadow-lg cursor-pointer hover:shadow-xl transition-all">
-                        <CardContent className="p-6 flex items-center justify-between">
-                            <div>
-                                <h3 className="text-2xl font-bold mb-1 flex items-center gap-2 arabic-text">
-                                    <Medal className="w-6 h-6" /> جدار الشهادات
-                                </h3>
-                                <p className="text-orange-100 opacity-90 arabic-text">شاهد إنجازاتك وشهادات التقدير التي جمعتها 🏆</p>
-                            </div>
-                            <div className="bg-white/20 p-3 rounded-full">
-                                <Trophy className="w-8 h-8 text-white" />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </motion.div>
-            </Link>
-
-            {/* 3. بطاقة الإملاء الذكي (الجديدة) */}
-            <Link to={createPageUrl("SmartDictation")}>
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Card className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-0 shadow-lg cursor-pointer hover:shadow-xl transition-all">
-                        <CardContent className="p-6 flex items-center justify-between">
-                            <div>
-                                <h3 className="text-2xl font-bold mb-1 flex items-center gap-2 arabic-text">
-                                    <Keyboard className="w-6 h-6" /> الإملاء الذكي
-                                </h3>
-                                <p className="text-emerald-100 opacity-90 arabic-text">استمع للجمل واكتبها بدقة لتتحدى أخطائك! 🎧</p>
-                            </div>
-                            <div className="bg-white/20 p-3 rounded-full">
-                                <Mic className="w-8 h-8 text-white" />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </motion.div>
-            </Link>
-        </div>
-
-        {/* ================= Linguistic Identity Card ================= */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6"
-        >
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-100">
-            <CardHeader>
-              <CardTitle className="arabic-text flex items-center gap-2 text-indigo-900">
-                <Activity className="w-5 h-5 text-indigo-600" />
-                هويتي اللغوية 🆔
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col sm:flex-row justify-between items-center mb-4 bg-white p-3 rounded-lg shadow-sm gap-4 sm:gap-0">
-                <div className="text-center sm:text-right w-full sm:w-auto">
-                  <p className="text-gray-500 text-xs arabic-text">الاسم</p>
-                  <p className="font-bold text-indigo-900 arabic-text">
-                    {student?.name}
-                  </p>
-                </div>
-                <div className="text-center sm:text-right w-full sm:w-auto">
-                  <p className="text-gray-500 text-xs arabic-text">الصف</p>
-                  <p className="font-bold text-indigo-900 arabic-text">
-                    {student?.grade || "غير محدد"}
-                  </p>
-                </div>
-                <div className="text-center w-full sm:w-auto">
-                  <div className="flex justify-center sm:justify-start text-yellow-400">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-4 h-4 ${
-                          i < 3 ? "fill-current" : "text-gray-300"
-                        }`}
-                      />
-                    ))}
+            <CardContent className="p-6 md:p-8 relative z-10">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                
+                {/* معلومات الطالب */}
+                <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-right w-full md:w-auto">
+                  <div className="relative">
+                    <div className="w-24 h-24 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border-4 border-white/30 shadow-lg">
+                      <span className="text-4xl">🎓</span>
+                    </div>
+                    <div className="absolute -bottom-2 -right-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full shadow-sm animate-bounce">
+                      {student.level}
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1 arabic-text">
-                    مستوى النطق
-                  </p>
+                  
+                  <div>
+                    <h1 className="text-3xl md:text-4xl font-bold mb-2 arabic-text">
+                      مرحباً يا بطل، {student.name}! 👋
+                    </h1>
+                    <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                      <Badge className="bg-black/20 hover:bg-black/30 text-white border-0 backdrop-blur-sm px-3 py-1">
+                        <Flame className="w-4 h-4 mr-1 text-orange-300" /> 
+                        المرحلة {student.current_stage}
+                      </Badge>
+                      <Badge className="bg-black/20 hover:bg-black/30 text-white border-0 backdrop-blur-sm px-3 py-1">
+                        <Star className="w-4 h-4 mr-1 text-yellow-300" /> 
+                        {totalPoints} نقطة
+                      </Badge>
+                    </div>
+                  </div>
                 </div>
+
+                {/* كود الدخول وزر الشخصية */}
+                <div className="flex flex-col items-center gap-3 bg-white/10 p-4 rounded-xl backdrop-blur-sm border border-white/20">
+                  <p className="text-xs text-indigo-100 font-medium">🔑 كود ولي الأمر</p>
+                  <code 
+                    className="text-2xl font-mono font-black tracking-widest bg-black/20 px-4 py-2 rounded-lg cursor-pointer hover:bg-black/30 transition-colors"
+                    onClick={() => { navigator.clipboard.writeText(student.access_code); alert("تم نسخ الكود!"); }}
+                  >
+                    {student.access_code}
+                  </code>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={togglePersona} 
+                    className="text-white hover:bg-white/20 w-full"
+                  >
+                    <User className="w-4 h-4 ml-2" />
+                    {getPersonaLabel(teacherPersona)}
+                  </Button>
+                </div>
+
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-center">
-                  <p className="text-green-800 text-sm font-bold mb-2 arabic-text">
-                    🌟 حروف أتقنتها
-                  </p>
-                  <div className="flex justify-center gap-2 flex-wrap">
-                    {student?.mastered_letters?.length > 0 ? (
-                      student.mastered_letters.slice(0, 5).map((c) => (
-                        <span
-                          key={c}
-                          className="w-8 h-8 bg-white rounded-full flex items-center justify-center font-bold text-green-700 shadow-sm"
-                        >
-                          {c}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-xs text-gray-400 arabic-text font-bold">
-                        لا يوجد حروف متقنة بعد
-                      </span>
-                    )}
-                  </div>
+              {/* شريط التقدم للمستوى */}
+              <div className="mt-8">
+                <div className="flex justify-between text-xs text-indigo-100 mb-1">
+                  <span>التقدم في المستوى الحالي</span>
+                  <span>{Math.round(getLevelProgress())}%</span>
                 </div>
-                <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 text-center">
-                  <p className="text-orange-800 text-sm font-bold mb-2 arabic-text">
-                    💪 أتدرب عليها
-                  </p>
-                  <div className="flex justify-center gap-2 flex-wrap">
-                    {student?.needs_practice_letters?.length > 0 ? (
-                      student.needs_practice_letters.slice(0, 5).map((c) => (
-                        <span
-                          key={c}
-                          className="w-8 h-8 bg-white rounded-full flex items-center justify-center font-bold text-orange-700 shadow-sm"
-                        >
-                          {c}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-xs text-gray-400 arabic-text font-bold">
-                        لا يوجد نقاط ضعف
-                      </span>
-                    )}
-                  </div>
-                </div>
+                <Progress value={getLevelProgress()} className="h-3 bg-black/20" indicatorClassName="bg-gradient-to-r from-yellow-400 to-orange-500" />
               </div>
             </CardContent>
           </Card>
-
-          {/* Messages & Family Challenges */}
-          <div className="space-y-6">
-            {student?.encouragement_message && (
-              <Card className="border-0 shadow-lg bg-pink-50 border-2 border-pink-100 relative overflow-hidden">
-                <div className="absolute top-0 left-0 p-2 opacity-10">
-                  <MessageCircle className="w-24 h-24 text-pink-500" />
-                </div>
-                <CardContent className="p-6 text-center relative z-10">
-                  <p className="text-sm text-pink-500 font-bold mb-2 arabic-text">
-                    💌 رسالة من والدي اليوم
-                  </p>
-                  <p className="text-xl text-pink-700 font-bold arabic-text leading-relaxed">
-                    "{student.encouragement_message}"
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            {challenges.length > 0 && (
-              <Card className="border-0 shadow-lg bg-purple-50 border-2 border-purple-100">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base text-purple-900 arabic-text flex items-center justify-between">
-                    <span>🏆 تحدي العائلة الجديد!</span>
-                    <Badge className="bg-purple-500">نشط</Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-purple-800 font-bold text-lg text-center mb-4 arabic-text">
-                    "{challenges[0].text}"
-                  </p>
-                  {challenges[0].parent_audio_url && (
-                    <div className="mb-4 flex justify-center">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          window.open(challenges[0].parent_audio_url)
-                        }
-                        className="arabic-text"
-                      >
-                        <Play className="w-4 h-4 ml-2" /> استمع لتحدي بابا/ماما
-                      </Button>
-                    </div>
-                  )}
-                  <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white arabic-text">
-                    <Mic className="w-4 h-4 ml-2" /> قبول التحدي وتسجيل صوتي
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-          </div>
         </motion.div>
 
-        {/* ================= Stats Cards Grid ================= */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 mb-8"
-        >
-          {/* Average Score */}
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Card className="border-0 shadow-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white h-full">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
+        {/* ================= NAVIGATION GRID ================= */}
+        {/* أزرار التنقل الرئيسية للصفحات الجديدة */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          
+          {/* 1. الإملاء الذكي */}
+          <Link to={createPageUrl("SmartDictation")}>
+            <motion.div whileHover={{ y: -5 }} whileTap={{ scale: 0.98 }}>
+              <Card className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-0 shadow-lg cursor-pointer h-full relative overflow-hidden group">
+                <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-4 translate-y-4 group-hover:scale-110 transition-transform duration-500">
+                  <Keyboard className="w-32 h-32" />
+                </div>
+                <CardContent className="p-6 flex flex-col h-full justify-between relative z-10">
                   <div>
-                    <p className="text-blue-100 text-sm arabic-text">
-                      المتوسط
-                    </p>
-                    <p className="text-4xl font-bold">
-                      {student?.average_score || 0}%
+                    <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mb-4">
+                      <Mic className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-1 arabic-text">الإملاء الذكي</h3>
+                    <p className="text-emerald-100 text-sm opacity-90 leading-relaxed arabic-text">
+                      استمع، اكتب، وتحدى أخطائك مع المصحح الآلي الفوري 🎧
                     </p>
                   </div>
-                  <TrendingUp className="w-12 h-12 text-blue-200" />
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Badges Count */}
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Card className="border-0 shadow-xl bg-gradient-to-br from-green-500 to-green-600 text-white h-full">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-green-100 text-sm arabic-text">
-                      الشارات
-                    </p>
-                    <p className="text-4xl font-bold">
-                      {student?.badges?.length || 0}
-                    </p>
+                  <div className="mt-4 flex items-center text-sm font-bold">
+                    ابدأ الآن <ChevronRight className="w-4 h-4 mr-1" />
                   </div>
-                  <Award className="w-12 h-12 text-green-200" />
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Points */}
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Card className="border-0 shadow-xl bg-gradient-to-br from-purple-500 to-purple-600 text-white h-full">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-purple-100 text-sm arabic-text">
-                      النقاط
-                    </p>
-                    <p className="text-4xl font-bold">
-                      {(student?.total_exercises || 0) * 10}
-                    </p>
-                  </div>
-                  <Target className="w-12 h-12 text-purple-200" />
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Next Badge */}
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Card className="border-0 shadow-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white h-full">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-orange-100 text-sm arabic-text">
-                      الشارة التالية
-                    </p>
-                    <p className="text-lg font-bold truncate max-w-[100px]">{getNextBadge()}</p>
-                  </div>
-                  <Gift className="w-12 h-12 text-orange-200" />
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Teacher Lessons */}
-          <Link to={createPageUrl("StudentLessons")} className="block h-full">
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="h-full"
-            >
-              <Card className="border-0 shadow-xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white h-full cursor-pointer">
-                <CardContent className="p-6 flex flex-col justify-center items-center h-full text-center">
-                  <BookOpen className="w-12 h-12 text-indigo-200 mb-2" />
-                  <p className="text-indigo-100 arabic-text font-semibold">
-                    شروحات المعلم
-                  </p>
                 </CardContent>
               </Card>
             </motion.div>
           </Link>
-        </motion.div>
 
-        {/* ================= Heatmap Section ================= */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-8">
-          <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="arabic-text flex items-center gap-2">
-                <Activity className="w-5 h-5 text-orange-500" />
-                خارطة نطق الحروف (نقاط قوتك)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {student?.mastered_letters &&
-              student.mastered_letters.length > 0 ? (
-                <div className="flex flex-wrap gap-2 justify-center" dir="rtl">
-                  {student.mastered_letters.map((char) => (
-                    <div
-                      key={char}
-                      className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg border-2 border-green-200 bg-green-100 text-green-700 shadow-sm"
-                    >
-                      {char}
+          {/* 2. ورشة الكتابة */}
+          <Link to={createPageUrl("WritingWorkshop")}>
+            <motion.div whileHover={{ y: -5 }} whileTap={{ scale: 0.98 }}>
+              <Card className="bg-gradient-to-br from-indigo-500 to-blue-600 text-white border-0 shadow-lg cursor-pointer h-full relative overflow-hidden group">
+                <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-4 translate-y-4 group-hover:scale-110 transition-transform duration-500">
+                  <PenTool className="w-32 h-32" />
+                </div>
+                <CardContent className="p-6 flex flex-col h-full justify-between relative z-10">
+                  <div>
+                    <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mb-4">
+                      <Sparkles className="w-6 h-6 text-yellow-300" />
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 arabic-text mb-2 text-lg">
-                    لم يتم تسجيل حروف متقنة بعد 🔤
-                  </p>
-                  <p className="text-indigo-600 arabic-text">
-                    ابدأ التمارين لملء خارطة حروفك وتلوينها! 🚀
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
+                    <h3 className="text-2xl font-bold mb-1 arabic-text">ورشة الكتابة</h3>
+                    <p className="text-indigo-100 text-sm opacity-90 leading-relaxed arabic-text">
+                      أطلق العنان لقلمك! اكتب مواضيع تعبير وصحح أسلوبك ✍️
+                    </p>
+                  </div>
+                  <div className="mt-4 flex items-center text-sm font-bold">
+                    ابدأ الآن <ChevronRight className="w-4 h-4 mr-1" />
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Link>
 
-        {/* ================= Weekly Analysis Chart ================= */}
-        <motion.div
+          {/* 3. جدار الشهادات */}
+          <Link to={createPageUrl("Certificates")}>
+            <motion.div whileHover={{ y: -5 }} whileTap={{ scale: 0.98 }}>
+              <Card className="bg-gradient-to-br from-amber-400 to-orange-500 text-white border-0 shadow-lg cursor-pointer h-full relative overflow-hidden group">
+                <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-4 translate-y-4 group-hover:scale-110 transition-transform duration-500">
+                  <Medal className="w-32 h-32" />
+                </div>
+                <CardContent className="p-6 flex flex-col h-full justify-between relative z-10">
+                  <div>
+                    <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mb-4">
+                      <Trophy className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-1 arabic-text">جدار الشهادات</h3>
+                    <p className="text-orange-100 text-sm opacity-90 leading-relaxed arabic-text">
+                      شاهد ثمار جهدك! شهادات تقدير موثقة لكل إنجاز تحققه 🏆
+                    </p>
+                  </div>
+                  <div className="mt-4 flex items-center text-sm font-bold">
+                    عرض الشهادات <ChevronRight className="w-4 h-4 mr-1" />
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Link>
+        </div>
+
+        {/* ================= STATS ROW ================= */}
+        <motion.div 
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
           initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="mb-8"
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
         >
-          <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-xl font-bold arabic-text flex items-center gap-2">
-                <Activity className="w-6 h-6 text-blue-600" />
-                تحليل الأداء الأسبوعي
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[250px] w-full">
-                {statsData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={statsData}>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                      <XAxis
-                        dataKey="date"
-                        stroke="#888888"
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <YAxis
-                        stroke="#888888"
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(value) => `${value}%`}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#fff",
-                          borderRadius: "8px",
-                          border: "none",
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                        }}
-                        cursor={{ fill: "rgba(0,0,0,0.05)" }}
-                      />
-                      <Bar dataKey="score" radius={[4, 4, 0, 0]} name="الدرجة">
-                        {statsData.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={
-                              entry.score >= 90
-                                ? "#22c55e"
-                                : entry.score >= 70
-                                ? "#f59e0b"
-                                : "#ef4444"
-                            }
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-gray-400 arabic-text">
-                    لا توجد بيانات كافية للعرض بعد
-                  </div>
-                )}
+          {/* 1. Average Score */}
+          <Card className="bg-white border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-slate-500 text-xs font-bold mb-1">المتوسط العام</p>
+                <div className="text-3xl font-bold text-slate-800">{averageScore}%</div>
               </div>
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${averageScore >= 90 ? 'bg-green-100 text-green-600' : averageScore >= 70 ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
+                <TrendingUp className="w-6 h-6" />
+              </div>
+            </CardContent>
+          </Card>
 
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                  <div className="flex items-center gap-2 mb-2 text-blue-800 font-bold arabic-text">
-                    <Clock className="w-4 h-4" />
-                    وقت التدريب
-                  </div>
-                  <div className="text-2xl font-bold text-blue-900">
-                    {student?.total_minutes || 0} دقيقة
-                  </div>
-                </div>
-                <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
-                  <div className="flex items-center gap-2 mb-2 text-purple-800 font-bold arabic-text">
-                    <Zap className="w-4 h-4" />
-                    أفضل أداء
-                  </div>
-                  <div className="text-2xl font-bold text-purple-900">
-                    {recentRecordings.length > 0
-                      ? Math.max(
-                          ...recentRecordings.map((r) => r.score || 0)
-                        )
-                      : 0}
-                    %
-                  </div>
-                </div>
-                <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
-                  <div className="flex items-center gap-2 mb-2 text-orange-800 font-bold arabic-text">
-                    <Award className="w-4 h-4" />
-                    آخر نشاط
-                  </div>
-                  <div className="text-lg font-bold text-orange-900 arabic-text">
-                    {student?.last_activity
-                      ? new Date(
-                          student.last_activity
-                        ).toLocaleDateString("ar-AE")
-                      : "اليوم"}
-                  </div>
-                  <p className="text-xs text-orange-600 arabic-text">
-                    تاريخ آخر تفاعل
-                  </p>
-                </div>
+          {/* 2. Total Points */}
+          <Card className="bg-white border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-slate-500 text-xs font-bold mb-1">نقاط الخبرة</p>
+                <div className="text-3xl font-bold text-purple-600">{totalPoints}</div>
+              </div>
+              <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center">
+                <Zap className="w-6 h-6" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 3. Completed Exercises */}
+          <Card className="bg-white border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-slate-500 text-xs font-bold mb-1">تمارين مكتملة</p>
+                <div className="text-3xl font-bold text-blue-600">{unifiedHistory.length}</div>
+              </div>
+              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 4. Next Badge */}
+          <Card className="bg-white border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-slate-500 text-xs font-bold mb-1">هدفك القادم</p>
+                <div className="text-lg font-bold text-orange-600 truncate">{getNextBadge()}</div>
+              </div>
+              <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center animate-pulse">
+                <Target className="w-6 h-6" />
               </div>
             </CardContent>
           </Card>
         </motion.div>
 
-        {/* ================= Infinite Journey Map & Sidebar ================= */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Main Journey Column */}
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="lg:col-span-2 space-y-6"
-          >
-            {/* Journey Map Card */}
-            <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur-sm">
-              <CardHeader className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-t-xl">
-                <CardTitle className="text-2xl font-bold arabic-text flex items-center gap-2">
-                  <Zap className="w-6 h-6" />
-                  🗺️ خريطة رحلة النطق
+          {/* ================= LEFT COLUMN (Main Content) ================= */}
+          <div className="lg:col-span-2 space-y-8">
+            
+            {/* 1. WEEKLY PROGRESS CHART */}
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-indigo-900">
+                  <Activity className="w-5 h-5" />
+                  تحليل الأداء الأسبوعي (نطق، كتابة، إملاء)
+                </CardTitle>
+                <CardDescription>متابعة دقيقة لمستواك في آخر 7 أيام</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px] w-full mt-4" dir="ltr">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={weeklyStats}>
+                      <defs>
+                        <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                      <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} domain={[0, 100]} />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
+                        formatter={(value) => [`${value}%`, 'الدرجة']}
+                        labelStyle={{ textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="score" 
+                        stroke="#6366f1" 
+                        strokeWidth={3} 
+                        fillOpacity={1} 
+                        fill="url(#colorScore)" 
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 2. INFINITE JOURNEY MAP */}
+            <Card className="border-0 shadow-lg bg-white/50 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-indigo-900">
+                  <Zap className="w-5 h-5 text-yellow-500" />
+                  رحلة التعلم الخاصة بك
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4 md:p-8">
-                <div className="relative">
-                  {/* Vertical Line */}
-                  <div className="absolute left-1/2 top-0 bottom-0 w-2 bg-indigo-100 -ml-1 rounded-full hidden md:block"></div>
+              <CardContent>
+                <div className="relative pl-8 pr-4 py-4">
+                  {/* Timeline Line */}
+                  <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-gradient-to-b from-indigo-200 via-purple-200 to-transparent transform -translate-x-1/2 hidden md:block"></div>
 
-                  <div className="space-y-12">
+                  <div className="space-y-8">
                     {infiniteStages.map((stage, index) => (
-                      <motion.div
+                      <motion.div 
                         key={stage.stage}
                         initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.15 }}
-                        className={`relative flex items-center md:justify-center ${
-                          index % 2 === 0
-                            ? "md:flex-row"
-                            : "md:flex-row-reverse"
-                        } flex-col gap-4 md:gap-8`}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: index * 0.1 }}
+                        className={`relative flex items-center gap-6 ${index % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'} flex-col`}
                       >
-                        {/* Status Icon Bubble */}
-                        <div
-                          className={`z-10 w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center border-8 shadow-xl transition-all duration-500 ${
-                            stage.isCompleted
-                              ? "bg-green-500 border-green-200 scale-100"
-                              : stage.isUnlocked
-                              ? "bg-white border-indigo-500 scale-110 ring-4 ring-indigo-200 animate-pulse"
-                              : "bg-gray-200 border-gray-300 grayscale"
-                          }`}
-                        >
-                          <span className="text-2xl md:text-3xl">
-                            {stage.isCompleted
-                              ? "⭐"
-                              : stage.isUnlocked
-                              ? "🚀"
-                              : "🔒"}
-                          </span>
+                        {/* Status Icon */}
+                        <div className={`z-10 w-14 h-14 rounded-full flex items-center justify-center border-4 shadow-xl transition-all duration-500 ${
+                          stage.isCompleted ? "bg-green-100 border-green-500 text-2xl" : 
+                          stage.isUnlocked ? "bg-white border-indigo-500 text-2xl animate-pulse ring-4 ring-indigo-100" : 
+                          "bg-slate-100 border-slate-300 text-xl grayscale"
+                        }`}>
+                          {stage.isCompleted ? "🌟" : stage.isUnlocked ? "🚀" : "🔒"}
                         </div>
 
-                        {/* Stage Details Card */}
-                        <div className="w-full md:w-5/12">
-                          <Card
-                            className={`border-2 transform transition-all hover:scale-105 ${
-                              stage.isUnlocked
-                                ? "border-indigo-500 bg-indigo-50 shadow-md"
-                                : "border-gray-200 bg-gray-50 opacity-80"
-                            }`}
-                          >
-                            <CardContent className="p-4 text-center">
-                              <h3 className="font-bold text-lg arabic-text text-indigo-900 mb-1">
-                                {stage.title}
-                              </h3>
-                              <div className="text-sm text-gray-600 mb-3 arabic-text">
-                                {stage.completedExercises} /{" "}
-                                {stage.totalExercises} تمارين
-                              </div>
-
-                              {stage.isUnlocked && !stage.isCompleted && (
-                                <Link
-                                  to={createPageUrl(
-                                    `Exercise?id=${
-                                      currentStageExercises[0]?.id || ""
-                                    }&studentId=${student.id}`
-                                  )}
-                                >
-                                  <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white arabic-text">
-                                    <Play className="w-4 h-4 ml-2" />
-                                    تابع الرحلة
-                                  </Button>
-                                </Link>
-                              )}
-                            </CardContent>
-                          </Card>
+                        {/* Content Card */}
+                        <div className="flex-1 w-full md:w-auto">
+                          <div className={`bg-white p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all ${stage.isUnlocked ? 'border-indigo-200' : 'border-slate-100 opacity-70'}`}>
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-bold text-lg text-indigo-900">{stage.title}</h4>
+                              <Badge variant={stage.isCompleted ? "success" : "outline"}>
+                                {stage.completedExercises}/{stage.totalExercises}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-slate-500 mb-4">تمارين نطق متقدمة وممتعة</p>
+                            
+                            {stage.isUnlocked && !stage.isCompleted && (
+                              <Link to={createPageUrl(`Exercise?id=${currentStageExercises[0]?.id || ""}&studentId=${student.id}`)}>
+                                <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200">
+                                  <Play className="w-4 h-4 ml-2" /> ابدأ الآن
+                                </Button>
+                              </Link>
+                            )}
+                          </div>
                         </div>
-
-                        <div className="hidden md:block md:w-5/12"></div>
+                        
+                        <div className="flex-1 hidden md:block"></div>
                       </motion.div>
                     ))}
                   </div>
@@ -996,87 +775,127 @@ export default function StudentDashboard() {
               </CardContent>
             </Card>
 
-            {/* Additional Skill Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                      <TrendingUp className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-green-900 arabic-text">
-                        نقاط القوة 💪
-                      </h3>
-                      <p className="text-xs text-green-700 arabic-text">
-                        أنت مبدع في هذه المهارات
-                      </p>
-                    </div>
+          </div>
+
+          {/* ================= RIGHT COLUMN (Sidebar) ================= */}
+          <div className="space-y-8">
+            
+            {/* 1. LINGUISTIC IDENTITY (Strengths & Weaknesses) */}
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <div className="h-2 bg-gradient-to-r from-green-400 to-blue-500"></div>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-wider text-slate-500">
+                  <Activity className="w-4 h-4" /> تقرير نقاط القوة
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                
+                {/* Mastered Letters */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-bold text-green-700 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" /> حروف أتقنتها
+                    </span>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">{student.mastered_letters?.length || 0}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {student?.mastered_letters?.length > 0 ? (
-                      student.mastered_letters.map((l) => (
-                        <Badge
-                          key={l}
-                          className="bg-green-200 text-green-800 hover:bg-green-300"
-                        >
-                          {l}
-                        </Badge>
+                    {student.mastered_letters && student.mastered_letters.length > 0 ? (
+                      student.mastered_letters.slice(0, 8).map(char => (
+                        <div key={char} className="w-8 h-8 rounded-lg bg-green-50 border border-green-200 text-green-700 flex items-center justify-center font-bold shadow-sm">
+                          {char}
+                        </div>
                       ))
                     ) : (
-                      <span className="text-sm text-gray-500 arabic-text">
-                        أكمل التمارين لاكتشاف نقاط قوتك!
-                      </span>
+                      <p className="text-xs text-slate-400 italic w-full text-center py-2">لا توجد بيانات بعد، واصل التدريب!</p>
                     )}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
 
-              <Card className="bg-gradient-to-br from-orange-50 to-red-50 border-2 border-orange-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                      <Target className="w-6 h-6 text-orange-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-orange-900 arabic-text">
-                        تحتاج لتركيز 🎯
-                      </h3>
-                      <p className="text-xs text-orange-700 arabic-text">
-                        فرصتك للتحسن هنا
-                      </p>
-                    </div>
+                <Separator />
+
+                {/* Needs Practice */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-bold text-orange-700 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" /> ركز على هذه
+                    </span>
+                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">{student.needs_practice_letters?.length || 0}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {student?.weak_points?.length > 0 ? (
-                      student.weak_points.map((l) => (
-                        <Badge
-                          key={l}
-                          variant="outline"
-                          className="bg-white text-orange-800 border-orange-300"
-                        >
-                          {l}
-                        </Badge>
+                    {student.needs_practice_letters && student.needs_practice_letters.length > 0 ? (
+                      student.needs_practice_letters.slice(0, 8).map(char => (
+                        <div key={char} className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 flex items-center justify-center font-bold shadow-sm">
+                          {char}
+                        </div>
                       ))
                     ) : (
-                      <span className="text-sm text-gray-500 arabic-text">
-                        نطقك ممتاز! لا توجد ملاحظات حالياً.
-                      </span>
+                      <p className="text-xs text-slate-400 italic w-full text-center py-2">ممتاز! لا توجد نقاط ضعف حالياً.</p>
                     )}
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          </motion.div>
+                </div>
 
-          {/* Sidebar Column */}
-          <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            className="space-y-6"
-          >
-            {/* Daily Challenge Sidebar Card */}
+              </CardContent>
+            </Card>
+
+            {/* 2. RECENT ACTIVITY FEED */}
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-wider text-slate-500">
+                  <Clock className="w-4 h-4" /> آخر النشاطات
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[300px] pr-4">
+                  <div className="space-y-4">
+                    {recentActivities.length > 0 ? (
+                      recentActivities.map((item, i) => (
+                        <div key={item.id} className="flex gap-3 relative pb-4 border-b border-slate-50 last:border-0 last:pb-0">
+                          {/* Icon based on type */}
+                          <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center border-2 ${
+                            item.type === 'voice' ? 'bg-indigo-50 border-indigo-200 text-indigo-600' :
+                            item.type === 'writing' ? 'bg-blue-50 border-blue-200 text-blue-600' :
+                            'bg-emerald-50 border-emerald-200 text-emerald-600'
+                          }`}>
+                            {item.type === 'voice' ? <Mic className="w-5 h-5" /> : 
+                             item.type === 'writing' ? <PenTool className="w-5 h-5" /> : 
+                             <Keyboard className="w-5 h-5" />}
+                          </div>
+                          
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start">
+                              <h5 className="font-bold text-slate-800 text-sm">{item.title}</h5>
+                              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                                {item.date.toLocaleDateString('ar-AE')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1 line-clamp-1">{item.feedback}</p>
+                            <div className="mt-2 flex items-center gap-2">
+                              <Badge variant={item.score >= 90 ? "default" : "secondary"} className="text-[10px] h-5">
+                                {item.score}%
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-10 text-slate-400">
+                        <BookOpen className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                        <p className="text-sm">لم تقم بأي نشاط بعد</p>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+              <CardFooter className="bg-slate-50 p-3">
+                <Link to={createPageUrl("FeedbackLog")} className="w-full">
+                  <Button variant="ghost" size="sm" className="w-full text-slate-500 hover:text-indigo-600">
+                    عرض السجل الكامل <ChevronRight className="w-4 h-4 mr-1" />
+                  </Button>
+                </Link>
+              </CardFooter>
+            </Card>
+
+            {/* 3. DAILY CHALLENGE */}
             <Card className="border-0 shadow-xl bg-gradient-to-br from-yellow-400 to-orange-500 text-white overflow-hidden relative">
               <div className="absolute top-0 left-0 w-full h-full bg-white/10 opacity-30 pattern-dots"></div>
               <CardContent className="p-6 relative z-10 text-center">
@@ -1086,116 +905,23 @@ export default function StudentDashboard() {
                 <h3 className="text-2xl font-bold mb-2 arabic-text">
                   تحدي اليوم! 🌟
                 </h3>
-                <p className="mb-6 arabic-text text-yellow-50">
-                  نص قصير ممتع عن "الفضاء" بانتظارك
+                <p className="mb-6 arabic-text text-yellow-50 text-sm">
+                  نص قصير ممتع عن "الفضاء" بانتظارك لتقرأه
                 </p>
                 <Link
                   to={createPageUrl(
                     `CreateCustomExercise?topic=space&studentId=${student.id}&mode=challenge`
                   )}
                 >
-                  <Button className="w-full bg-white text-orange-600 hover:bg-orange-50 font-bold text-lg arabic-text shadow-lg">
+                  <Button className="w-full bg-white text-orange-600 hover:bg-orange-50 font-bold shadow-lg border-0">
                     اقبل التحدي
                   </Button>
                 </Link>
               </CardContent>
             </Card>
 
-            {/* Feedback Log Link */}
-            <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur-sm">
-              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-xl">
-                <CardTitle className="text-lg font-bold arabic-text flex items-center gap-2">
-                  <MessageCircle className="w-5 h-5" />
-                  📝 سجل التعليقات الذكي
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <p className="text-sm text-gray-600 mb-4 arabic-text">
-                  راجع كل تفاصيل أدائك وتعليقات المعلم في مكان واحد.
-                </p>
-                <Link to={createPageUrl("FeedbackLog")}>
-                  <Button
-                    variant="outline"
-                    className="w-full border-blue-200 text-blue-700 hover:bg-blue-50 arabic-text"
-                  >
-                    <BookOpen className="w-4 h-4 ml-2" />
-                    فتح السجل الكامل
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            {/* Recent Activities Mini View */}
-            <Card className="border-0 shadow-lg bg-white/90">
-              <CardContent className="p-4">
-                <h4 className="font-bold text-gray-800 mb-3 arabic-text text-sm border-b pb-2">
-                  آخر الأنشطة
-                </h4>
-                {recentRecordings.length > 0 ? (
-                  <div className="space-y-3">
-                    {recentRecordings.slice(0, 3).map((recording) => (
-                      <div key={recording.id} className="text-right">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-xs font-bold text-gray-700 arabic-text">
-                            {new Date(
-                              recording.created_date
-                            ).toLocaleDateString("ar-AE")}
-                          </span>
-                          <Badge
-                            className={
-                              recording.score >= 85
-                                ? "bg-green-100 text-green-800"
-                                : "bg-orange-100 text-orange-800"
-                            }
-                          >
-                            {recording.score}%
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-gray-500 truncate arabic-text">
-                          {recording.feedback || "لا يوجد تعليق"}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-400 text-center py-4 text-sm arabic-text">
-                    لا توجد تسجيلات بعد
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Extra Challenge / Create Custom */}
-            <Link
-              to={createPageUrl(`CreateCustomExercise?studentId=${student.id}`)}
-              className="block"
-            >
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Card className="border-0 shadow-2xl bg-gradient-to-br from-orange-500 to-red-500 text-white hover:shadow-3xl transition-all duration-300 cursor-pointer">
-                  <CardContent className="p-6 text-center">
-                    <motion.div
-                      animate={{ rotate: [0, 10, -10, 0] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                      className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4"
-                    >
-                      <Wand2 className="w-8 h-8" />
-                    </motion.div>
-                    <h2 className="text-2xl font-bold arabic-text mb-2">
-                      🎯 تحدي إضافي!
-                    </h2>
-                    <p className="arabic-text text-orange-100">
-                      أنشئ تمرينك الخاص واختبر نفسك
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Link>
-          </motion.div>
+          </div>
         </div>
-
       </div>
     </div>
   );
