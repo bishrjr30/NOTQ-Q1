@@ -42,7 +42,8 @@ import {
   User,
   Mic,
   Medal,
-  PenTool, // ✅ تمت إضافة أيقونة القلم لورشة الكتابة
+  PenTool,
+  Keyboard, // ✅ استيراد أيقونة الكيبورد للإملاء
   Layout
 } from "lucide-react";
 
@@ -443,9 +444,9 @@ export default function StudentDashboard() {
           </div>
         </motion.div>
 
-        {/* ================= NEW NAVIGATION CARDS (Writing + Certificates) ================= */}
-        {/* ✅ تمت إضافة هذا القسم الجديد لصفحات الكتابة والشهادات */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        {/* ================= NEW NAVIGATION CARDS (Writing + Certificates + Dictation) ================= */}
+        {/* ✅ تمت إضافة بطاقة الإملاء الذكي هنا */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             
             {/* 1. بطاقة ورشة الكتابة الذكية */}
             <Link to={createPageUrl("WritingWorkshop")}>
@@ -479,6 +480,25 @@ export default function StudentDashboard() {
                             </div>
                             <div className="bg-white/20 p-3 rounded-full">
                                 <Trophy className="w-8 h-8 text-white" />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+            </Link>
+
+            {/* 3. بطاقة الإملاء الذكي (الجديدة) */}
+            <Link to={createPageUrl("SmartDictation")}>
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Card className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-0 shadow-lg cursor-pointer hover:shadow-xl transition-all">
+                        <CardContent className="p-6 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-2xl font-bold mb-1 flex items-center gap-2 arabic-text">
+                                    <Keyboard className="w-6 h-6" /> الإملاء الذكي
+                                </h3>
+                                <p className="text-emerald-100 opacity-90 arabic-text">استمع للجمل واكتبها بدقة لتتحدى أخطائك! 🎧</p>
+                            </div>
+                            <div className="bg-white/20 p-3 rounded-full">
+                                <Mic className="w-8 h-8 text-white" />
                             </div>
                         </CardContent>
                     </Card>
