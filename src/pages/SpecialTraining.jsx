@@ -15,6 +15,9 @@ import {
   RefreshCw,
   AlertCircle,
   Sparkles,
+  Play,
+  Lightbulb,
+  Info
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -389,460 +392,363 @@ export default function SpecialTrainingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-3 sm:p-4 md:p-6">
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
-          <Link to={createPageUrl("StudentDashboard")}>
-            <Button variant="outline" size="icon" className="rounded-full shadow-lg hover:shadow-xl transition-all flex-shrink-0">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
-          <div className="flex-1">
-            <h1 className="text-2xl sm:text-3xl font-bold arabic-text text-slate-800 flex items-center gap-2 mb-1">
-              <Sparkles className="text-cyan-600 w-6 h-6 sm:w-7 sm:h-7" />
-              تدريب خاص ومبتكر
-            </h1>
-            <p className="text-slate-600 arabic-text text-sm sm:text-base">
-              جرّب أساليب مختلفة لتحسين النطق، التنفس، والتعبير الصوتي
-            </p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-3 sm:p-4 md:p-6 font-sans" dir="rtl">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-4">
+            <Link to={createPageUrl("StudentDashboard")}>
+                <Button variant="outline" size="icon" className="rounded-full shadow-lg bg-white hover:bg-slate-50 transition-transform">
+                <ArrowLeft className="w-5 h-5 text-gray-700" />
+                </Button>
+            </Link>
+            <div>
+                <h1 className="text-3xl sm:text-4xl font-black arabic-text text-slate-900 flex items-center gap-3">
+                <Sparkles className="text-cyan-600 w-8 h-8" />
+                التدريب الصوتي المتقدم
+                </h1>
+                <p className="text-slate-600 arabic-text text-lg mt-1 opacity-80 hidden sm:block">
+                طور مهاراتك في الإلقاء، التنفس، والتمثيل الصوتي مع المدرب الذكي.
+                </p>
+            </div>
           </div>
         </div>
 
-        <Tabs
-          defaultValue="mirroring"
-          onValueChange={setActiveTab}
-          className="space-y-4 sm:space-y-6"
-        >
-          <TabsList className="grid w-full grid-cols-3 h-auto sm:h-14 bg-white shadow-lg border-2 rounded-xl p-1">
-            <TabsTrigger
-              value="mirroring"
-              className="text-sm sm:text-lg arabic-text data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 rounded-lg py-2 sm:py-3"
-            >
-              <Activity className="w-4 h-4 sm:w-5 sm:h-5 ml-1 sm:ml-2" />
-              <span className="hidden sm:inline">مماثلة الصوت</span>
-              <span className="sm:hidden">مماثلة</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="breathing"
-              className="text-sm sm:text-lg arabic-text data-[state=active]:bg-green-100 data-[state=active]:text-green-700 rounded-lg py-2 sm:py-3"
-            >
-              <Wind className="w-4 h-4 sm:w-5 sm:h-5 ml-1 sm:ml-2" />
-              <span className="hidden sm:inline">تدريب التنفس</span>
-              <span className="sm:hidden">التنفس</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="acting"
-              className="text-sm sm:text-lg arabic-text data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700 rounded-lg py-2 sm:py-3"
-            >
-              <Drama className="w-4 h-4 sm:w-5 sm:h-5 ml-1 sm:ml-2" />
-              <span className="hidden sm:inline">مسرح القراءة</span>
-              <span className="sm:hidden">المسرح</span>
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Mirroring Mode */}
-          <TabsContent value="mirroring">
-            <Card className="border-0 shadow-xl sm:shadow-2xl bg-white/90">
-              <CardHeader className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-t-xl p-4 sm:p-6">
-                <CardTitle className="arabic-text flex items-center gap-2 text-lg sm:text-xl">
-                  <Activity className="w-5 h-5 sm:w-6 sm:h-6" />
-                  قلّد نغمة وإيقاع المعلم
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 sm:p-6 md:p-8 text-center space-y-6 sm:space-y-8">
-                <div className="bg-blue-50 p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 border-blue-200">
-                  <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-900 arabic-text leading-loose">
-                    {mirrorText}
-                  </p>
-                </div>
-
-                <div className="flex justify-center gap-3 sm:gap-4">
-                  <Button
-                    onClick={() => speakText(mirrorText)}
-                    disabled={isPlaying}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 sm:px-8 py-4 sm:py-6 rounded-xl text-base sm:text-lg arabic-text shadow-lg"
-                  >
-                    <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 ml-2" />
-                    <span className="hidden sm:inline">{isPlaying ? "جاري الاستماع..." : "استمع للنمط"}</span>
-                    <span className="sm:hidden">{isPlaying ? "استماع..." : "استمع"}</span>
-                  </Button>
-                </div>
-
-                {/* Audio Wave Visualization */}
-                <div className="h-20 sm:h-24 bg-slate-100 rounded-xl flex items-center justify-center gap-0.5 sm:gap-1 overflow-hidden px-2">
-                  {Array.from({ length: window.innerWidth < 640 ? 30 : 40 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-1 sm:w-2 bg-blue-400 rounded-full transition-all duration-200 ${
-                        isPlaying ? 'animate-pulse' : ''
-                      }`}
-                      style={{ 
-                        height: isPlaying ? `${10 + Math.random() * 60}px` : "10px",
-                        animationDelay: `${i * 50}ms`
-                      }}
-                    />
-                  ))}
-                </div>
-
-                <Button
-                  onClick={isRecording ? stopRecording : startRecording}
-                  disabled={isAnalyzing}
-                  variant={isRecording ? "destructive" : "default"}
-                  className="w-full py-6 sm:py-8 text-lg sm:text-xl rounded-xl sm:rounded-2xl arabic-text shadow-xl"
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            {/* === Main Training Area (8 Cols) === */}
+            <div className="lg:col-span-8">
+                <Tabs
+                    defaultValue="mirroring"
+                    onValueChange={setActiveTab}
+                    className="space-y-6"
                 >
-                  {isAnalyzing ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      جاري التحليل... {progress}%
-                    </span>
-                  ) : (
-                    <>
-                      {isRecording ? (
-                        <Square className="w-5 h-5 sm:w-6 sm:h-6 ml-2" />
-                      ) : (
-                        <Mic className="w-5 h-5 sm:w-6 sm:h-6 ml-2" />
-                      )}
-                      {isRecording ? "إيقاف وتحليل" : "سجّل محاولتك"}
-                    </>
-                  )}
-                </Button>
+                    <TabsList className="grid w-full grid-cols-3 h-16 bg-white shadow-md border rounded-2xl p-1.5">
+                        <TabsTrigger
+                            value="mirroring"
+                            className="text-base sm:text-lg arabic-text font-bold data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 rounded-xl transition-all"
+                        >
+                            <Activity className="w-5 h-5 ml-2" />
+                            مماثلة الصوت
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="breathing"
+                            className="text-base sm:text-lg arabic-text font-bold data-[state=active]:bg-green-100 data-[state=active]:text-green-700 rounded-xl transition-all"
+                        >
+                            <Wind className="w-5 h-5 ml-2" />
+                            تدريب التنفس
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="acting"
+                            className="text-base sm:text-lg arabic-text font-bold data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700 rounded-xl transition-all"
+                        >
+                            <Drama className="w-5 h-5 ml-2" />
+                            مسرح القراءة
+                        </TabsTrigger>
+                    </TabsList>
 
-                {isAnalyzing && (
-                  <div className="space-y-2">
-                    <Progress value={progress} className="h-2" />
-                    <p className="text-xs sm:text-sm text-slate-600 arabic-text">
-                      يتم تحليل التسجيل صوتياً بواسطة GPT-4...
+                    {/* Mirroring Mode */}
+                    <TabsContent value="mirroring" className="focus-visible:outline-none">
+                        <Card className="border-0 shadow-2xl bg-white/95 overflow-hidden">
+                            <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white p-6">
+                                <CardTitle className="arabic-text flex items-center gap-3 text-2xl">
+                                    <Activity className="w-8 h-8 opacity-80" />
+                                    قلّد نغمة وإيقاع المعلم
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-8 text-center space-y-8">
+                                <div className="bg-blue-50 p-8 rounded-3xl border-2 border-blue-200 shadow-inner">
+                                    <p className="text-3xl md:text-4xl font-bold text-blue-900 arabic-text leading-relaxed">
+                                        {mirrorText}
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row justify-center gap-6">
+                                    <Button
+                                        onClick={() => speakText(mirrorText)}
+                                        disabled={isPlaying}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 rounded-2xl text-xl arabic-text shadow-lg w-full sm:w-auto"
+                                    >
+                                        <Volume2 className="w-6 h-6 ml-3" />
+                                        {isPlaying ? "جاري الاستماع..." : "استمع للنمط"}
+                                    </Button>
+                                    
+                                    <Button
+                                        onClick={isRecording ? stopRecording : startRecording}
+                                        disabled={isAnalyzing}
+                                        variant={isRecording ? "destructive" : "outline"}
+                                        className={`px-8 py-6 rounded-2xl text-xl arabic-text shadow-lg border-2 w-full sm:w-auto ${isRecording ? "" : "border-blue-200 hover:bg-blue-50 text-blue-700"}`}
+                                    >
+                                        {isAnalyzing ? (
+                                            <span className="flex items-center gap-2"><div className="animate-spin rounded-full h-5 w-5 border-2 border-current"></div> جاري التحليل... {progress}%</span>
+                                        ) : (
+                                            <>
+                                                {isRecording ? <Square className="w-6 h-6 ml-3" /> : <Mic className="w-6 h-6 ml-3" />}
+                                                {isRecording ? "إيقاف التسجيل" : "سجّل محاولتك"}
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+
+                                {/* Audio Wave Visualization (Decoy) */}
+                                <div className="h-24 bg-slate-50 rounded-2xl flex items-end justify-center gap-1 overflow-hidden px-4 pb-4 border border-slate-100">
+                                    {Array.from({ length: 50 }).map((_, i) => (
+                                        <div
+                                            key={i}
+                                            className={`w-1.5 bg-blue-400 rounded-t-full transition-all duration-150 ${isPlaying ? 'animate-pulse' : ''}`}
+                                            style={{ 
+                                                height: isPlaying ? `${20 + Math.random() * 80}%` : "15%",
+                                                opacity: isPlaying ? 1 : 0.3
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+
+                                {/* Feedback Section */}
+                                {feedback && activeTab === "mirroring" && (
+                                    <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-200 text-right animate-in slide-in-from-bottom-4 fade-in duration-500">
+                                        <div className="flex items-center justify-between mb-4 pb-4 border-b border-emerald-200">
+                                            <h3 className="font-bold text-emerald-900 text-xl arabic-text flex items-center gap-2">
+                                                <CheckCircle2 className="w-6 h-6" /> تحليل الأداء الصوتي
+                                            </h3>
+                                            <span className="bg-emerald-600 text-white px-4 py-1 rounded-lg text-xl font-black shadow-sm">
+                                                {feedback.score}%
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                            <div className="bg-white p-4 rounded-xl border border-emerald-100 shadow-sm">
+                                                <p className="text-emerald-800 font-bold mb-1 text-sm">الإيقاع</p>
+                                                <p className="text-slate-600 text-sm">{feedback.rhythm}</p>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-xl border border-emerald-100 shadow-sm">
+                                                <p className="text-emerald-800 font-bold mb-1 text-sm">النبرة</p>
+                                                <p className="text-slate-600 text-sm">{feedback.tone}</p>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-xl border border-emerald-100 shadow-sm">
+                                                <p className="text-emerald-800 font-bold mb-1 text-sm">التنفس</p>
+                                                <p className="text-slate-600 text-sm">{feedback.breathing}</p>
+                                            </div>
+                                        </div>
+                                        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl flex gap-3 items-start">
+                                            <Lightbulb className="w-5 h-5 text-yellow-600 mt-1 flex-shrink-0" />
+                                            <p className="text-yellow-900 text-sm leading-relaxed font-medium">
+                                                {feedback.feedback}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* Breathing Mode */}
+                    <TabsContent value="breathing" className="focus-visible:outline-none">
+                        <Card className="border-0 shadow-2xl bg-white/95 overflow-hidden">
+                            <CardHeader className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-6">
+                                <CardTitle className="arabic-text flex items-center gap-3 text-2xl">
+                                    <Wind className="w-8 h-8 opacity-80" />
+                                    مدرّب التوقف والتنفس
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-8 text-center space-y-8">
+                                
+                                <div className="bg-green-50 p-8 rounded-3xl border-2 border-green-200 shadow-inner relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                                        <Wind className="w-32 h-32 text-green-600" />
+                                    </div>
+                                    <p className="text-2xl md:text-3xl font-bold text-green-900 arabic-text leading-loose relative z-10">
+                                        {breathingText.split("...").map((part, idx, arr) => (
+                                            <span key={idx}>
+                                                {part}
+                                                {idx < arr.length - 1 && (
+                                                    <span className="mx-3 inline-flex items-center justify-center w-8 h-8 bg-white border-2 border-green-300 text-green-600 rounded-full text-lg shadow-sm" title="تنفس هنا">
+                                                        💨
+                                                    </span>
+                                                )}
+                                            </span>
+                                        ))}
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-col items-center gap-4">
+                                    <div className={`w-32 h-32 rounded-full border-8 flex items-center justify-center transition-all duration-[4000ms] ease-in-out ${isRecording ? "scale-110 border-green-400 bg-green-50" : "scale-90 border-slate-200 bg-slate-50"}`}>
+                                        <span className="text-green-800 font-bold text-lg arabic-text">
+                                            {isRecording ? "تنفّس ببطء..." : "استعد"}
+                                        </span>
+                                    </div>
+                                    
+                                    <Button
+                                        onClick={isRecording ? stopRecording : startRecording}
+                                        disabled={isAnalyzing}
+                                        className={`w-full sm:w-auto py-6 px-10 text-xl rounded-2xl arabic-text shadow-lg transition-all ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-green-600 hover:bg-green-700"} text-white`}
+                                    >
+                                        {isAnalyzing ? "جاري التحليل..." : (isRecording ? "إنهاء التمرين" : "ابدأ تمرين التنفس")}
+                                    </Button>
+                                </div>
+
+                                {/* Feedback Section (Breathing) */}
+                                {feedback && activeTab === "breathing" && (
+                                    <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-200 text-right animate-in slide-in-from-bottom-4 fade-in duration-500">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="font-bold text-emerald-900 text-xl arabic-text">نتيجة تمرين التنفس</h3>
+                                            <span className="bg-emerald-600 text-white px-4 py-1 rounded-lg text-xl font-black">{feedback.score}%</span>
+                                        </div>
+                                        <p className="text-emerald-800 leading-relaxed mb-4">{feedback.feedback}</p>
+                                        <div className="bg-white p-4 rounded-xl border border-emerald-100">
+                                            <p className="text-sm text-slate-500 font-bold mb-1">تفاصيل التنفس:</p>
+                                            <p className="text-slate-700">{feedback.breathing}</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* Acting Mode */}
+                    <TabsContent value="acting" className="focus-visible:outline-none">
+                        <Card className="border-0 shadow-2xl bg-white/95 overflow-hidden">
+                            <CardHeader className="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-6">
+                                <CardTitle className="arabic-text flex items-center gap-3 text-2xl">
+                                    <Drama className="w-8 h-8 opacity-80" />
+                                    مسرح القراءة التفاعلي
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-8 space-y-8">
+                                
+                                <div className="flex flex-col sm:flex-row justify-between items-center bg-purple-50 p-4 rounded-2xl border border-purple-100 gap-4">
+                                    <div className="text-center sm:text-right">
+                                        <p className="text-sm text-purple-600 font-bold mb-1">أنت تلعب دور:</p>
+                                        <div className="bg-white px-6 py-2 rounded-xl shadow-sm border border-purple-200 text-purple-900 font-black text-xl">
+                                            {userRole} 🎭
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex gap-2">
+                                        {roles.map((role) => (
+                                            <Button
+                                                key={role.name}
+                                                size="sm"
+                                                variant={userRole === role.name ? "default" : "outline"}
+                                                className={`rounded-xl ${userRole === role.name ? "bg-purple-600 hover:bg-purple-700" : "border-purple-200 text-purple-700"}`}
+                                                onClick={() => { setUserRole(role.name); setFeedback(null); }}
+                                            >
+                                                {role.name}
+                                            </Button>
+                                        ))}
+                                        <Button size="sm" variant="ghost" onClick={renewPlay} className="text-slate-500 hover:bg-slate-100 rounded-xl">
+                                            <RefreshCw className="w-4 h-4 ml-1" /> مشهد جديد
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {roles.map((role, idx) => (
+                                        <div key={idx} className={`flex gap-4 ${role.name === userRole ? "flex-row-reverse" : ""}`}>
+                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-sm border-2 ${role.name === userRole ? "bg-purple-100 text-purple-700 border-purple-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                                                {role.name.charAt(0)}
+                                            </div>
+                                            <div className={`flex-1 p-5 rounded-2xl border-2 relative ${role.name === userRole ? "bg-purple-50 border-purple-200 text-purple-900 rounded-tr-none" : "bg-white border-slate-100 text-slate-700 rounded-tl-none"}`}>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="font-bold text-sm opacity-70">{role.name}</span>
+                                                    {role.name !== userRole && (
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full hover:bg-slate-100" onClick={() => speakText(role.text)}>
+                                                            <Volume2 className="w-4 h-4 text-slate-400" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                <p className="text-xl font-medium leading-relaxed">{role.text}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="flex justify-center pt-4">
+                                    <Button
+                                        onClick={isRecording ? stopRecording : startRecording}
+                                        disabled={isAnalyzing}
+                                        className={`w-full sm:w-auto py-6 px-12 text-xl rounded-2xl arabic-text shadow-xl transition-transform hover:scale-105 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"} text-white`}
+                                    >
+                                        {isAnalyzing ? "جاري تقييم الأداء..." : (isRecording ? "إنهاء المشهد" : "🎬 ابدأ التمثيل (سجّل دورك)")}
+                                    </Button>
+                                </div>
+
+                                {/* Feedback Section (Acting) */}
+                                {feedback && activeTab === "acting" && (
+                                    <div className="bg-purple-50 p-6 rounded-2xl border border-purple-200 text-right animate-in slide-in-from-bottom-4 fade-in duration-500">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="font-bold text-purple-900 text-xl arabic-text">تقييم الممثل المبدع</h3>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-purple-600 font-bold">الأداء:</span>
+                                                <span className="bg-purple-600 text-white px-3 py-1 rounded-lg text-lg font-black">{feedback.score}/100</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <p className="text-purple-800 mb-6 font-medium leading-relaxed">{feedback.feedback}</p>
+                                        
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="bg-white p-4 rounded-xl border border-purple-100">
+                                                <p className="text-xs text-purple-400 font-bold uppercase mb-1">التعبير والنبرة</p>
+                                                <p className="text-slate-700 text-sm">{feedback.tone}</p>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-xl border border-purple-100">
+                                                <p className="text-xs text-purple-400 font-bold uppercase mb-1">التناغم والإيقاع</p>
+                                                <p className="text-slate-700 text-sm">{feedback.rhythm}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
+            </div>
+
+            {/* === Sidebar / Educational Content (4 Cols) - AdSense Rich Content === */}
+            <div className="lg:col-span-4 space-y-6">
+                
+                {/* Info Card 1 */}
+                <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
+                    <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-50">
+                        <div className="bg-blue-100 p-2.5 rounded-xl text-blue-600">
+                            <Info className="w-6 h-6" />
+                        </div>
+                        <h3 className="font-bold text-slate-800 text-lg arabic-text">لماذا هذا التدريب؟</h3>
+                    </div>
+                    <p className="text-slate-600 leading-relaxed text-sm text-justify mb-4">
+                        التنويع في أساليب القراءة (التقليد، التمثيل، التنفس) يساعد في بناء <strong>الذاكرة العضلية</strong> لأعضاء النطق، ويجعل صوتك أكثر مرونة وقوة وتأثيراً.
                     </p>
-                  </div>
-                )}
-
-                {feedback && activeTab === "mirroring" && (
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 sm:p-6 rounded-xl border-2 border-green-200 text-right animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-green-200">
-                      <h3 className="font-bold text-green-800 text-lg sm:text-xl arabic-text">
-                        تحليل الأداء الصوتي
-                      </h3>
-                      <div className="bg-green-600 text-white px-3 sm:px-4 py-1 sm:py-2 rounded-full text-base sm:text-lg font-bold">
-                        {feedback.score}%
-                      </div>
+                    <div className="bg-slate-50 p-3 rounded-lg text-xs text-slate-500 border border-slate-200">
+                        "الصوت هو أداة، وكلما تدربت عليها، أصبحت أكثر إتقانًا."
                     </div>
-                    
-                    <div className="space-y-3 mb-4">
-                      <div className="bg-white/50 p-3 rounded-lg">
-                        <p className="text-green-700 arabic-text text-sm sm:text-base">
-                          <strong>🎵 الإيقاع:</strong> {feedback.rhythm}
-                        </p>
-                      </div>
-                      <div className="bg-white/50 p-3 rounded-lg">
-                        <p className="text-green-700 arabic-text text-sm sm:text-base">
-                          <strong>🗣️ النبرة:</strong> {feedback.tone}
-                        </p>
-                      </div>
-                      <div className="bg-white/50 p-3 rounded-lg">
-                        <p className="text-green-700 arabic-text text-sm sm:text-base">
-                          <strong>💨 التنفس:</strong> {feedback.breathing}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-yellow-50 border border-yellow-200 p-3 sm:p-4 rounded-lg">
-                      <p className="text-yellow-900 font-bold arabic-text mb-2 text-sm sm:text-base">
-                        💡 ملاحظات المعلم:
-                      </p>
-                      <p className="text-yellow-800 arabic-text text-sm sm:text-base leading-relaxed">
-                        {feedback.feedback}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Breathing Mode */}
-          <TabsContent value="breathing">
-            <Card className="border-0 shadow-xl sm:shadow-2xl bg-white/90">
-              <CardHeader className="bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-t-xl p-4 sm:p-6">
-                <CardTitle className="arabic-text flex items-center gap-2 text-lg sm:text-xl">
-                  <Wind className="w-5 h-5 sm:w-6 sm:h-6" />
-                  مدرّب التوقف والتنفس
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 sm:p-6 md:p-8 text-center space-y-6 sm:space-y-8">
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4">
-                  <p className="text-slate-700 arabic-text text-sm sm:text-base lg:text-lg flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <span>تتبّع الإشارات البصرية للتنفس. خُذ نفساً عند (💨) واقرأ بهدوء.</span>
-                  </p>
                 </div>
 
-                <div className="bg-green-50 p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl border-2 border-green-200 leading-loose text-lg sm:text-xl md:text-2xl font-bold text-green-900 arabic-text">
-                  {breathingText.split("...").map((part, idx, arr) => (
-                    <span key={idx}>
-                      {part}
-                      {idx < arr.length - 1 && (
-                        <span className="mx-2 inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 bg-green-200 text-green-700 rounded-full text-sm sm:text-base">
-                          💨
-                        </span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="w-24 h-24 sm:w-32 sm:h-32 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full mx-auto flex items-center justify-center border-4 border-green-300 shadow-lg">
-                  <span className="text-green-700 font-bold arabic-text text-sm sm:text-base">
-                    تنفّس...
-                  </span>
-                </div>
-
-                <Button
-                  onClick={isRecording ? stopRecording : startRecording}
-                  disabled={isAnalyzing}
-                  variant={isRecording ? "destructive" : "default"}
-                  className="w-full py-6 sm:py-8 text-lg sm:text-xl rounded-xl sm:rounded-2xl arabic-text bg-green-600 hover:bg-green-700 text-white shadow-xl"
-                >
-                  {isAnalyzing ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      جاري التحليل... {progress}%
-                    </span>
-                  ) : (
-                    <>
-                      {isRecording ? (
-                        <Square className="w-5 h-5 sm:w-6 sm:h-6 ml-2" />
-                      ) : (
-                        <Mic className="w-5 h-5 sm:w-6 sm:h-6 ml-2" />
-                      )}
-                      {isRecording
-                        ? "إيقاف وإنهاء التحليل"
-                        : "ابدأ تمرين التنفس والقراءة"}
-                    </>
-                  )}
-                </Button>
-
-                {isAnalyzing && (
-                  <div className="space-y-2">
-                    <Progress value={progress} className="h-2" />
-                    <p className="text-xs sm:text-sm text-slate-600 arabic-text">
-                      يتم تحليل طريقة التنفس والوقفات بواسطة GPT-4...
+                {/* Info Card 2 */}
+                <div className="bg-gradient-to-br from-purple-600 to-pink-600 p-6 rounded-2xl shadow-lg text-white">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
+                            <Lightbulb className="w-6 h-6 text-yellow-300" />
+                        </div>
+                        <h3 className="font-bold text-lg arabic-text">نصيحة ذهبية</h3>
+                    </div>
+                    <p className="text-purple-100 leading-relaxed text-sm mb-4">
+                        عند أداء دور تمثيلي، لا تقرأ الكلمات فقط، بل <strong>عش المشاعر</strong>. تخيل أنك الشخصية فعلاً. هل هو غاضب؟ سعيد؟ مستعجل؟ دع صوتك يعكس ذلك.
                     </p>
-                  </div>
-                )}
-
-                {feedback && activeTab === "breathing" && (
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 sm:p-6 rounded-xl border-2 border-green-200 text-right animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-green-200">
-                      <h3 className="font-bold text-green-800 text-lg sm:text-xl arabic-text">
-                        تحليل التنفس والقراءة
-                      </h3>
-                      <div className="bg-green-600 text-white px-3 sm:px-4 py-1 sm:py-2 rounded-full text-base sm:text-lg font-bold">
-                        {feedback.score}%
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-3 mb-4">
-                      <div className="bg-white/50 p-3 rounded-lg">
-                        <p className="text-green-700 arabic-text text-sm sm:text-base">
-                          <strong>💨 التنفس والوقفات:</strong> {feedback.breathing}
-                        </p>
-                      </div>
-                      <div className="bg-white/50 p-3 rounded-lg">
-                        <p className="text-green-700 arabic-text text-sm sm:text-base">
-                          <strong>🗣️ النبرة:</strong> {feedback.tone}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-yellow-50 border border-yellow-200 p-3 sm:p-4 rounded-lg">
-                      <p className="text-yellow-900 font-bold arabic-text mb-2 text-sm sm:text-base">
-                        💡 ملاحظات المعلم:
-                      </p>
-                      <p className="text-yellow-800 arabic-text text-sm sm:text-base leading-relaxed">
-                        {feedback.feedback}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Acting Mode */}
-          <TabsContent value="acting">
-            <Card className="border-0 shadow-xl sm:shadow-2xl bg-white/90">
-              <CardHeader className="bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-t-xl p-4 sm:p-6">
-                <CardTitle className="arabic-text flex items-center gap-2 text-lg sm:text-xl">
-                  <Drama className="w-5 h-5 sm:w-6 sm:h-6" />
-                  مسرح القراءة (تفاعلي)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
-                  <p className="arabic-text text-base sm:text-lg font-bold">
-                    أنت تؤدّي دور:{" "}
-                    <span className="text-purple-600">{userRole}</span>
-                  </p>
-                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                    {roles.map((role) => (
-                      <Button
-                        key={role.name}
-                        size="sm"
-                        variant={
-                          userRole === role.name ? "default" : "outline"
-                        }
-                        className={`arabic-text text-xs sm:text-sm ${
-                          userRole === role.name
-                            ? "bg-purple-600 text-white"
-                            : ""
-                        }`}
-                        onClick={() => {
-                          setUserRole(role.name);
-                          setFeedback(null);
-                        }}
-                      >
-                        {role.name}
-                      </Button>
-                    ))}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={renewPlay}
-                      className="arabic-text flex items-center gap-1 text-purple-700 text-xs sm:text-sm"
-                    >
-                      <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
-                      مشهد جديد
+                    <Button variant="secondary" size="sm" className="w-full bg-white text-purple-700 hover:bg-purple-50 font-bold rounded-xl">
+                        جرب الآن في "مسرح القراءة"
                     </Button>
-                  </div>
                 </div>
 
-                <div className="space-y-3 sm:space-y-4">
-                  {roles.map((role, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex gap-2 sm:gap-4 ${
-                        role.name === userRole
-                          ? "flex-row-reverse"
-                          : ""
-                      }`}
-                    >
-                      <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-purple-100 flex items-center justify-center text-xs font-bold text-purple-700">
-                        {role.name.slice(0, 2)}
-                      </div>
-                      <div
-                        className={`flex-1 p-3 sm:p-4 rounded-xl sm:rounded-2xl border text-right ${
-                          role.name === userRole
-                            ? "bg-purple-50 border-purple-200"
-                            : "bg-slate-50 border-slate-200"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold arabic-text text-xs sm:text-sm text-slate-700">
-                            {role.name}
-                          </span>
-                          {role.name === userRole ? (
-                            <span className="text-xs text-purple-600 arabic-text">
-                              هذا دورك 🎭
-                            </span>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 sm:h-8 arabic-text text-slate-600 text-xs sm:text-sm"
-                              onClick={() => speakText(role.text)}
-                            >
-                              <Volume2 className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
-                              استمع
-                            </Button>
-                          )}
-                        </div>
-                        <p className="arabic-text text-sm sm:text-base lg:text-lg text-slate-800 leading-relaxed">
-                          {role.text}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                {/* Ad Placeholder (For AdSense) */}
+                <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl h-64 flex flex-col items-center justify-center gap-2 text-slate-400">
+                    <span className="text-sm font-bold">مساحة إعلانية</span>
+                    <span className="text-xs opacity-70">Google AdSense</span>
                 </div>
 
-                <div className="space-y-3 sm:space-y-4">
-                  <Button
-                    onClick={isRecording ? stopRecording : startRecording}
-                    disabled={isAnalyzing}
-                    variant={isRecording ? "destructive" : "default"}
-                    className="w-full py-6 sm:py-8 text-lg sm:text-xl rounded-xl sm:rounded-2xl arabic-text bg-purple-600 hover:bg-purple-700 text-white shadow-xl"
-                  >
-                    {isAnalyzing ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        جاري التحليل... {progress}%
-                      </span>
-                    ) : (
-                      <>
-                        {isRecording ? (
-                          <Square className="w-5 h-5 sm:w-6 sm:h-6 ml-2" />
-                        ) : (
-                          <Mic className="w-5 h-5 sm:w-6 sm:h-6 ml-2" />
-                        )}
-                        {isRecording
-                          ? "إيقاف وتحليل أداء الدور"
-                          : "سجّل أداء دورك التمثيلي"}
-                      </>
-                    )}
-                  </Button>
-
-                  {isAnalyzing && (
-                    <div className="space-y-2">
-                      <Progress value={progress} className="h-2" />
-                      <p className="text-xs sm:text-sm text-slate-600 arabic-text text-right">
-                        يتم تحليل تعبيرك الصوتي وإيقاعك في الحوار بواسطة GPT-4...
-                      </p>
-                    </div>
-                  )}
-
-                  {feedback && activeTab === "acting" && (
-                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 sm:p-6 rounded-xl border-2 border-purple-200 text-right animate-in fade-in slide-in-from-bottom-4 duration-500">
-                      <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-purple-200">
-                        <h3 className="font-bold text-purple-800 text-lg sm:text-xl arabic-text">
-                          تقرير الأداء التمثيلي
-                        </h3>
-                        <div className="bg-purple-600 text-white px-3 sm:px-4 py-1 sm:py-2 rounded-full text-base sm:text-lg font-bold">
-                          {feedback.score}%
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-3 mb-4">
-                        <div className="bg-white/50 p-3 rounded-lg">
-                          <p className="text-purple-700 arabic-text text-sm sm:text-base">
-                            <strong>🎵 الإيقاع:</strong> {feedback.rhythm}
-                          </p>
-                        </div>
-                        <div className="bg-white/50 p-3 rounded-lg">
-                          <p className="text-purple-700 arabic-text text-sm sm:text-base">
-                            <strong>🗣️ النبرة والتعبير:</strong> {feedback.tone}
-                          </p>
-                        </div>
-                        <div className="bg-white/50 p-3 rounded-lg">
-                          <p className="text-purple-700 arabic-text text-sm sm:text-base">
-                            <strong>💨 التنفس والوقفات:</strong> {feedback.breathing}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="bg-yellow-50 border border-yellow-200 p-3 sm:p-4 rounded-lg">
-                        <p className="text-yellow-900 font-bold arabic-text mb-2 text-sm sm:text-base">
-                          💡 ملاحظات المعلم:
-                        </p>
-                        <p className="text-yellow-800 arabic-text text-sm sm:text-base leading-relaxed">
-                          {feedback.feedback}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+            </div>
+        </div>
       </div>
     </div>
   );
