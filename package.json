@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "gtts": "^0.2.1",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.1",
     "google-tts-api": "^2.0.2", 
