@@ -433,7 +433,7 @@ export default function NooraniaLearning() {
 
       console.log("Transcribed Text:", studentText); // للتأكد من النتيجة
 
-      // 3. Evaluate (GPT-4) - التقييم
+      // 3. Evaluate (GPT-4)
       const prompt = `
         أنت معلم خبير في "القاعدة النورانية".
         الحرف/الكلمة المطلوبة: "${currentItem.char}" (${currentItem.name})
@@ -441,13 +441,7 @@ export default function NooraniaLearning() {
         
         قيم النطق. إذا كان النص المسموع قريباً جداً صوتياً حتى لو اختلف الإملاء قليلاً، اعتبره صحيحاً.
         
-        JSON Response Format:
-        {
-          "isCorrect": boolean,
-          "score": number (0-100),
-          "message": "رسالة تشجيعية قصيرة جداً (سطر واحد)",
-          "correction": "شرح الخطأ إذا وجد (اختياري)"
-        }
+        أعطني النتيجة بتنسيق JSON دقيق.
       `;
 
       const evalRes = await InvokeLLM({
@@ -458,9 +452,11 @@ export default function NooraniaLearning() {
                  isCorrect: { type: "boolean" },
                  score: { type: "number" },
                  message: { type: "string" },
-                 correction: { type: "string" }
+                 correction: { type: "string" } // هذا الحقل كان يسبب المشكلة
              },
-             required: ["isCorrect", "score", "message"]
+             // ✅ الحل: يجب ذكر جميع الحقول هنا
+             required: ["isCorrect", "score", "message", "correction"],
+             additionalProperties: false // يفضل إضافتها لضمان الصرامة
         }
       });
       
