@@ -631,11 +631,11 @@ export default function NooraniaLearning() {
         <AnimatePresence>
             {sidebarOpen && (
                 <motion.aside 
-                    initial={{ width: 0, opacity: 0 }}
-                    animate={{ width: 280, opacity: 1 }}
-                    exit={{ width: 0, opacity: 0 }}
-                    className="bg-white border-l border-slate-200 h-full overflow-y-auto hidden lg:block custom-scrollbar"
-                >
+    initial={{ width: 0, opacity: 0 }}
+    animate={{ width: 280, opacity: 1 }}
+    exit={{ width: 0, opacity: 0 }}
+    className="bg-white border-l border-slate-200 h-full overflow-y-auto custom-scrollbar absolute lg:static z-50 shadow-2xl lg:shadow-none"
+>
                     <div className="p-4">
                         <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 px-2">خريطة المنهج</h2>
                         <div className="space-y-2">
