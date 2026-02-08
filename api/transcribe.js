@@ -1,58 +1,66 @@
 // api/transcribe.js
-import { getOpenAIKey } from "./_openai.js";
 
 export const config = {
-  api: {
-    bodyParser: false, // مهم: حتى نستلم multipart كما هو
-  },
+  runtime: 'edge', // استخدام بيئة Edge لدعم FormData بشكل أصلي وسريع
 };
 
-export default async function handler(req, res) {
+export default async function handler(req) {
+  // 1. التحقق من نوع الطلب
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ ok: false, error: 'Method not allowed' }), { status: 405 });
+  }
+
   try {
-    if (req.method !== "POST") {
-      res.status(405).json({ ok: false, error: "Method not allowed" });
-      return;
+    // 2. استلام البيانات من المتصفح
+    const reqFormData = await req.formData();
+    const file = reqFormData.get('file');
+
+    if (!file) {
+      return new Response(JSON.stringify({ ok: false, error: 'No file uploaded' }), { status: 400 });
     }
 
-    const key = getOpenAIKey();
-
-    // اقرأ جسم الطلب كما هو (multipart/form-data) وأعد إرساله
-    const chunks = [];
-    for await (const chunk of req) chunks.push(chunk);
-    const rawBody = Buffer.concat(chunks);
-
-    const contentType = req.headers["content-type"];
-    if (!contentType || !contentType.includes("multipart/form-data")) {
-      res.status(400).json({
-        ok: false,
-        error: "Expected multipart/form-data (send FormData from the browser).",
-      });
-      return;
+    // 3. جلب مفتاح API
+    const apiKey = process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return new Response(JSON.stringify({ ok: false, error: 'OpenAI Key is missing on server' }), { status: 500 });
     }
 
-    // Endpoint الترنسكريبشن (Whisper / Transcription)
-    const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST",
+    // 4. بناء FormData جديد لـ OpenAI (هنا نحل المشكلة بإضافة الموديل)
+    const openAIFormData = new FormData();
+    openAIFormData.append('file', file);
+    openAIFormData.append('model', 'whisper-1'); // ✅ هذا الحقل الإجباري الذي كان ناقصاً
+    openAIFormData.append('language', 'ar');     // تحسين الدقة للغة العربية
+
+    // 5. الإرسال إلى OpenAI
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": contentType,
+        'Authorization': `Bearer ${apiKey}`,
+        // ملاحظة هامة: لا نضع Content-Type يدوياً هنا، المتصفح يضعه تلقائياً مع الـ boundary الصحيح
       },
-      body: rawBody,
+      body: openAIFormData,
     });
 
-    const data = await r.json().catch(() => ({}));
+    // 6. معالجة الرد
+    const data = await response.json();
 
-    if (!r.ok) {
-      res.status(r.status).json({
-        ok: false,
-        error: data?.error?.message || "Transcription failed",
-        details: data,
-      });
-      return;
+    if (!response.ok) {
+      console.error("OpenAI API Error:", data);
+      return new Response(JSON.stringify({ 
+        ok: false, 
+        error: data.error?.message || "Transcription failed from OpenAI",
+        details: data 
+      }), { status: response.status });
     }
 
-    res.status(200).json({ ok: true, ...data });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e?.message || "Server error" });
+    // 7. إرجاع النص بنجاح
+    return new Response(JSON.stringify({ ok: true, ...data }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  } catch (error) {
+    console.error("Server Handler Error:", error);
+    return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500 });
   }
 }
