@@ -1,23 +1,23 @@
 // src/pages/NooraniaLearning.jsx
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 
-// ✅ استيراد واجهات برمجة التطبيقات (API)
+// ✅ استيراد الاتصال بقاعدة البيانات
+import { supabase } from "@/api/supabaseClient";
+import { Student, Recording, SystemSetting } from "@/api/entities";
 import { InvokeLLM, UploadFile } from "@/api/integrations";
-import { SystemSetting, Student } from "@/api/entities";
 
-// ✅ استيراد مكونات واجهة المستخدم (UI Components)
+// ✅ استيراد مكونات واجهة المستخدم
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -35,7 +35,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Play,
-  Pause,
   Brain,
   ChevronRight,
   ChevronLeft,
@@ -45,17 +44,16 @@ import {
   Star,
   Trophy,
   RefreshCw,
-  MessageCircle,
   X,
   Menu,
-  GraduationCap,
-  Sparkles
+  Sparkles,
+  Lock,
+  Unlock
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 /* =================================================================================================
-   📚 NOORANIA CURRICULUM DATA (قاعدة البيانات التعليمية)
-   هذا القسم يحتوي على محتوى الدروس مأخوذاً من منهج القاعدة النورانية
+   📚 NOORANIA CURRICULUM DATA (البيانات الشاملة)
    ================================================================================================= */
 
 const NOORANIA_DATA = [
@@ -210,6 +208,7 @@ export default function NooraniaLearning() {
   const { toast } = useToast();
   
   // --- States ---
+  const [student, setStudent] = useState(null);
   const [currentLessonIdx, setCurrentLessonIdx] = useState(0);
   const [selectedItemIdx, setSelectedItemIdx] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
@@ -220,28 +219,74 @@ export default function NooraniaLearning() {
   const [loadingExplanation, setLoadingExplanation] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [audioSpeed, setAudioSpeed] = useState([0.8]); // 0.8 is default educational speed
+  const [audioSpeed, setAudioSpeed] = useState([0.8]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [totalPoints, setTotalPoints] = useState(0);
   
-  // Progress Tracking (Mock)
-  const [completedItems, setCompletedItems] = useState({}); // { "lesson_1_item_0": true }
+  // Progress Data from DB
+  const [completedItems, setCompletedItems] = useState({}); // { "0_1": true, ... } key = lessonIdx_itemIdx
 
   // Refs
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const canvasRef = useRef(null); // For Audio Visualizer
-  const chatScrollRef = useRef(null);
+  const canvasRef = useRef(null);
 
   // Derived Data
   const currentLesson = NOORANIA_DATA[currentLessonIdx];
   const currentItem = currentLesson.items[selectedItemIdx];
   const progressPercent = useMemo(() => {
     const lessonItems = currentLesson.items;
-    const completedCount = lessonItems.filter((_, idx) => completedItems[`${currentLessonIdx}_${idx}`]).length;
+    let completedCount = 0;
+    lessonItems.forEach((_, idx) => {
+        if (completedItems[`${currentLessonIdx}_${idx}`]) completedCount++;
+    });
     return Math.round((completedCount / lessonItems.length) * 100);
   }, [completedItems, currentLessonIdx, currentLesson]);
 
   // --- Effects ---
+  
+  // 1. Load Student & Progress
+  useEffect(() => {
+    const loadData = async () => {
+        const studentId = localStorage.getItem("studentId");
+        if (!studentId) {
+            navigate(createPageUrl("StudentOnboarding"));
+            return;
+        }
+
+        try {
+            // Fetch Student
+            const s = await Student.get(studentId);
+            setStudent(s);
+
+            // Fetch Noorania Progress
+            const { data: progressData, error } = await supabase
+                .from('noorania_progress')
+                .select('*')
+                .eq('student_id', studentId);
+            
+            if (error) {
+                console.error("Error fetching progress:", error);
+            } else {
+                const progressMap = {};
+                let points = 0;
+                progressData.forEach(p => {
+                    if (p.is_completed) {
+                        progressMap[`${p.lesson_id}_${p.item_index}`] = true;
+                        points += (p.score || 0); // Aggregate points
+                    }
+                });
+                setCompletedItems(progressMap);
+                setTotalPoints(points); // Simple point calc
+            }
+
+        } catch (e) {
+            console.error("Failed to load user data", e);
+        }
+    };
+    loadData();
+  }, [navigate]);
+
   useEffect(() => {
     // Reset feedback when item changes
     setFeedback(null);
@@ -270,15 +315,13 @@ export default function NooraniaLearning() {
   };
 
   /* ------------------------------------------------------------------------------------------------
-   * 🎤 Recording & Analysis Logic (The Core AI Integration)
+   * 🎤 Recording & Analysis Logic (With Supabase)
    * ------------------------------------------------------------------------------------------------ */
 
   const startRecording = async () => {
     try {
       setFeedback(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Setup Visualizer
       setupVisualizer(stream);
 
       const mediaRecorder = new MediaRecorder(stream);
@@ -292,8 +335,6 @@ export default function NooraniaLearning() {
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         await analyzePronunciation(audioBlob);
-        
-        // Stop Tracks
         stream.getTracks().forEach(track => track.stop());
         setIsRecording(false);
       };
@@ -328,7 +369,7 @@ export default function NooraniaLearning() {
         if (!isRecording) return;
         requestAnimationFrame(draw);
         analyzer.getByteFrequencyData(dataArray);
-        canvasCtx.fillStyle = 'rgb(248, 250, 252)'; // Matches bg-slate-50
+        canvasCtx.fillStyle = 'rgb(248, 250, 252)';
         canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
         const barWidth = (canvas.width / bufferLength) * 2.5;
         let barHeight;
@@ -346,18 +387,22 @@ export default function NooraniaLearning() {
   const analyzePronunciation = async (audioBlob) => {
     setIsProcessing(true);
     try {
-      // 1. Upload File
-      const file = new File([audioBlob], "noorania_attempt.webm", { type: "audio/webm" });
-      // In a real app, use the UploadFile helper:
-      // const { file_url } = await UploadFile({ file, bucket: "recordings", folder: "noorania" });
+      if (!student) throw new Error("لم يتم تحديد الطالب");
+
+      // 1. Upload File using API utility
+      const file = new File([audioBlob], `noorania_${student.id}_${Date.now()}.webm`, { type: "audio/webm" });
+      const { file_url } = await UploadFile({ 
+          file, 
+          bucket: "recordings", 
+          folder: "noorania" 
+      });
 
       // 2. Transcribe (Whisper)
-      // Mocking the call structure for safety in this demo, replace with real API call
       const settings = await SystemSetting.list();
       const apiKeySetting = settings.find(s => s.key === "openai_api_key");
       const apiKey = apiKeySetting?.value || import.meta.env.VITE_OPENAI_API_KEY;
 
-      if (!apiKey) throw new Error("مفتاح OpenAI غير موجود في الإعدادات");
+      if (!apiKey) throw new Error("مفتاح OpenAI غير موجود");
 
       const formData = new FormData();
       formData.append("file", file);
@@ -408,15 +453,46 @@ export default function NooraniaLearning() {
       const result = typeof evalRes === "string" ? JSON.parse(evalRes) : evalRes;
       setFeedback(result);
 
+      // 4. Save to Database (Recordings & Progress)
+      // A. Save Recording Log
+      await Recording.create({
+          student_id: student.id,
+          exercise_id: `noorania_${currentLessonIdx}_${selectedItemIdx}`,
+          audio_url: file_url,
+          score: result.score,
+          feedback: result.message,
+          analysis_details: {
+              lesson: currentLesson.title,
+              item: currentItem.char,
+              transcription: studentText,
+              correction: result.correction
+          }
+      });
+
+      // B. Save Progress (Upsert)
       if (result.isCorrect) {
-          triggerConfetti();
-          // Mark as complete
-          setCompletedItems(prev => ({ ...prev, [`${currentLessonIdx}_${selectedItemIdx}`]: true }));
+          const { error: upsertError } = await supabase
+              .from('noorania_progress')
+              .upsert({
+                  student_id: student.id,
+                  lesson_id: currentLessonIdx,
+                  item_index: selectedItemIdx,
+                  score: result.score,
+                  is_completed: true,
+                  updated_at: new Date()
+              }, { onConflict: 'student_id,lesson_id,item_index' });
+          
+          if (!upsertError) {
+              triggerConfetti();
+              // Update local state
+              setCompletedItems(prev => ({ ...prev, [`${currentLessonIdx}_${selectedItemIdx}`]: true }));
+              setTotalPoints(prev => prev + 10);
+          }
       }
 
     } catch (error) {
       console.error("Analysis Error:", error);
-      toast({ title: "خطأ", description: "فشل في تحليل الصوت. يرجى المحاولة مرة أخرى.", variant: "destructive" });
+      toast({ title: "خطأ", description: "حدث خطأ أثناء المعالجة، يرجى المحاولة.", variant: "destructive" });
     } finally {
       setIsProcessing(false);
     }
@@ -444,10 +520,6 @@ export default function NooraniaLearning() {
     }
   };
 
-  /* ------------------------------------------------------------------------------------------------
-   * ✨ Visual Effects
-   * ------------------------------------------------------------------------------------------------ */
-  
   const triggerConfetti = () => {
     const duration = 2000;
     const end = Date.now() + duration;
@@ -459,7 +531,7 @@ export default function NooraniaLearning() {
   };
 
   /* ------------------------------------------------------------------------------------------------
-   * 🖥️ Sub-Components (Internal for Single File Structure)
+   * 🖥️ Sub-Components
    * ------------------------------------------------------------------------------------------------ */
 
   const LessonItemButton = ({ item, index, isActive, isCompleted }) => (
@@ -482,12 +554,13 @@ export default function NooraniaLearning() {
         <span className={`text-3xl sm:text-4xl md:text-5xl font-black arabic-text mb-1 ${isActive ? "text-white" : "text-slate-800"}`}>
             {item.char}
         </span>
-        {/* Phonetic hint on hover only */}
         <span className={`text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ${isActive ? "text-white/80" : "text-slate-400"}`}>
             {item.sound}
         </span>
     </motion.button>
   );
+
+  if (!student) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-8 h-8 text-indigo-600" /></div>;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans" dir="rtl" style={{ fontFamily: "'Traditional Arabic', sans-serif" }}>
@@ -512,7 +585,7 @@ export default function NooraniaLearning() {
         <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100">
                 <Trophy className="w-4 h-4 text-amber-500 mr-2" />
-                <span className="text-xs font-bold text-indigo-900 arabic-text">نقاط: 1,250</span>
+                <span className="text-xs font-bold text-indigo-900 arabic-text">نقاط: {totalPoints}</span>
             </div>
             
             <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -522,21 +595,11 @@ export default function NooraniaLearning() {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle className="text-right">إعدادات التعلم</DialogTitle>
-                        <DialogDescription className="text-right">خصص تجربتك التعليمية</DialogDescription>
                     </DialogHeader>
                     <div className="py-4 space-y-6">
                         <div className="space-y-2">
-                            <Label className="text-right block">سرعة القراءة الصوتية (TTS)</Label>
+                            <Label className="text-right block">سرعة القراءة الصوتية</Label>
                             <Slider value={audioSpeed} onValueChange={setAudioSpeed} min={0.5} max={1.2} step={0.1} />
-                            <div className="flex justify-between text-xs text-slate-400">
-                                <span>بطيء جداً</span>
-                                <span>طبيعي</span>
-                                <span>سريع</span>
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <Label>إظهار الترجمة الصوتية (Transliteration)</Label>
-                            <Switch />
                         </div>
                     </div>
                 </DialogContent>
@@ -551,7 +614,7 @@ export default function NooraniaLearning() {
       {/* 🟢 Main Layout */}
       <div className="flex flex-1 overflow-hidden relative">
         
-        {/* Sidebar (Lessons Navigation) */}
+        {/* Sidebar */}
         <AnimatePresence>
             {sidebarOpen && (
                 <motion.aside 
@@ -599,14 +662,13 @@ export default function NooraniaLearning() {
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-slate-50/50">
             <div className="max-w-6xl mx-auto space-y-6">
                 
-                {/* 1. Lesson Progress & Title */}
+                {/* 1. Lesson Header */}
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
                     <div>
                         <div className="flex items-center gap-2 mb-2">
                             <Badge variant="outline" className={`bg-${currentLesson.color}-50 text-${currentLesson.color}-700 border-${currentLesson.color}-200`}>
                                 الدرس {currentLesson.id}
                             </Badge>
-                            <span className="text-xs text-slate-400">|</span>
                             <span className="text-xs text-slate-500">{currentLesson.description}</span>
                         </div>
                         <h1 className="text-2xl md:text-3xl font-black text-slate-900 arabic-text">{currentLesson.subtitle}</h1>
@@ -623,7 +685,7 @@ export default function NooraniaLearning() {
 
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 h-auto min-h-[600px]">
                     
-                    {/* 2. Interactive Grid (Left/Bottom) - 7 Columns */}
+                    {/* 2. Items Grid */}
                     <div className="xl:col-span-7 order-2 xl:order-1">
                         <Card className="border-0 shadow-lg h-full bg-white">
                             <CardContent className="p-6">
@@ -640,36 +702,24 @@ export default function NooraniaLearning() {
                                 </div>
                             </CardContent>
                             <CardFooter className="border-t border-slate-100 p-4 bg-slate-50/50 flex justify-between items-center">
-                                <Button 
-                                    variant="outline" 
-                                    onClick={() => setSelectedItemIdx(Math.max(0, selectedItemIdx - 1))}
-                                    disabled={selectedItemIdx === 0}
-                                    className="gap-2"
-                                >
+                                <Button variant="outline" onClick={() => setSelectedItemIdx(Math.max(0, selectedItemIdx - 1))} disabled={selectedItemIdx === 0} className="gap-2">
                                     <ChevronRight className="w-4 h-4" /> السابق
                                 </Button>
                                 <span className="text-sm font-bold text-slate-400">
                                     {selectedItemIdx + 1} / {currentLesson.items.length}
                                 </span>
-                                <Button 
-                                    variant="outline" 
-                                    onClick={() => setSelectedItemIdx(Math.min(currentLesson.items.length - 1, selectedItemIdx + 1))}
-                                    disabled={selectedItemIdx === currentLesson.items.length - 1}
-                                    className="gap-2"
-                                >
+                                <Button variant="outline" onClick={() => setSelectedItemIdx(Math.min(currentLesson.items.length - 1, selectedItemIdx + 1))} disabled={selectedItemIdx === currentLesson.items.length - 1} className="gap-2">
                                     التالي <ChevronLeft className="w-4 h-4" />
                                 </Button>
                             </CardFooter>
                         </Card>
                     </div>
 
-                    {/* 3. Learning Stage (Right/Top) - 5 Columns */}
+                    {/* 3. Learning Stage */}
                     <div className="xl:col-span-5 order-1 xl:order-2 space-y-6">
                         
-                        {/* Active Item Card */}
                         <div className="relative group">
-                             {/* Glow Effect */}
-                             <div className={`absolute -inset-1 bg-gradient-to-r from-${currentLesson.color}-600 to-purple-600 rounded-[2rem] blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200`}></div>
+                             <div className={`absolute -inset-1 bg-gradient-to-r from-${currentLesson.color}-600 to-purple-600 rounded-[2rem] blur opacity-25 group-hover:opacity-50 transition duration-1000`}></div>
                              
                              <Card className="relative border-0 shadow-2xl bg-white rounded-[1.8rem] overflow-hidden">
                                 <CardContent className="p-8 text-center flex flex-col items-center">
@@ -686,66 +736,30 @@ export default function NooraniaLearning() {
                                         </motion.div>
                                     </div>
 
-                                    {/* Action Buttons */}
                                     <div className="flex gap-4 w-full mb-8">
-                                        <Button 
-                                            onClick={() => playAudio(currentItem.char)}
-                                            disabled={isPlayingAudio}
-                                            className={`flex-1 h-14 text-lg rounded-2xl shadow-lg bg-${currentLesson.color}-600 hover:bg-${currentLesson.color}-700 text-white`}
-                                        >
-                                            {isPlayingAudio ? <Loader2 className="animate-spin" /> : <Volume2 className="w-6 h-6 mr-2" />}
-                                            استمع
+                                        <Button onClick={() => playAudio(currentItem.char)} disabled={isPlayingAudio} className={`flex-1 h-14 text-lg rounded-2xl shadow-lg bg-${currentLesson.color}-600 hover:bg-${currentLesson.color}-700 text-white`}>
+                                            {isPlayingAudio ? <Loader2 className="animate-spin" /> : <Volume2 className="w-6 h-6 mr-2" />} استمع
                                         </Button>
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button 
-                                                        variant="outline" 
-                                                        onClick={askAiTeacher}
-                                                        className="h-14 w-14 rounded-2xl border-2 border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100"
-                                                    >
-                                                        <Brain className="w-6 h-6" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent><p>اسأل المعلم الذكي عن المخرج</p></TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
+                                        <Button variant="outline" onClick={askAiTeacher} className="h-14 w-14 rounded-2xl border-2 border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100">
+                                            <Brain className="w-6 h-6" />
+                                        </Button>
                                     </div>
 
-                                    {/* Recording Area */}
                                     <div className="w-full bg-slate-50 rounded-3xl p-1 border border-slate-100 relative overflow-hidden">
-                                        {/* Canvas Visualizer */}
-                                        <canvas 
-                                            ref={canvasRef} 
-                                            className="absolute inset-0 w-full h-full opacity-30 pointer-events-none" 
-                                            width="300" 
-                                            height="100"
-                                        />
-                                        
+                                        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full opacity-30 pointer-events-none" width="300" height="100"/>
                                         <div className="relative z-10 flex flex-col items-center py-6">
                                             {isProcessing ? (
                                                 <div className="flex flex-col items-center gap-3">
-                                                    <div className="relative">
-                                                        <div className="w-16 h-16 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin"></div>
-                                                        <div className="absolute inset-0 flex items-center justify-center font-bold text-indigo-600 text-xs">AI</div>
-                                                    </div>
-                                                    <span className="text-sm text-slate-500 font-medium">جاري تحليل النطق...</span>
+                                                    <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+                                                    <span className="text-sm text-slate-500 font-medium">جاري التحليل...</span>
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <button
-                                                        onClick={isRecording ? stopRecording : startRecording}
-                                                        className={`
-                                                            w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl
-                                                            ${isRecording 
-                                                                ? "bg-red-500 shadow-red-200 scale-110 ring-4 ring-red-100" 
-                                                                : `bg-${currentLesson.color}-100 text-${currentLesson.color}-600 hover:bg-${currentLesson.color}-200`}
-                                                        `}
-                                                    >
+                                                    <button onClick={isRecording ? stopRecording : startRecording} className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl ${isRecording ? "bg-red-500 shadow-red-200 scale-110 ring-4 ring-red-100" : `bg-${currentLesson.color}-100 text-${currentLesson.color}-600 hover:bg-${currentLesson.color}-200`}`}>
                                                         {isRecording ? <div className="w-8 h-8 bg-white rounded-md animate-pulse" /> : <Mic className="w-10 h-10" />}
                                                     </button>
                                                     <p className="mt-4 text-sm font-medium text-slate-400">
-                                                        {isRecording ? "جاري الاستماع... اضغط للإنهاء" : "اضغط وسجّل نطقك"}
+                                                        {isRecording ? "جاري الاستماع..." : "اضغط وسجّل نطقك"}
                                                     </p>
                                                 </>
                                             )}
@@ -756,14 +770,10 @@ export default function NooraniaLearning() {
                              </Card>
                         </div>
 
-                        {/* Feedback & Chat Section */}
+                        {/* Feedback Area */}
                         <AnimatePresence mode="wait">
                             {feedback && (
-                                <motion.div 
-                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                >
+                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                                     <Card className={`border-0 shadow-lg ${feedback.isCorrect ? "bg-green-50 border-2 border-green-100" : "bg-red-50 border-2 border-red-100"}`}>
                                         <CardContent className="p-5 flex items-start gap-4">
                                             <div className={`p-3 rounded-full ${feedback.isCorrect ? "bg-green-200 text-green-700" : "bg-red-200 text-red-700"}`}>
@@ -771,68 +781,28 @@ export default function NooraniaLearning() {
                                             </div>
                                             <div>
                                                 <h3 className={`font-bold text-lg mb-1 ${feedback.isCorrect ? "text-green-800" : "text-red-800"}`}>
-                                                    {feedback.isCorrect ? "ممتاز! نطق صحيح" : "تحتاج لمحاولة أخرى"}
+                                                    {feedback.isCorrect ? "ممتاز! نطق صحيح" : "حاول مرة أخرى"}
                                                 </h3>
-                                                <p className="text-slate-700 text-sm leading-relaxed">
-                                                    {feedback.message}
-                                                </p>
-                                                {feedback.correction && (
-                                                    <div className="mt-2 text-xs bg-white/50 p-2 rounded text-slate-600 border border-slate-200/50">
-                                                        💡 {feedback.correction}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="mr-auto font-black text-2xl opacity-20">
-                                                {feedback.score}
+                                                <p className="text-slate-700 text-sm leading-relaxed">{feedback.message}</p>
+                                                {feedback.correction && <div className="mt-2 text-xs bg-white/50 p-2 rounded text-slate-600">💡 {feedback.correction}</div>}
                                             </div>
                                         </CardContent>
                                     </Card>
                                 </motion.div>
                             )}
 
-                            {/* AI Teacher Chat Bubble */}
                             {showTeacherChat && (
-                                <motion.div 
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: "auto" }}
-                                    className="bg-white border border-indigo-100 rounded-2xl shadow-lg overflow-hidden"
-                                >
+                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="bg-white border border-indigo-100 rounded-2xl shadow-lg overflow-hidden">
                                     <div className="bg-indigo-50 px-4 py-2 flex items-center justify-between border-b border-indigo-100">
-                                        <div className="flex items-center gap-2">
-                                            <Avatar className="w-8 h-8 border-2 border-white">
-                                                <AvatarImage src="https://ui-avatars.com/api/?name=AI+Teacher&background=6366f1&color=fff" />
-                                                <AvatarFallback>AI</AvatarFallback>
-                                            </Avatar>
-                                            <span className="text-xs font-bold text-indigo-900">المعلم الذكي</span>
-                                        </div>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowTeacherChat(false)}>
-                                            <X className="w-3 h-3" />
-                                        </Button>
+                                        <span className="text-xs font-bold text-indigo-900">المعلم الذكي</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowTeacherChat(false)}><X className="w-3 h-3" /></Button>
                                     </div>
-                                    <div className="p-4 bg-slate-50 min-h-[100px] max-h-[200px] overflow-y-auto">
-                                        {loadingExplanation ? (
-                                            <div className="flex items-center gap-2 text-xs text-slate-400">
-                                                <Loader2 className="w-3 h-3 animate-spin" /> جاري كتابة الشرح...
-                                            </div>
-                                        ) : (
-                                            <div className="flex gap-3">
-                                                <div className="bg-white p-3 rounded-2xl rounded-tr-none shadow-sm text-sm text-slate-700 leading-relaxed border border-slate-200">
-                                                    {aiExplanation}
-                                                </div>
-                                            </div>
-                                        )}
+                                    <div className="p-4 bg-slate-50 min-h-[100px]">
+                                        {loadingExplanation ? <div className="flex items-center gap-2 text-xs text-slate-400"><Loader2 className="w-3 h-3 animate-spin" /> جاري الشرح...</div> : <p className="text-sm text-slate-700 leading-relaxed">{aiExplanation}</p>}
                                     </div>
-                                    {!loadingExplanation && aiExplanation && (
-                                        <div className="p-2 bg-white border-t border-slate-100 flex justify-end">
-                                             <Button variant="ghost" size="sm" onClick={() => playAudio(aiExplanation)} className="text-xs h-8">
-                                                <Volume2 className="w-3 h-3 mr-1" /> قراءة الشرح
-                                             </Button>
-                                        </div>
-                                    )}
                                 </motion.div>
                             )}
                         </AnimatePresence>
-
                     </div>
                 </div>
             </div>
