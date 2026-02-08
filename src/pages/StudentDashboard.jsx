@@ -351,7 +351,7 @@ export default function StudentDashboard() {
       Student.get(savedStudentId)
         .then((s) => {
           setStudent(s);
-          setStudentName(s.name);
+          // setStudentName(s.name); // Removed as it wasn't defined
         })
         .catch(() => {
           const savedName = localStorage.getItem("studentName");
@@ -361,7 +361,7 @@ export default function StudentDashboard() {
     } else {
       const savedName = localStorage.getItem("studentName");
       if (savedName) {
-        setStudentName(savedName);
+        // setStudentName(savedName); // Removed as it wasn't defined
         findOrCreateStudent(savedName);
       } else {
         setIsLoading(false);
@@ -532,7 +532,8 @@ export default function StudentDashboard() {
 
         {/* ================= NAVIGATION GRID (UPDATED) ================= */}
         {/* أزرار التنقل الرئيسية مع زر التحدي الإضافي (Create Custom) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* تم تحديث الشبكة لتستوعب 5 عناصر باستخدام grid-cols-1 md:grid-cols-3 lg:grid-cols-5 أو توزيع مرن */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
           
           {/* 1. الإملاء الذكي */}
           <Link to={createPageUrl("SmartDictation")}>
@@ -584,7 +585,7 @@ export default function StudentDashboard() {
             </motion.div>
           </Link>
 
-          {/* 3. أنشئ تمرينك الخاص (كان في الأسفل وتم رفعه) */}
+          {/* 3. أنشئ تمرينك الخاص */}
           <Link to={createPageUrl(`CreateCustomExercise?studentId=${student.id}`)}>
             <motion.div whileHover={{ y: -5 }} whileTap={{ scale: 0.98 }}>
               <Card className="bg-gradient-to-br from-pink-500 to-rose-600 text-white border-0 shadow-lg cursor-pointer h-full relative overflow-hidden group">
@@ -609,7 +610,32 @@ export default function StudentDashboard() {
             </motion.div>
           </Link>
 
-          {/* 4. جدار الشهادات */}
+          {/* 4. القاعدة النورانية (الجديد ✅) */}
+          <Link to={createPageUrl("NooraniaLearning")}>
+            <motion.div whileHover={{ y: -5 }} whileTap={{ scale: 0.98 }}>
+              <Card className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white border-0 shadow-lg cursor-pointer h-full relative overflow-hidden group">
+                <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-4 translate-y-4 group-hover:scale-110 transition-transform duration-500">
+                  <BookOpen className="w-32 h-32" />
+                </div>
+                <CardContent className="p-6 flex flex-col h-full justify-between relative z-10">
+                  <div>
+                    <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mb-4">
+                      <Award className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-1 arabic-text">القاعدة النورانية</h3>
+                    <p className="text-violet-100 text-xs opacity-90 leading-relaxed arabic-text">
+                       تأسيس قوي في النطق ومخارج الحروف 📖
+                    </p>
+                  </div>
+                  <div className="mt-4 flex items-center text-xs font-bold">
+                    دخول الدرس <ChevronRight className="w-4 h-4 mr-1" />
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Link>
+
+          {/* 5. جدار الشهادات */}
           <Link to={createPageUrl("Certificates")}>
             <motion.div whileHover={{ y: -5 }} whileTap={{ scale: 0.98 }}>
               <Card className="bg-gradient-to-br from-amber-400 to-orange-500 text-white border-0 shadow-lg cursor-pointer h-full relative overflow-hidden group">
