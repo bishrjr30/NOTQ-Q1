@@ -397,37 +397,43 @@ export default function NooraniaLearning() {
     try {
       if (!student) throw new Error("لم يتم تحديد الطالب");
 
-      // 1. Upload File using API utility
+      // 1. Upload File to Supabase (للحفظ فقط)
       const file = new File([audioBlob], `noorania_${student.id}_${Date.now()}.webm`, { type: "audio/webm" });
-      const { file_url } = await UploadFile({ 
-          file, 
-          bucket: "recordings", 
-          folder: "noorania" 
-      });
+      
+      // سنحاول الرفع، ولكن لن نوقف العملية إذا فشل الرفع (لضمان عمل التحليل)
+      let file_url = "";
+      try {
+         const uploadRes = await UploadFile({ 
+             file, 
+             bucket: "recordings", 
+             folder: "noorania" 
+         });
+         file_url = uploadRes.file_url;
+      } catch (err) {
+         console.warn("فشل رفع الملف للتخزين، جاري المتابعة للتحليل...", err);
+      }
 
-      // 2. Transcribe (Whisper)
-      const settings = await SystemSetting.list();
-      const apiKeySetting = settings.find(s => s.key === "openai_api_key");
-      const apiKey = apiKeySetting?.value || import.meta.env.VITE_OPENAI_API_KEY;
-
-      if (!apiKey) throw new Error("مفتاح OpenAI غير موجود");
-
+      // 2. Transcribe (إرسال إلى الخادم الخلفي الخاص بك بدلاً من OpenAI مباشرة)
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("model", "whisper-1");
-      formData.append("language", "ar");
 
-      const transRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      // ✅ التغيير هنا: الاتصال بالـ API الخاص بنا لتجاوز CORS
+      const transRes = await fetch("/api/transcribe", {
         method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
         body: formData
       });
 
-      if (!transRes.ok) throw new Error("فشل تحويل الصوت إلى نص");
+      if (!transRes.ok) {
+          const errText = await transRes.text();
+          throw new Error(`فشل التحليل الصوتي: ${errText}`);
+      }
+      
       const transData = await transRes.json();
       const studentText = transData.text || "";
 
-      // 3. Evaluate (GPT-4)
+      console.log("Transcribed Text:", studentText); // للتأكد من النتيجة
+
+      // 3. Evaluate (GPT-4) - التقييم
       const prompt = `
         أنت معلم خبير في "القاعدة النورانية".
         الحرف/الكلمة المطلوبة: "${currentItem.char}" (${currentItem.name})
@@ -462,45 +468,48 @@ export default function NooraniaLearning() {
       setFeedback(result);
 
       // 4. Save to Database (Recordings & Progress)
-      // A. Save Recording Log
-      await Recording.create({
-          student_id: student.id,
-          exercise_id: `noorania_${currentLessonIdx}_${selectedItemIdx}`,
-          audio_url: file_url,
-          score: result.score,
-          feedback: result.message,
-          analysis_details: {
-              lesson: currentLesson.title,
-              item: currentItem.char,
-              transcription: studentText,
-              correction: result.correction
-          }
-      });
+      try {
+          await Recording.create({
+              student_id: student.id,
+              exercise_id: `noorania_${currentLessonIdx}_${selectedItemIdx}`,
+              audio_url: file_url || "skipped",
+              score: result.score,
+              feedback: result.message,
+              analysis_details: {
+                  lesson: currentLesson.title,
+                  item: currentItem.char,
+                  transcription: studentText,
+                  correction: result.correction
+              }
+          });
 
-      // B. Save Progress (Upsert)
-      if (result.isCorrect) {
-          const { error: upsertError } = await supabase
-              .from('noorania_progress')
-              .upsert({
-                  student_id: student.id,
-                  lesson_id: currentLessonIdx,
-                  item_index: selectedItemIdx,
-                  score: result.score,
-                  is_completed: true,
-                  updated_at: new Date()
-              }, { onConflict: 'student_id,lesson_id,item_index' });
-          
-          if (!upsertError) {
-              triggerConfetti();
-              // Update local state
-              setCompletedItems(prev => ({ ...prev, [`${currentLessonIdx}_${selectedItemIdx}`]: true }));
-              setTotalPoints(prev => prev + 10);
+          if (result.isCorrect) {
+              const { error: upsertError } = await supabase
+                  .from('noorania_progress')
+                  .upsert({
+                      student_id: student.id,
+                      lesson_id: currentLessonIdx,
+                      item_index: selectedItemIdx,
+                      score: result.score,
+                      is_completed: true,
+                      updated_at: new Date()
+                  }, { onConflict: 'student_id,lesson_id,item_index' });
+              
+              if (!upsertError) {
+                  triggerConfetti();
+                  setCompletedItems(prev => ({ ...prev, [`${currentLessonIdx}_${selectedItemIdx}`]: true }));
+                  setTotalPoints(prev => prev + 10);
+              }
           }
+      } catch (saveError) {
+          console.warn("Failed to save progress to DB:", saveError);
+          // If saving fails, still show success to user if correct
+          if (result.isCorrect) triggerConfetti();
       }
 
     } catch (error) {
       console.error("Analysis Error:", error);
-      toast({ title: "خطأ", description: "حدث خطأ أثناء المعالجة، يرجى المحاولة.", variant: "destructive" });
+      toast({ title: "خطأ في التحليل", description: error.message, variant: "destructive" });
     } finally {
       setIsProcessing(false);
     }
