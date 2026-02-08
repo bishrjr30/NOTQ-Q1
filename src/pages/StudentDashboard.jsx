@@ -531,9 +531,8 @@ export default function StudentDashboard() {
         </motion.div>
 
         {/* ================= NAVIGATION GRID (UPDATED) ================= */}
-        {/* أزرار التنقل الرئيسية مع زر التحدي الإضافي (Create Custom) */}
-        {/* تم تحديث الشبكة لتستوعب 5 عناصر باستخدام grid-cols-1 md:grid-cols-3 lg:grid-cols-5 أو توزيع مرن */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
+        {/* أزرار التنقل الرئيسية مع زر التحدي الإضافي والآن القاعدة النورانية */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
           
           {/* 1. الإملاء الذكي */}
           <Link to={createPageUrl("SmartDictation")}>
