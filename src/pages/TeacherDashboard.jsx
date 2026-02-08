@@ -805,7 +805,7 @@ function TeacherGate({ children }) {
               <div className="flex items-start gap-2 text-xs text-slate-500 arabic-text text-right">
                 <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <p>
-                  كلمة المرور الافتراضية: <code className="bg-slate-100 px-2 py-0.5 rounded">teacher246</code>
+                   <code className="bg-slate-100 px-2 py-0.5 rounded"></code>
                 </p>
               </div>
               
@@ -820,7 +820,6 @@ function TeacherGate({ children }) {
 
           <CardFooter className="flex-col space-y-3 border-t border-slate-100 bg-slate-50/50">
             <p className="text-xs text-slate-500 arabic-text text-right">
-              ⚠️ تنبيه: هذا نظام حماية محسّن على مستوى الواجهة. للحماية الكاملة في بيئة الإنتاج، يُنصح بتطبيق نظام مصادقة خلفي (Backend Authentication) مع JWT أو OAuth.
             </p>
             
             <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
