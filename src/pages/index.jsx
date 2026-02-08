@@ -20,6 +20,7 @@ import FeedbackLog from "./FeedbackLog";
 import Certificates from "./Certificates";
 import WritingWorkshop from "./WritingWorkshop"; 
 import SmartDictation from "./SmartDictation";
+import NooraniaLearning from "./NooraniaLearning"; // ✅ إضافة الاستيراد هنا
 
 // ✅ 1. استيراد الصفحات الجديدة
 import Blog from "./Blog";
@@ -44,6 +45,7 @@ const PAGES = {
   Certificates,
   WritingWorkshop,
   SmartDictation,
+  NooraniaLearning, // ✅ إضافتها لقائمة الصفحات
   // ✅ 2. إضافتها لقائمة الصفحات (للتعرف على اسم الصفحة الحالي)
   Blog,
   AboutUs,
@@ -94,6 +96,7 @@ function PagesContent() {
         <Route path="/Certificates" element={<Certificates />} />
         <Route path="/WritingWorkshop" element={<WritingWorkshop />} />
         <Route path="/SmartDictation" element={<SmartDictation />} />
+        <Route path="/NooraniaLearning" element={<NooraniaLearning />} /> {/* ✅ إضافة الرابط هنا */}
         
         {/* ✅ 3. إضافة المسارات (Routes) الجديدة */}
         <Route path="/Blog" element={<Blog />} />
