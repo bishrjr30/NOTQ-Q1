@@ -1449,9 +1449,7 @@ function SettingsTab() {
    👨‍🎓 القسم 6: إدارة الطلاب المحسّنة
    ═══════════════════════════════════════════════════════════════════ */
 
-/**
- * 👥 صفحة إدارة الطلاب - عرض شامل مع تصفية متقدمة
- function StudentsTab({ onSelectStudent }) {
+function StudentsTab({ onSelectStudent }) {
   const [students, setStudents] = useState([]);
   const [filterGrade, setFilterGrade] = useState("all"); // ✅ تم التعديل إلى "all" بدلاً من ""
   const [searchName, setSearchName] = useState("");
@@ -1462,7 +1460,7 @@ function SettingsTab() {
   const [sortBy, setSortBy] = useState("name");
   const [sortOrder, setSortOrder] = useState("asc");
   const [viewMode, setViewMode] = useState("table"); // table or cards
-  
+
   // للحذف
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState(null);
@@ -1513,8 +1511,8 @@ function SettingsTab() {
 
   // المصفوفة القياسية للصفوف لاستخدامها في الترتيب والفلاتر
   const GRADE_LEVELS = [
-    "الروضة", "الصف الأول", "الصف الثاني", "الصف الثالث", "الصف الرابع", 
-    "الصف الخامس", "الصف السادس", "الصف السابع", "الصف الثامن", 
+    "الروضة", "الصف الأول", "الصف الثاني", "الصف الثالث", "الصف الرابع",
+    "الصف الخامس", "الصف السادس", "الصف السابع", "الصف الثامن",
     "الصف التاسع", "الصف العاشر", "الصف الحادي عشر", "الصف الثاني عشر"
   ];
 
@@ -1524,11 +1522,11 @@ function SettingsTab() {
       let ok = true;
       // ✅ فحص filterGrade مقابل "all" وليس قيمة فارغة
       if (filterGrade && filterGrade !== "all") ok = ok && s.grade === filterGrade;
-      
+
       if (searchName.trim()) {
         ok = ok && arabicFilter(s.name, searchName);
       }
-      
+
       if (selectedGroupFilter !== "all") {
         ok = ok && s.group_id && selectedGroupFilter === s.group_id;
       }
@@ -1538,7 +1536,7 @@ function SettingsTab() {
     // الترتيب
     result.sort((a, b) => {
       let comparison = 0;
-      
+
       switch (sortBy) {
         case "name":
           comparison = (a.name || "").localeCompare(b.name || "", "ar");
@@ -1622,13 +1620,13 @@ function SettingsTab() {
   };
 
   const getTimeAgo = (dateString) => {
-      if (!dateString) return "لا يوجد نشاط";
-      const diff = Date.now() - new Date(dateString).getTime();
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      if (days === 0) return "اليوم";
-      if (days === 1) return "أمس";
-      if (days < 7) return `منذ ${days} أيام`;
-      return new Date(dateString).toLocaleDateString('ar-AE');
+    if (!dateString) return "لا يوجد نشاط";
+    const diff = Date.now() - new Date(dateString).getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    if (days === 0) return "اليوم";
+    if (days === 1) return "أمس";
+    if (days < 7) return `منذ ${days} أيام`;
+    return new Date(dateString).toLocaleDateString('ar-AE');
   };
 
   // إحصائيات سريعة
@@ -1639,14 +1637,14 @@ function SettingsTab() {
       const daysSince = (Date.now() - lastActivity) / (1000 * 60 * 60 * 24);
       return daysSince <= 7;
     }).length;
-    
+
     // ✅ حساب المتوسط برمجياً بدلاً من استخدام دالة مفقودة (calculateAverage)
     const validScores = filteredAndSortedStudents.map(s => s.average_score).filter(Boolean);
-    const avgScore = validScores.length > 0 
-        ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) 
-        : 0;
+    const avgScore = validScores.length > 0
+      ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length)
+      : 0;
 
-    const needsHelp = filteredAndSortedStudents.filter(s => 
+    const needsHelp = filteredAndSortedStudents.filter(s =>
       (s.average_score || 0) < 70 && (s.average_score || 0) > 0
     ).length;
 
@@ -1685,40 +1683,40 @@ function SettingsTab() {
         {/* بطاقات الإحصائيات السريعة */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border-l-4 border-l-indigo-500 shadow-sm">
-              <CardContent className="p-4">
-                  <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">إجمالي الطلاب</p>
-                  <div className="flex items-center justify-between">
-                      <h3 className="text-2xl font-black text-indigo-900">{stats.total}</h3>
-                      <Users className="w-6 h-6 text-indigo-200" />
-                  </div>
-              </CardContent>
+            <CardContent className="p-4">
+              <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">إجمالي الطلاب</p>
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-black text-indigo-900">{stats.total}</h3>
+                <Users className="w-6 h-6 text-indigo-200" />
+              </div>
+            </CardContent>
           </Card>
           <Card className="border-l-4 border-l-emerald-500 shadow-sm">
-              <CardContent className="p-4">
-                  <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">نشط هذا الأسبوع</p>
-                  <div className="flex items-center justify-between">
-                      <h3 className="text-2xl font-black text-emerald-900">{stats.active}</h3>
-                      <Activity className="w-6 h-6 text-emerald-200" />
-                  </div>
-              </CardContent>
+            <CardContent className="p-4">
+              <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">نشط هذا الأسبوع</p>
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-black text-emerald-900">{stats.active}</h3>
+                <Activity className="w-6 h-6 text-emerald-200" />
+              </div>
+            </CardContent>
           </Card>
           <Card className="border-l-4 border-l-blue-500 shadow-sm">
-              <CardContent className="p-4">
-                  <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">متوسط الدرجات</p>
-                  <div className="flex items-center justify-between">
-                      <h3 className="text-2xl font-black text-blue-900">{stats.avgScore}%</h3>
-                      <Star className="w-6 h-6 text-blue-200" />
-                  </div>
-              </CardContent>
+            <CardContent className="p-4">
+              <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">متوسط الدرجات</p>
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-black text-blue-900">{stats.avgScore}%</h3>
+                <Star className="w-6 h-6 text-blue-200" />
+              </div>
+            </CardContent>
           </Card>
           <Card className="border-l-4 border-l-amber-500 shadow-sm">
-              <CardContent className="p-4">
-                  <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">يحتاج دعم (<span className="text-[10px]">أقل من 70%</span>)</p>
-                  <div className="flex items-center justify-between">
-                      <h3 className="text-2xl font-black text-amber-900">{stats.needsHelp}</h3>
-                      <AlertCircle className="w-6 h-6 text-amber-200" />
-                  </div>
-              </CardContent>
+            <CardContent className="p-4">
+              <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">يحتاج دعم (<span className="text-[10px]">أقل من 70%</span>)</p>
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-black text-amber-900">{stats.needsHelp}</h3>
+                <AlertCircle className="w-6 h-6 text-amber-200" />
+              </div>
+            </CardContent>
           </Card>
         </div>
       </motion.div>
@@ -1895,14 +1893,14 @@ function SettingsTab() {
         <CardContent className="p-0 sm:p-6">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-4" />
-                <p className="text-sm text-slate-500 font-bold arabic-text">جاري جلب بيانات الطلاب...</p>
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-4" />
+              <p className="text-sm text-slate-500 font-bold arabic-text">جاري جلب بيانات الطلاب...</p>
             </div>
           ) : filteredAndSortedStudents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 bg-slate-50 rounded-xl border border-dashed border-slate-200 m-6">
-                <Users className="w-12 h-12 text-slate-300 mb-4" />
-                <h3 className="font-bold text-slate-700 arabic-text mb-1">لا يوجد طلاب</h3>
-                <p className="text-sm text-slate-500 arabic-text">لم يتم العثور على أي طالب يطابق معايير البحث الحالية.</p>
+              <Users className="w-12 h-12 text-slate-300 mb-4" />
+              <h3 className="font-bold text-slate-700 arabic-text mb-1">لا يوجد طلاب</h3>
+              <p className="text-sm text-slate-500 arabic-text">لم يتم العثور على أي طالب يطابق معايير البحث الحالية.</p>
             </div>
           ) : viewMode === "table" && !isMobile ? (
             // عرض الجدول للشاشات الكبيرة
@@ -1928,27 +1926,27 @@ function SettingsTab() {
                         className="hover:bg-indigo-50/30 transition-colors group"
                       >
                         <td className="py-3 px-4">
-                            <div className="flex items-center gap-3">
-                                {/* ✅ حل مشكلة Avatar باستبدالها بـ div بسيط وجميل */}
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 font-bold border border-indigo-200 shadow-sm shrink-0">
-                                    {s.name?.charAt(0) || "؟"}
-                                </div>
-                                <div>
-                                    <p className="text-sm font-bold text-slate-900 arabic-text">{s.name}</p>
-                                    <p className="text-[10px] text-slate-500 font-mono">ID: {s.access_code || '---'}</p>
-                                </div>
+                          <div className="flex items-center gap-3">
+                            {/* ✅ حل مشكلة Avatar باستبدالها بـ div بسيط وجميل */}
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 font-bold border border-indigo-200 shadow-sm shrink-0">
+                              {s.name?.charAt(0) || "؟"}
                             </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900 arabic-text">{s.name}</p>
+                              <p className="text-[10px] text-slate-500 font-mono">ID: {s.access_code || '---'}</p>
+                            </div>
+                          </div>
                         </td>
                         <td className="py-3 px-4">
-                            <div className="flex flex-col">
-                                <span className="text-sm text-slate-700 arabic-text">{s.grade}</span>
-                                <span className="text-[10px] text-slate-400 arabic-text">{getGroupName(s.group_id)}</span>
-                            </div>
+                          <div className="flex flex-col">
+                            <span className="text-sm text-slate-700 arabic-text">{s.grade}</span>
+                            <span className="text-[10px] text-slate-400 arabic-text">{getGroupName(s.group_id)}</span>
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-xs text-slate-600 arabic-text">
                           <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-slate-400" />
-                              {getTimeAgo(s.last_activity)}
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            {getTimeAgo(s.last_activity)}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
@@ -1961,15 +1959,15 @@ function SettingsTab() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
-                            <div className="flex flex-col items-center">
-                                <span className={cn(
-                                    "font-black text-sm",
-                                    (s.average_score || 0) >= 80 ? "text-emerald-600" : (s.average_score || 0) >= 60 ? "text-amber-600" : "text-red-600"
-                                )}>
-                                    {s.average_score ? `${s.average_score}%` : "-"}
-                                </span>
-                                <span className="text-[10px] text-slate-400">{s.total_exercises || 0} تمرين</span>
-                            </div>
+                          <div className="flex flex-col items-center">
+                            <span className={cn(
+                              "font-black text-sm",
+                              (s.average_score || 0) >= 80 ? "text-emerald-600" : (s.average_score || 0) >= 60 ? "text-amber-600" : "text-red-600"
+                            )}>
+                              {s.average_score ? `${s.average_score}%` : "-"}
+                            </span>
+                            <span className="text-[10px] text-slate-400">{s.total_exercises || 0} تمرين</span>
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-center">
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1993,7 +1991,7 @@ function SettingsTab() {
                                   إجراءات سريعة
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   className="arabic-text text-right flex justify-end cursor-pointer"
                                   onClick={() => setExpandedStudentId(expandedStudentId === s.id ? null : s.id)}
                                 >
@@ -2001,7 +1999,7 @@ function SettingsTab() {
                                   <Activity className="w-4 h-4 ml-2 text-indigo-500" />
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   className="arabic-text text-right text-red-600 hover:text-red-700 hover:bg-red-50 flex justify-end cursor-pointer"
                                   onClick={() => handleDeleteClick(s)}
                                 >
@@ -2013,7 +2011,7 @@ function SettingsTab() {
                           </div>
                         </td>
                       </motion.tr>
-                      
+
                       {/* Expanded Row */}
                       <AnimatePresence>
                         {expandedStudentId === s.id && (
@@ -2080,9 +2078,8 @@ function SettingsTab() {
                   transition={{ delay: index * 0.05 }}
                 >
                   <Card className="border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all overflow-hidden relative group">
-                    <div className={`absolute top-0 right-0 w-1 h-full ${
-                        (s.average_score || 0) >= 80 ? "bg-emerald-500" : (s.average_score || 0) >= 60 ? "bg-amber-500" : "bg-red-500"
-                    }`}></div>
+                    <div className={`absolute top-0 right-0 w-1 h-full ${(s.average_score || 0) >= 80 ? "bg-emerald-500" : (s.average_score || 0) >= 60 ? "bg-amber-500" : "bg-red-500"
+                      }`}></div>
                     <CardContent className="p-5">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex-1 text-right">
@@ -2093,13 +2090,13 @@ function SettingsTab() {
                             {s.grade} • {getGroupName(s.group_id)}
                           </p>
                         </div>
-                        
+
                         {/* ✅ حل مشكلة Avatar هنا أيضاً */}
                         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 font-bold border border-indigo-200 shadow-sm shrink-0 ml-3">
-                            {s.name?.charAt(0) || "؟"}
+                          {s.name?.charAt(0) || "؟"}
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl mb-4 border border-slate-100">
                         <div className="text-center">
                           <p className="text-[10px] text-slate-500 arabic-text mb-1">المرحلة</p>
@@ -2124,14 +2121,14 @@ function SettingsTab() {
                         <span className="text-[10px] text-slate-400 flex items-center gap-1 arabic-text">
                           <Clock className="w-3 h-3" /> {getTimeAgo(s.last_activity)}
                         </span>
-                        
+
                         <div className="flex gap-2">
-                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDeleteClick(s)}>
-                                <Trash2 className="w-4 h-4" />
-                            </Button>
-                            <Button size="sm" onClick={() => onSelectStudent(s)} className="text-xs h-8 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white arabic-text px-4">
-                                السجل <ChevronLeft className="w-3 h-3 ml-1" />
-                            </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDeleteClick(s)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                          <Button size="sm" onClick={() => onSelectStudent(s)} className="text-xs h-8 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white arabic-text px-4">
+                            السجل <ChevronLeft className="w-3 h-3 ml-1" />
+                          </Button>
                         </div>
                       </div>
                     </CardContent>
