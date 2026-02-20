@@ -71,6 +71,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
   ExternalLink,
   Copy,
   Upload,
@@ -218,7 +219,7 @@ async function safeCreateExercise(payload) {
     return await Exercise.create(payload);
   } catch (e1) {
     console.warn("First attempt failed, trying fallback...", e1);
-    
+
     // محاولة ثانية مع تبديل text/sentence
     const fallback = { ...payload };
     if ("sentence" in fallback && !("text" in fallback)) {
@@ -226,7 +227,7 @@ async function safeCreateExercise(payload) {
     } else if ("text" in fallback && !("sentence" in fallback)) {
       fallback.sentence = fallback.text;
     }
-    
+
     try {
       return await Exercise.create(fallback);
     } catch (e2) {
@@ -245,7 +246,7 @@ async function safeUpdateRecording(id, patch) {
     return await Recording.update(id, patch);
   } catch (e1) {
     console.warn("Update failed, trying with field name variations...", e1);
-    
+
     // معالجة اختلاف أسماء حقول التعليق الصوتي
     if (patch.teacher_audio_comment && !patch.teacher_audio) {
       const { teacher_audio_comment, ...rest } = patch;
@@ -304,7 +305,7 @@ const pickReadText = (recording) => {
  */
 const getScoreColor = (score) => {
   if (score === null || score === undefined) return "slate";
-  
+
   for (const range of Object.values(SCORE_COLOR_RANGES)) {
     if (score >= range.min && score <= range.max) {
       return range.color;
@@ -318,7 +319,7 @@ const getScoreColor = (score) => {
  */
 const getScoreLabel = (score) => {
   if (score === null || score === undefined) return "غير محدد";
-  
+
   for (const range of Object.values(SCORE_COLOR_RANGES)) {
     if (score >= range.min && score <= range.max) {
       return range.label;
@@ -332,18 +333,18 @@ const getScoreLabel = (score) => {
  */
 const formatDate = (dateStr, options = {}) => {
   if (!dateStr) return "غير محدد";
-  
+
   try {
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return "تاريخ غير صالح";
-    
+
     const defaultOptions = {
       year: "numeric",
       month: "long",
       day: "numeric",
       ...options,
     };
-    
+
     return date.toLocaleDateString("ar-AE", defaultOptions);
   } catch (error) {
     console.error("Date formatting error:", error);
@@ -356,7 +357,7 @@ const formatDate = (dateStr, options = {}) => {
  */
 const getTimeAgo = (dateStr) => {
   if (!dateStr) return "غير محدد";
-  
+
   try {
     const date = new Date(dateStr);
     const now = new Date();
@@ -364,7 +365,7 @@ const getTimeAgo = (dateStr) => {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
-    
+
     if (diffMins < 1) return "الآن";
     if (diffMins < 60) return `منذ ${diffMins} دقيقة`;
     if (diffHours < 24) return `منذ ${diffHours} ساعة`;
@@ -403,10 +404,10 @@ const calculateAverage = (scores) => {
 const arabicFilter = (text, searchTerm) => {
   if (!searchTerm || !searchTerm.trim()) return true;
   if (!text) return false;
-  
+
   const normalizedText = text.toLowerCase().trim();
   const normalizedSearch = searchTerm.toLowerCase().trim();
-  
+
   return normalizedText.includes(normalizedSearch);
 };
 
@@ -455,10 +456,10 @@ class SecurityManager {
   static isLocked() {
     const lockoutTime = localStorage.getItem(SECURITY_CONFIG.STORAGE_KEY_LOCKOUT);
     if (!lockoutTime) return false;
-    
+
     const now = Date.now();
     const lockoutEnd = parseInt(lockoutTime, 10);
-    
+
     if (now < lockoutEnd) {
       return true;
     } else {
@@ -471,11 +472,11 @@ class SecurityManager {
   static getLockoutTimeRemaining() {
     const lockoutTime = localStorage.getItem(SECURITY_CONFIG.STORAGE_KEY_LOCKOUT);
     if (!lockoutTime) return 0;
-    
+
     const now = Date.now();
     const lockoutEnd = parseInt(lockoutTime, 10);
     const remaining = lockoutEnd - now;
-    
+
     return remaining > 0 ? remaining : 0;
   }
 
@@ -488,11 +489,11 @@ class SecurityManager {
     const current = this.getLoginAttempts();
     const newCount = current + 1;
     localStorage.setItem(SECURITY_CONFIG.STORAGE_KEY_ATTEMPTS, newCount.toString());
-    
+
     if (newCount >= SECURITY_CONFIG.MAX_LOGIN_ATTEMPTS) {
       this.lockAccount();
     }
-    
+
     return newCount;
   }
 
@@ -513,17 +514,17 @@ class SecurityManager {
   static isAuthenticated() {
     const authData = sessionStorage.getItem(SECURITY_CONFIG.STORAGE_KEY_AUTH);
     if (!authData) return false;
-    
+
     try {
       const { timestamp, authenticated } = JSON.parse(authData);
       const now = Date.now();
-      
+
       // التحقق من انتهاء الجلسة
       if (now - timestamp > SECURITY_CONFIG.SESSION_TIMEOUT) {
         this.logout();
         return false;
       }
-      
+
       return authenticated === true;
     } catch (error) {
       console.error("Auth check error:", error);
@@ -584,7 +585,7 @@ function TeacherGate({ children }) {
   useEffect(() => {
     // التحقق من حالة القفل عند التحميل
     checkLockStatus();
-    
+
     // تركيز حقل كلمة المرور
     if (!isAuthenticated && passwordInputRef.current) {
       passwordInputRef.current.focus();
@@ -601,7 +602,7 @@ function TeacherGate({ children }) {
   const checkLockStatus = () => {
     const locked = SecurityManager.isLocked();
     setIsLocked(locked);
-    
+
     if (locked) {
       setLockoutTime(SecurityManager.getLockoutTimeRemaining());
     } else {
@@ -612,7 +613,7 @@ function TeacherGate({ children }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    
+
     if (isLocked) {
       setError("الحساب مقفل مؤقتاً. يرجى الانتظار.");
       return;
@@ -630,7 +631,7 @@ function TeacherGate({ children }) {
 
     try {
       const success = SecurityManager.authenticate(password);
-      
+
       if (success) {
         // نجح تسجيل الدخول
         window.location.reload();
@@ -638,7 +639,7 @@ function TeacherGate({ children }) {
         // فشل تسجيل الدخول
         const currentAttempts = SecurityManager.getLoginAttempts();
         const remainingAttempts = SECURITY_CONFIG.MAX_LOGIN_ATTEMPTS - currentAttempts;
-        
+
         if (remainingAttempts > 0) {
           setError(`كلمة مرور خاطئة. المحاولات المتبقية: ${remainingAttempts}`);
           setAttempts(currentAttempts);
@@ -646,7 +647,7 @@ function TeacherGate({ children }) {
           setError("تم قفل الحساب لمدة 15 دقيقة بسبب المحاولات الفاشلة المتكررة.");
           setIsLocked(true);
         }
-        
+
         setPassword("");
       }
     } catch (error) {
@@ -691,7 +692,7 @@ function TeacherGate({ children }) {
                 <Shield className="w-10 h-10 text-white" />
               </motion.div>
             </div>
-            
+
             <div className="text-center space-y-2">
               <CardTitle className="arabic-text text-2xl font-bold text-slate-800">
                 🎓 دخول المعلم
@@ -738,7 +739,7 @@ function TeacherGate({ children }) {
                   <Lock className="w-4 h-4" />
                   كلمة المرور
                 </Label>
-                
+
                 <div className="relative">
                   <Input
                     ref={passwordInputRef}
@@ -750,7 +751,7 @@ function TeacherGate({ children }) {
                     autoComplete="current-password"
                     disabled={isLocked || isLoading}
                   />
-                  
+
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
@@ -805,10 +806,10 @@ function TeacherGate({ children }) {
               <div className="flex items-start gap-2 text-xs text-slate-500 arabic-text text-right">
                 <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <p>
-                   <code className="bg-slate-100 px-2 py-0.5 rounded"></code>
+                  <code className="bg-slate-100 px-2 py-0.5 rounded"></code>
                 </p>
               </div>
-              
+
               <div className="flex items-start gap-2 text-xs text-slate-500 arabic-text text-right">
                 <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <p>
@@ -821,7 +822,7 @@ function TeacherGate({ children }) {
           <CardFooter className="flex-col space-y-3 border-t border-slate-100 bg-slate-50/50">
             <p className="text-xs text-slate-500 arabic-text text-right">
             </p>
-            
+
             <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
               <Cpu className="w-3 h-3" />
               <span>مُدعّم بتقنية أمان متقدمة</span>
@@ -888,7 +889,7 @@ function StatCard({ title, value, icon: Icon, color = "indigo", change, subtitle
                 </p>
               )}
             </div>
-            
+
             <div className={cn(
               "w-14 h-14 rounded-2xl bg-gradient-to-br flex items-center justify-center shadow-lg",
               colorClasses[color]
@@ -1449,6 +1450,9 @@ function SettingsTab() {
    👨‍🎓 القسم 6: إدارة الطلاب المحسّنة
    ═══════════════════════════════════════════════════════════════════ */
 
+/**
+ * 👥 صفحة إدارة الطلاب - عرض شامل مع تصفية متقدمة
+ */
 function StudentsTab({ onSelectStudent }) {
   const [students, setStudents] = useState([]);
   const [filterGrade, setFilterGrade] = useState("all"); // ✅ تم التعديل إلى "all" بدلاً من ""
@@ -2142,10 +2146,14 @@ function StudentsTab({ onSelectStudent }) {
 
       {/* نافذة تأكيد الحذف */}
       <DeleteConfirmDialog
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
+        isOpen={deleteDialogOpen}
+        onClose={() => {
+          setDeleteDialogOpen(false);
+          setStudentToDelete(null);
+        }}
         onConfirm={handleConfirmDelete}
-        studentName={studentToDelete?.name}
+        type="single"
+        isDeleting={false}
       />
     </div>
   );
@@ -2317,7 +2325,7 @@ function GroupsTab() {
 
     try {
       await StudentGroup.update(groupId, { name: editGroupName.trim() });
-      setGroups(prev => prev.map(g => 
+      setGroups(prev => prev.map(g =>
         g.id === groupId ? { ...g, name: editGroupName.trim() } : g
       ));
       setEditingGroupId(null);
@@ -2833,7 +2841,7 @@ function ExercisesTab() {
 
   const [exercises, setExercises] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // حقول التمرين الجديد
   const [newTitle, setNewTitle] = useState("");
   const [newText, setNewText] = useState("");
@@ -2912,7 +2920,7 @@ function ExercisesTab() {
       });
 
       setExercises((prev) => [normalizeExercise(ex), ...prev]);
-      
+
       // إعادة ضبط الحقول
       setNewTitle("");
       setNewText("");
@@ -2939,7 +2947,7 @@ function ExercisesTab() {
   const handleToggleActive = async (exercise) => {
     try {
       await Exercise.update(exercise.id, { is_active: !exercise.is_active });
-      setExercises(prev => prev.map(ex => 
+      setExercises(prev => prev.map(ex =>
         ex.id === exercise.id ? { ...ex, is_active: !ex.is_active } : ex
       ));
       toast({
@@ -3369,8 +3377,8 @@ function ExercisesTab() {
                         <Badge className={cn(
                           "text-xs",
                           ex.level === "متقدم" ? "bg-emerald-100 text-emerald-800" :
-                          ex.level === "متوسط" ? "bg-blue-100 text-blue-800" :
-                          "bg-slate-100 text-slate-800"
+                            ex.level === "متوسط" ? "bg-blue-100 text-blue-800" :
+                              "bg-slate-100 text-slate-800"
                         )}>
                           {ex.level}
                         </Badge>
@@ -3536,7 +3544,7 @@ function RecordingsTab() {
 
   const saveReply = async () => {
     if (!selectedRecording) return;
-    
+
     if (!teacherComment.trim()) {
       toast({
         title: "تنبيه",
@@ -4214,13 +4222,13 @@ function EmergencyDrillTab() {
 
       const text = res?.text || res?.content || "";
       const cleaned = (text || "").trim();
-      
+
       if (!cleaned) {
         throw new Error("لم يتم توليد نص");
       }
 
       setGeneratedText(cleaned);
-      
+
       // إضافة للسجل
       setHistory(prev => [{
         prompt,
