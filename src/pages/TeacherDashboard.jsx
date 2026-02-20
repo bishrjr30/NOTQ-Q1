@@ -1451,7 +1451,7 @@ function SettingsTab() {
 
 /**
  * 👥 صفحة إدارة الطلاب - عرض شامل مع تصفية متقدمة
- */function StudentsTab({ onSelectStudent }) {
+ function StudentsTab({ onSelectStudent }) {
   const [students, setStudents] = useState([]);
   const [filterGrade, setFilterGrade] = useState("all"); // ✅ تم التعديل إلى "all" بدلاً من ""
   const [searchName, setSearchName] = useState("");
@@ -1640,7 +1640,7 @@ function SettingsTab() {
       return daysSince <= 7;
     }).length;
     
-    // حساب المتوسط بأمان
+    // ✅ حساب المتوسط برمجياً بدلاً من استخدام دالة مفقودة (calculateAverage)
     const validScores = filteredAndSortedStudents.map(s => s.average_score).filter(Boolean);
     const avgScore = validScores.length > 0 
         ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) 
@@ -1929,11 +1929,10 @@ function SettingsTab() {
                       >
                         <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
-                                <Avatar className="h-9 w-9 border border-slate-200">
-                                    <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700 font-bold">
-                                        {s.name.charAt(0)}
-                                    </AvatarFallback>
-                                </Avatar>
+                                {/* ✅ حل مشكلة Avatar باستبدالها بـ div بسيط وجميل */}
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 font-bold border border-indigo-200 shadow-sm shrink-0">
+                                    {s.name?.charAt(0) || "؟"}
+                                </div>
                                 <div>
                                     <p className="text-sm font-bold text-slate-900 arabic-text">{s.name}</p>
                                     <p className="text-[10px] text-slate-500 font-mono">ID: {s.access_code || '---'}</p>
@@ -2095,11 +2094,10 @@ function SettingsTab() {
                           </p>
                         </div>
                         
-                        <Avatar className="h-12 w-12 border-2 border-indigo-50 shadow-sm ml-3">
-                            <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700 font-bold text-lg">
-                                {s.name?.charAt(0) || "؟"}
-                            </AvatarFallback>
-                        </Avatar>
+                        {/* ✅ حل مشكلة Avatar هنا أيضاً */}
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 font-bold border border-indigo-200 shadow-sm shrink-0 ml-3">
+                            {s.name?.charAt(0) || "؟"}
+                        </div>
                       </div>
                       
                       <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl mb-4 border border-slate-100">
