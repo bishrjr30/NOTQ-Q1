@@ -1451,10 +1451,9 @@ function SettingsTab() {
 
 /**
  * 👥 صفحة إدارة الطلاب - عرض شامل مع تصفية متقدمة
- */
-function StudentsTab({ onSelectStudent }) {
+ */function StudentsTab({ onSelectStudent }) {
   const [students, setStudents] = useState([]);
-  const [filterGrade, setFilterGrade] = useState("");
+  const [filterGrade, setFilterGrade] = useState("all"); // ✅ تم التعديل إلى "all" بدلاً من ""
   const [searchName, setSearchName] = useState("");
   const [groups, setGroups] = useState([]);
   const [selectedGroupFilter, setSelectedGroupFilter] = useState("all");
@@ -1469,7 +1468,16 @@ function StudentsTab({ onSelectStudent }) {
   const [studentToDelete, setStudentToDelete] = useState(null);
 
   const { toast } = useToast();
-  const isMobile = useMediaQuery("(max-width: 768px)");
+  // التأكد من دعم الشاشات الصغيرة
+  const [isMobile, setIsMobile] = useState(false);
+
+  // تحديث حالة الشاشة
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -1496,14 +1504,31 @@ function StudentsTab({ onSelectStudent }) {
     }
   };
 
+  // مساعد للبحث باللغة العربية (تجاهل التشكيل والهمزات)
+  const arabicFilter = (text, search) => {
+    if (!text || !search) return true;
+    const normalize = (str) => str.replace(/[أإآء]/g, 'ا').replace(/[ة]/g, 'ه').replace(/[\u064B-\u065F]/g, '');
+    return normalize(text).includes(normalize(search));
+  };
+
+  // المصفوفة القياسية للصفوف لاستخدامها في الترتيب والفلاتر
+  const GRADE_LEVELS = [
+    "الروضة", "الصف الأول", "الصف الثاني", "الصف الثالث", "الصف الرابع", 
+    "الصف الخامس", "الصف السادس", "الصف السابع", "الصف الثامن", 
+    "الصف التاسع", "الصف العاشر", "الصف الحادي عشر", "الصف الثاني عشر"
+  ];
+
   // الطلاب المفلترين والمرتبين
   const filteredAndSortedStudents = useMemo(() => {
     let result = (students || []).filter((s) => {
       let ok = true;
-      if (filterGrade) ok = ok && s.grade === filterGrade;
+      // ✅ فحص filterGrade مقابل "all" وليس قيمة فارغة
+      if (filterGrade && filterGrade !== "all") ok = ok && s.grade === filterGrade;
+      
       if (searchName.trim()) {
         ok = ok && arabicFilter(s.name, searchName);
       }
+      
       if (selectedGroupFilter !== "all") {
         ok = ok && s.group_id && selectedGroupFilter === s.group_id;
       }
@@ -1596,6 +1621,16 @@ function StudentsTab({ onSelectStudent }) {
     return "bg-red-100 text-red-800";
   };
 
+  const getTimeAgo = (dateString) => {
+      if (!dateString) return "لا يوجد نشاط";
+      const diff = Date.now() - new Date(dateString).getTime();
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      if (days === 0) return "اليوم";
+      if (days === 1) return "أمس";
+      if (days < 7) return `منذ ${days} أيام`;
+      return new Date(dateString).toLocaleDateString('ar-AE');
+  };
+
   // إحصائيات سريعة
   const stats = useMemo(() => {
     const total = filteredAndSortedStudents.length;
@@ -1604,11 +1639,15 @@ function StudentsTab({ onSelectStudent }) {
       const daysSince = (Date.now() - lastActivity) / (1000 * 60 * 60 * 24);
       return daysSince <= 7;
     }).length;
-    const avgScore = calculateAverage(
-      filteredAndSortedStudents.map(s => s.average_score).filter(Boolean)
-    );
+    
+    // حساب المتوسط بأمان
+    const validScores = filteredAndSortedStudents.map(s => s.average_score).filter(Boolean);
+    const avgScore = validScores.length > 0 
+        ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) 
+        : 0;
+
     const needsHelp = filteredAndSortedStudents.filter(s => 
-      (s.average_score || 0) < 70
+      (s.average_score || 0) < 70 && (s.average_score || 0) > 0
     ).length;
 
     return { total, active, avgScore, needsHelp };
@@ -1645,68 +1684,79 @@ function StudentsTab({ onSelectStudent }) {
 
         {/* بطاقات الإحصائيات السريعة */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard
-            title="إجمالي الطلاب"
-            value={stats.total}
-            icon={Users}
-            color="indigo"
-          />
-          <StatCard
-            title="نشط هذا الأسبوع"
-            value={stats.active}
-            icon={TrendingUp}
-            color="emerald"
-          />
-          <StatCard
-            title="متوسط الدرجات"
-            value={`${stats.avgScore}%`}
-            icon={Award}
-            color="blue"
-          />
-          <StatCard
-            title="يحتاج دعم"
-            value={stats.needsHelp}
-            icon={AlertTriangle}
-            color="amber"
-          />
+          <Card className="border-l-4 border-l-indigo-500 shadow-sm">
+              <CardContent className="p-4">
+                  <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">إجمالي الطلاب</p>
+                  <div className="flex items-center justify-between">
+                      <h3 className="text-2xl font-black text-indigo-900">{stats.total}</h3>
+                      <Users className="w-6 h-6 text-indigo-200" />
+                  </div>
+              </CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-emerald-500 shadow-sm">
+              <CardContent className="p-4">
+                  <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">نشط هذا الأسبوع</p>
+                  <div className="flex items-center justify-between">
+                      <h3 className="text-2xl font-black text-emerald-900">{stats.active}</h3>
+                      <Activity className="w-6 h-6 text-emerald-200" />
+                  </div>
+              </CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-blue-500 shadow-sm">
+              <CardContent className="p-4">
+                  <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">متوسط الدرجات</p>
+                  <div className="flex items-center justify-between">
+                      <h3 className="text-2xl font-black text-blue-900">{stats.avgScore}%</h3>
+                      <Star className="w-6 h-6 text-blue-200" />
+                  </div>
+              </CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-amber-500 shadow-sm">
+              <CardContent className="p-4">
+                  <p className="text-xs text-slate-500 font-bold mb-1 arabic-text">يحتاج دعم (<span className="text-[10px]">أقل من 70%</span>)</p>
+                  <div className="flex items-center justify-between">
+                      <h3 className="text-2xl font-black text-amber-900">{stats.needsHelp}</h3>
+                      <AlertCircle className="w-6 h-6 text-amber-200" />
+                  </div>
+              </CardContent>
+          </Card>
         </div>
       </motion.div>
 
       {/* أدوات التصفية المتقدمة */}
-      <Card className="border-0 shadow-lg">
-        <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-slate-100">
-          <div className="flex items-center justify-between">
+      <Card className="border-0 shadow-lg overflow-hidden">
+        <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <CardTitle className="arabic-text text-right flex items-center gap-2">
-              <Filter className="w-5 h-5 text-slate-500" />
+              <Filter className="w-5 h-5 text-indigo-500" />
               تصفية وترتيب الطلاب
             </CardTitle>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full md:w-auto">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setFilterGrade("");
+                  setFilterGrade("all"); // ✅ الاستعادة للقيمة الصحيحة
                   setSearchName("");
                   setSelectedGroupFilter("all");
                   setSortBy("name");
                   setSortOrder("asc");
                 }}
-                className="arabic-text text-xs"
+                className="arabic-text text-xs flex-1 md:flex-none text-slate-500 hover:text-red-500 hover:bg-red-50"
               >
-                <RefreshCcw className="w-3 h-3 ml-1" />
                 إعادة ضبط
               </Button>
 
               {!isMobile && (
-                <div className="flex border border-slate-200 rounded-lg overflow-hidden">
+                <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-slate-100 p-1">
                   <button
                     onClick={() => setViewMode("table")}
                     className={cn(
-                      "px-3 py-1 text-xs transition-colors",
+                      "px-4 py-1 text-xs font-bold transition-all rounded-md",
                       viewMode === "table"
-                        ? "bg-indigo-600 text-white"
-                        : "bg-white text-slate-600 hover:bg-slate-50"
+                        ? "bg-white text-indigo-600 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
                     )}
                   >
                     جدول
@@ -1714,10 +1764,10 @@ function StudentsTab({ onSelectStudent }) {
                   <button
                     onClick={() => setViewMode("cards")}
                     className={cn(
-                      "px-3 py-1 text-xs transition-colors",
+                      "px-4 py-1 text-xs font-bold transition-all rounded-md",
                       viewMode === "cards"
-                        ? "bg-indigo-600 text-white"
-                        : "bg-white text-slate-600 hover:bg-slate-50"
+                        ? "bg-white text-indigo-600 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
                     )}
                   >
                     بطاقات
@@ -1732,31 +1782,31 @@ function StudentsTab({ onSelectStudent }) {
           <div className="grid md:grid-cols-5 gap-4">
             {/* البحث بالاسم */}
             <div className="space-y-2 text-right md:col-span-2">
-              <Label className="arabic-text text-sm text-slate-700 font-semibold">
-                🔍 البحث بالاسم
+              <Label className="arabic-text text-xs font-bold text-slate-500">
+                البحث بالاسم
               </Label>
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
                 <Input
                   placeholder="اكتب اسم الطالب..."
                   value={searchName}
                   onChange={(e) => setSearchName(e.target.value)}
-                  className="pr-3 pl-10 text-right arabic-text"
+                  className="pr-10 text-right arabic-text"
                 />
               </div>
             </div>
 
             {/* الصف الدراسي */}
             <div className="space-y-2 text-right">
-              <Label className="arabic-text text-sm text-slate-700 font-semibold">
-                📚 الصف الدراسي
+              <Label className="arabic-text text-xs font-bold text-slate-500">
+                الصف الدراسي
               </Label>
               <Select value={filterGrade} onValueChange={setFilterGrade}>
-                <SelectTrigger className="text-right arabic-text">
+                <SelectTrigger className="text-right arabic-text" dir="rtl">
                   <SelectValue placeholder="جميع الصفوف" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="" className="arabic-text">
+                  <SelectItem value="all" className="arabic-text">
                     جميع الصفوف
                   </SelectItem>
                   {GRADE_LEVELS.map((g) => (
@@ -1770,14 +1820,14 @@ function StudentsTab({ onSelectStudent }) {
 
             {/* المجموعة */}
             <div className="space-y-2 text-right">
-              <Label className="arabic-text text-sm text-slate-700 font-semibold">
-                👥 المجموعة
+              <Label className="arabic-text text-xs font-bold text-slate-500">
+                المجموعة
               </Label>
               <Select
                 value={selectedGroupFilter}
                 onValueChange={setSelectedGroupFilter}
               >
-                <SelectTrigger className="text-right arabic-text">
+                <SelectTrigger className="text-right arabic-text" dir="rtl">
                   <SelectValue placeholder="كل المجموعات" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1795,12 +1845,12 @@ function StudentsTab({ onSelectStudent }) {
 
             {/* الترتيب */}
             <div className="space-y-2 text-right">
-              <Label className="arabic-text text-sm text-slate-700 font-semibold">
-                ⚡ الترتيب حسب
+              <Label className="arabic-text text-xs font-bold text-slate-500">
+                الترتيب حسب
               </Label>
               <div className="flex gap-2">
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="text-right arabic-text flex-1">
+                  <SelectTrigger className="text-right arabic-text flex-1" dir="rtl">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1815,12 +1865,13 @@ function StudentsTab({ onSelectStudent }) {
                 <Button
                   variant="outline"
                   size="icon"
+                  className="shrink-0"
                   onClick={() => setSortOrder(prev => prev === "asc" ? "desc" : "asc")}
                 >
                   {sortOrder === "asc" ? (
-                    <ChevronUp className="w-4 h-4" />
+                    <ChevronUp className="w-4 h-4 text-slate-600" />
                   ) : (
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown className="w-4 h-4 text-slate-600" />
                   )}
                 </Button>
               </div>
@@ -1834,192 +1885,181 @@ function StudentsTab({ onSelectStudent }) {
         <CardHeader className="border-b border-slate-100">
           <CardTitle className="flex items-center justify-between">
             <span className="arabic-text text-lg flex items-center gap-2">
-              <Users className="w-5 h-5 text-slate-500" />
-              قائمة الطلاب ({filteredAndSortedStudents.length})
+              <Users className="w-5 h-5 text-indigo-500" />
+              سجلات الطلاب
+              <Badge variant="secondary" className="ml-2 font-mono">{filteredAndSortedStudents.length}</Badge>
             </span>
-            {isLoading && (
-              <span className="flex items-center gap-2 text-xs text-slate-500 arabic-text">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                جاري التحميل...
-              </span>
-            )}
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="p-6">
+        <CardContent className="p-0 sm:p-6">
           {isLoading ? (
-            <LoadingSpinner text="جاري تحميل بيانات الطلاب..." />
+            <div className="flex flex-col items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-4" />
+                <p className="text-sm text-slate-500 font-bold arabic-text">جاري جلب بيانات الطلاب...</p>
+            </div>
           ) : filteredAndSortedStudents.length === 0 ? (
-            <EmptyState
-              title="لا يوجد طلاب"
-              description="لا يوجد طلاب مطابقون للتصفية الحالية. جرّب تغيير معايير البحث."
-              icon={Users}
-            />
+            <div className="flex flex-col items-center justify-center py-20 bg-slate-50 rounded-xl border border-dashed border-slate-200 m-6">
+                <Users className="w-12 h-12 text-slate-300 mb-4" />
+                <h3 className="font-bold text-slate-700 arabic-text mb-1">لا يوجد طلاب</h3>
+                <p className="text-sm text-slate-500 arabic-text">لم يتم العثور على أي طالب يطابق معايير البحث الحالية.</p>
+            </div>
           ) : viewMode === "table" && !isMobile ? (
             // عرض الجدول للشاشات الكبيرة
             <div className="overflow-x-auto">
               <table className="w-full text-right border-collapse">
                 <thead>
-                  <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-200">
-                    <th className="py-3 px-4 text-xs font-bold text-slate-700 arabic-text">الاسم</th>
-                    <th className="py-3 px-4 text-xs font-bold text-slate-700 arabic-text">الصف</th>
-                    <th className="py-3 px-4 text-xs font-bold text-slate-700 arabic-text">المجموعة</th>
-                    <th className="py-3 px-4 text-xs font-bold text-slate-700 arabic-text">آخر نشاط</th>
-                    <th className="py-3 px-4 text-xs font-bold text-slate-700 arabic-text">المستوى</th>
-                    <th className="py-3 px-4 text-xs font-bold text-slate-700 arabic-text text-center">التمارين</th>
-                    <th className="py-3 px-4 text-xs font-bold text-slate-700 arabic-text text-center">المتوسط</th>
-                    <th className="py-3 px-4 text-xs font-bold text-slate-700 arabic-text text-center">تفاصيل</th>
-                    <th className="py-3 px-4 text-xs font-bold text-slate-700 arabic-text text-center">إجراءات</th>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="py-4 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider arabic-text">الطالب</th>
+                    <th className="py-4 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider arabic-text">الصف / المجموعة</th>
+                    <th className="py-4 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider arabic-text">آخر نشاط</th>
+                    <th className="py-4 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider arabic-text text-center">المستوى</th>
+                    <th className="py-4 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider arabic-text text-center">الإنجاز</th>
+                    <th className="py-4 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider arabic-text text-center">إجراءات</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {filteredAndSortedStudents.map((s, index) => (
                     <React.Fragment key={s.id}>
                       <motion.tr
-                        initial={{ opacity: 0, y: 20 }}
+                        initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.02 }}
-                        className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors"
+                        transition={{ delay: index * 0.03 }}
+                        className="hover:bg-indigo-50/30 transition-colors group"
                       >
-                        <td className="py-3 px-4 text-sm font-semibold text-slate-900 arabic-text whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
-                              {s.name?.charAt(0) || "؟"}
+                        <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                                <Avatar className="h-9 w-9 border border-slate-200">
+                                    <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700 font-bold">
+                                        {s.name.charAt(0)}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                    <p className="text-sm font-bold text-slate-900 arabic-text">{s.name}</p>
+                                    <p className="text-[10px] text-slate-500 font-mono">ID: {s.access_code || '---'}</p>
+                                </div>
                             </div>
-                            {s.name}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-xs text-slate-700 arabic-text whitespace-nowrap">{s.grade}</td>
-                        <td className="py-3 px-4 text-xs text-slate-700 arabic-text whitespace-nowrap">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">
-                            {getGroupName(s.group_id)}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-xs text-slate-600 arabic-text whitespace-nowrap">
-                          {getTimeAgo(s.last_activity)}
                         </td>
                         <td className="py-3 px-4">
+                            <div className="flex flex-col">
+                                <span className="text-sm text-slate-700 arabic-text">{s.grade}</span>
+                                <span className="text-[10px] text-slate-400 arabic-text">{getGroupName(s.group_id)}</span>
+                            </div>
+                        </td>
+                        <td className="py-3 px-4 text-xs text-slate-600 arabic-text">
+                          <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              {getTimeAgo(s.last_activity)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
                           <span className={cn(
-                            "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border",
+                            "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border",
                             getLevelBadgeColor(s.level || "مبتدئ")
                           )}>
                             <Star className="w-3 h-3 ml-1" />
                             {s.level || "مبتدئ"}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-sm font-semibold text-slate-700 text-center">{s.total_exercises || 0}</td>
                         <td className="py-3 px-4 text-center">
-                          <span className={cn(
-                            "inline-flex items-center px-3 py-1 rounded-full text-xs font-bold",
-                            getScoreBadgeColor(s.average_score)
-                          )}>
-                            {s.average_score ? `${s.average_score}%` : "-"}
-                          </span>
+                            <div className="flex flex-col items-center">
+                                <span className={cn(
+                                    "font-black text-sm",
+                                    (s.average_score || 0) >= 80 ? "text-emerald-600" : (s.average_score || 0) >= 60 ? "text-amber-600" : "text-red-600"
+                                )}>
+                                    {s.average_score ? `${s.average_score}%` : "-"}
+                                </span>
+                                <span className="text-[10px] text-slate-400">{s.total_exercises || 0} تمرين</span>
+                            </div>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setExpandedStudentId(expandedStudentId === s.id ? null : s.id)}
-                            className="arabic-text text-xs"
-                          >
-                            {expandedStudentId === s.id ? (
-                              <>
-                                <ChevronUp className="w-3 h-3 ml-1" />
-                                إخفاء
-                              </>
-                            ) : (
-                              <>
-                                <ChevronDown className="w-3 h-3 ml-1" />
-                                عرض
-                              </>
-                            )}
-                          </Button>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreVertical className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem
-                                onClick={() => onSelectStudent(s)}
-                                className="arabic-text cursor-pointer"
-                              >
-                                <FileText className="w-4 h-4 ml-2" />
-                                سجل الطالب
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleDeleteClick(s)}
-                                className="text-red-600 arabic-text cursor-pointer"
-                              >
-                                <Trash2 className="w-4 h-4 ml-2" />
-                                حذف الطالب
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onSelectStudent(s)}
+                              className="arabic-text text-xs bg-white hover:bg-indigo-50 hover:text-indigo-600 border-slate-200"
+                            >
+                              <FileText className="w-3 h-3 ml-1" />
+                              ملف الطالب
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-200">
+                                  <MoreVertical className="w-4 h-4 text-slate-500" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuLabel className="arabic-text text-right text-xs text-slate-400">
+                                  إجراءات سريعة
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="arabic-text text-right flex justify-end cursor-pointer"
+                                  onClick={() => setExpandedStudentId(expandedStudentId === s.id ? null : s.id)}
+                                >
+                                  {expandedStudentId === s.id ? "إخفاء التقرير" : "تقرير نقاط القوة"}
+                                  <Activity className="w-4 h-4 ml-2 text-indigo-500" />
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="arabic-text text-right text-red-600 hover:text-red-700 hover:bg-red-50 flex justify-end cursor-pointer"
+                                  onClick={() => handleDeleteClick(s)}
+                                >
+                                  حذف نهائي
+                                  <Trash2 className="w-4 h-4 ml-2" />
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </td>
                       </motion.tr>
-
-                      {/* صف تفاصيل موسّع */}
+                      
+                      {/* Expanded Row */}
                       <AnimatePresence>
                         {expandedStudentId === s.id && (
                           <motion.tr
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: "auto" }}
                             exit={{ opacity: 0, height: 0 }}
-                            className="bg-gradient-to-r from-indigo-50/50 to-purple-50/50 border-b border-slate-100"
+                            className="bg-slate-50 border-b border-slate-200"
                           >
-                            <td colSpan={9} className="p-6">
-                              <div className="grid md:grid-cols-2 gap-4">
-                                <div className="space-y-3">
-                                  <h4 className="font-bold text-slate-900 arabic-text text-right flex items-center gap-2">
-                                    <Award className="w-4 h-4 text-emerald-600" />
-                                    الحروف المتقنة
+                            <td colSpan={6} className="p-4 px-8">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                                <div>
+                                  <h4 className="text-xs font-bold text-emerald-700 arabic-text mb-3 flex items-center justify-end gap-1 border-b border-emerald-100 pb-2">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    حروف ومهارات أتقنها
                                   </h4>
                                   <div className="flex flex-wrap gap-2 justify-end">
-                                    {s.mastered_letters && s.mastered_letters.length > 0 ? (
-                                      s.mastered_letters.map((letter, i) => (
-                                        <Badge key={i} className="bg-emerald-100 text-emerald-800 font-bold text-base px-3 py-1">
-                                          {letter}
-                                        </Badge>
+                                    {s.mastered_letters?.length > 0 ? (
+                                      s.mastered_letters.map(char => (
+                                        <span key={char} className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center text-sm font-bold border border-emerald-200 shadow-sm">
+                                          {char}
+                                        </span>
                                       ))
                                     ) : (
-                                      <span className="text-sm text-slate-500 arabic-text">لا يوجد حروف متقنة بعد</span>
+                                      <span className="text-xs text-slate-400 arabic-text">قيد التقييم...</span>
                                     )}
                                   </div>
                                 </div>
-
-                                <div className="space-y-3">
-                                  <h4 className="font-bold text-slate-900 arabic-text text-right flex items-center gap-2">
-                                    <Target className="w-4 h-4 text-amber-600" />
-                                    يحتاج تدريب
+                                <div>
+                                  <h4 className="text-xs font-bold text-amber-700 arabic-text mb-3 flex items-center justify-end gap-1 border-b border-amber-100 pb-2">
+                                    <AlertTriangle className="w-4 h-4" />
+                                    نقاط تحتاج للتدريب
                                   </h4>
                                   <div className="flex flex-wrap gap-2 justify-end">
-                                    {s.needs_practice_letters && s.needs_practice_letters.length > 0 ? (
-                                      s.needs_practice_letters.map((letter, i) => (
-                                        <Badge key={i} className="bg-amber-100 text-amber-800 font-bold text-base px-3 py-1">
-                                          {letter}
-                                        </Badge>
+                                    {s.needs_practice_letters?.length > 0 ? (
+                                      s.needs_practice_letters.map(char => (
+                                        <span key={char} className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center text-sm font-bold border border-amber-200 shadow-sm">
+                                          {char}
+                                        </span>
                                       ))
                                     ) : (
-                                      <span className="text-sm text-slate-500 arabic-text">لا توجد حروف تحتاج تدريب</span>
+                                      <span className="text-xs text-slate-400 arabic-text">لا توجد ملاحظات سلبية</span>
                                     )}
                                   </div>
                                 </div>
-                              </div>
-
-                              <div className="flex justify-end mt-4">
-                                <Button
-                                  onClick={() => onSelectStudent(s)}
-                                  className="arabic-text bg-gradient-to-r from-indigo-600 to-purple-600"
-                                >
-                                  <FileText className="w-4 h-4 ml-2" />
-                                  عرض السجل الكامل
-                                </Button>
                               </div>
                             </td>
                           </motion.tr>
@@ -2031,88 +2071,70 @@ function StudentsTab({ onSelectStudent }) {
               </table>
             </div>
           ) : (
-            // عرض البطاقات للموبايل أو عند اختيار cards
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            // عرض البطاقات (Mobile View أو عند اختيار Cards)
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 p-4 sm:p-0">
               {filteredAndSortedStudents.map((s, index) => (
                 <motion.div
                   key={s.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: index * 0.05 }}
                 >
-                  <Card className="border-2 border-slate-100 hover:border-indigo-300 hover:shadow-xl transition-all">
+                  <Card className="border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all overflow-hidden relative group">
+                    <div className={`absolute top-0 right-0 w-1 h-full ${
+                        (s.average_score || 0) >= 80 ? "bg-emerald-500" : (s.average_score || 0) >= 60 ? "bg-amber-500" : "bg-red-500"
+                    }`}></div>
                     <CardContent className="p-5">
-                      {/* رأس البطاقة */}
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex-1 text-right">
-                          <h3 className="text-lg font-bold text-indigo-900 arabic-text mb-1">
+                          <h3 className="text-lg font-bold text-slate-900 arabic-text mb-1 truncate">
                             {s.name}
                           </h3>
-                          <p className="text-xs text-slate-500 arabic-text">
+                          <p className="text-[10px] text-slate-500 arabic-text mt-0.5">
                             {s.grade} • {getGroupName(s.group_id)}
                           </p>
                         </div>
                         
-                        <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                          {s.name?.charAt(0) || "؟"}
-                        </div>
+                        <Avatar className="h-12 w-12 border-2 border-indigo-50 shadow-sm ml-3">
+                            <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700 font-bold text-lg">
+                                {s.name?.charAt(0) || "؟"}
+                            </AvatarFallback>
+                        </Avatar>
                       </div>
-
-                      {/* الإحصائيات */}
-                      <div className="grid grid-cols-3 gap-2 bg-gradient-to-r from-slate-50 to-slate-100 p-3 rounded-xl mb-4">
+                      
+                      <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl mb-4 border border-slate-100">
                         <div className="text-center">
-                          <div className="text-[10px] text-slate-500 mb-1 arabic-text">المرحلة</div>
-                          <div className="font-bold text-indigo-600 text-base">{s.current_stage || 1}</div>
+                          <p className="text-[10px] text-slate-500 arabic-text mb-1">المرحلة</p>
+                          <p className="font-bold text-indigo-600 text-sm">{s.current_stage || 1}</p>
                         </div>
-                        <div className="border-r border-l border-slate-200 px-2 text-center">
-                          <div className="text-[10px] text-slate-500 mb-1 arabic-text">التمارين</div>
-                          <div className="font-bold text-indigo-600 text-base">{s.total_exercises || 0}</div>
+                        <div className="text-center border-x border-slate-200">
+                          <p className="text-[10px] text-slate-500 arabic-text mb-1">التمارين</p>
+                          <p className="font-bold text-slate-700 text-sm">{s.total_exercises || 0}</p>
                         </div>
                         <div className="text-center">
-                          <div className="text-[10px] text-slate-500 mb-1 arabic-text">المتوسط</div>
-                          <div className={cn(
-                            "font-bold text-base",
+                          <p className="text-[10px] text-slate-500 arabic-text mb-1">المتوسط</p>
+                          <p className={cn(
+                            "font-bold text-sm",
                             (s.average_score || 0) >= 80 ? "text-emerald-600" : (s.average_score || 0) >= 60 ? "text-amber-600" : "text-red-600"
                           )}>
                             {s.average_score ? `${s.average_score}%` : "-"}
-                          </div>
+                          </p>
                         </div>
                       </div>
 
-                      {/* المستوى */}
-                      <div className="flex justify-between items-center mb-3">
-                        <span className={cn(
-                          "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border",
-                          getLevelBadgeColor(s.level || "مبتدئ")
-                        )}>
-                          <Star className="w-3 h-3 ml-1" />
-                          {s.level || "مبتدئ"}
+                      <div className="flex items-center justify-between pt-2">
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1 arabic-text">
+                          <Clock className="w-3 h-3" /> {getTimeAgo(s.last_activity)}
                         </span>
-
-                        <span className="text-xs text-slate-400 arabic-text">
-                          {getTimeAgo(s.last_activity)}
-                        </span>
-                      </div>
-
-                      {/* أزرار الإجراءات */}
-                      <div className="flex gap-2 pt-3 border-t border-slate-100">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onSelectStudent(s)}
-                          className="flex-1 arabic-text text-xs"
-                        >
-                          <FileText className="w-3 h-3 ml-1" />
-                          السجل
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteClick(s)}
-                          className="text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        
+                        <div className="flex gap-2">
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDeleteClick(s)}>
+                                <Trash2 className="w-4 h-4" />
+                            </Button>
+                            <Button size="sm" onClick={() => onSelectStudent(s)} className="text-xs h-8 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white arabic-text px-4">
+                                السجل <ChevronLeft className="w-3 h-3 ml-1" />
+                            </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
