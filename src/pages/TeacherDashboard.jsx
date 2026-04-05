@@ -1093,16 +1093,19 @@ function SettingsTab() {
   };
 
   const handleSave = async () => {
-    if (!apiKey.trim()) {
+    const trimmedApiKey = apiKey.trim();
+    const trimmedWebhook = googleSheetsWebhook.trim();
+
+    if (!trimmedApiKey && !trimmedWebhook) {
       toast({
         title: "تنبيه",
-        description: "يرجى إدخال مفتاح API صالح",
+        description: "يرجى إدخال مفتاح OpenAI أو رابط Google Sheets Webhook",
         variant: "destructive",
       });
       return;
     }
 
-    if (!apiKey.startsWith("sk-")) {
+    if (trimmedApiKey && !trimmedApiKey.startsWith("sk-")) {
       toast({
         title: "تنبيه",
         description: "مفتاح OpenAI يجب أن يبدأ بـ sk-",
@@ -1117,20 +1120,22 @@ function SettingsTab() {
       const existing = settings.find((s) => s.key === "openai_api_key");
       const existingGoogleSheetsWebhook = settings.find((s) => s.key === "google_sheets_webhook_url");
 
-      if (existing) {
-        await SystemSetting.update(existing.id, { value: apiKey });
-      } else {
-        await SystemSetting.create({
-          key: "openai_api_key",
-          value: apiKey,
-          description: "OpenAI API Key for audio transcription and analysis",
-        });
+      if (trimmedApiKey) {
+        if (existing) {
+          await SystemSetting.update(existing.id, { value: trimmedApiKey });
+        } else {
+          await SystemSetting.create({
+            key: "openai_api_key",
+            value: trimmedApiKey,
+            description: "OpenAI API Key for audio transcription and analysis",
+          });
+        }
       }
 
-      if (googleSheetsWebhook.trim()) {
+      if (trimmedWebhook) {
         const webhookPayload = {
-          value: googleSheetsWebhook.trim(),
-          description: "Google Sheets Apps Script Webhook URL for student exports",
+          value: trimmedWebhook,
+          description: "Google Sheets Apps Script Webhook URL for dashboard award evidence exports",
         };
 
         if (existingGoogleSheetsWebhook) {
@@ -1150,7 +1155,7 @@ function SettingsTab() {
       setSaved(true);
       toast({
         title: "✅ نجح الحفظ",
-        description: "تم حفظ إعدادات API بنجاح",
+        description: "تم حفظ الإعدادات بنجاح",
       });
 
       setTimeout(() => setSaved(false), 3000);
@@ -1538,10 +1543,8 @@ function StudentsTab({ onSelectStudent }) {
   const [filterGrade, setFilterGrade] = useState("all"); // ✅ تم التعديل إلى "all" بدلاً من ""
   const [searchName, setSearchName] = useState("");
   const [groups, setGroups] = useState([]);
-  const [googleSheetsWebhook, setGoogleSheetsWebhook] = useState("");
   const [selectedGroupFilter, setSelectedGroupFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
   const [expandedStudentId, setExpandedStudentId] = useState(null);
   const [sortBy, setSortBy] = useState("name");
   const [sortOrder, setSortOrder] = useState("asc");
@@ -1570,15 +1573,12 @@ function StudentsTab({ onSelectStudent }) {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [studentList, groupList, settings] = await Promise.all([
+      const [studentList, groupList] = await Promise.all([
         Student.list("-last_activity"),
         StudentGroup.list(),
-        SystemSetting.list(),
       ]);
       setStudents(studentList || []);
       setGroups(groupList || []);
-      const webhookSetting = (settings || []).find((s) => s.key === "google_sheets_webhook_url");
-      setGoogleSheetsWebhook((webhookSetting?.value || "").trim());
     } catch (error) {
       console.error("Failed to load students or groups", error);
       toast({
@@ -1740,139 +1740,6 @@ function StudentsTab({ onSelectStudent }) {
     return { total, active, avgScore, needsHelp };
   }, [filteredAndSortedStudents]);
 
-  const buildStudentsExportRows = () => {
-    return (students || []).map((s) => {
-      const masteredLetters = Array.isArray(s.mastered_letters)
-        ? s.mastered_letters.join(" ")
-        : "";
-      const needsPracticeLetters = Array.isArray(s.needs_practice_letters)
-        ? s.needs_practice_letters.join(" ")
-        : "";
-
-      return [
-        s.id || "",
-        s.name || "",
-        s.access_code || "",
-        s.grade || "",
-        getGroupName(s.group_id),
-        s.level || "مبتدئ",
-        s.current_stage || 1,
-        s.average_score ?? "",
-        s.total_exercises ?? 0,
-        s.last_activity || "",
-        getTimeAgo(s.last_activity),
-        masteredLetters,
-        needsPracticeLetters,
-        s.created_date || "",
-      ];
-    });
-  };
-
-  const handleDownloadStudentsCsv = () => {
-    try {
-      const headers = [
-        "معرف الطالب",
-        "الاسم",
-        "رمز الوصول",
-        "الصف",
-        "المجموعة",
-        "المستوى",
-        "المرحلة الحالية",
-        "متوسط الدرجة",
-        "عدد التمارين",
-        "آخر نشاط (ISO)",
-        "آخر نشاط (نسبي)",
-        "الحروف المتقنة",
-        "حروف تحتاج تدريب",
-        "تاريخ الإنشاء",
-      ];
-
-      const rows = buildStudentsExportRows();
-      const summaryRows = [
-        [],
-        ["ملخص الإحصائيات", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["إجمالي الطلاب", stats.total, "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["نشط هذا الأسبوع", stats.active, "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["متوسط الدرجات", `${stats.avgScore}%`, "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["يحتاج دعم", stats.needsHelp, "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["تاريخ التصدير", new Date().toISOString(), "", "", "", "", "", "", "", "", "", "", "", ""],
-      ];
-
-      const content = buildCsvContent(headers, [...rows, ...summaryRows]);
-      const fileDate = new Date().toISOString().slice(0, 10);
-      downloadCsvFile(`students-export-${fileDate}.csv`, content);
-
-      toast({
-        title: "✅ تم تنزيل الملف",
-        description: `تم تنزيل ${rows.length} سجل طالب بصيغة CSV بنجاح`,
-      });
-    } catch (error) {
-      console.error("Failed to export students CSV", error);
-      toast({
-        title: "خطأ في التصدير",
-        description: "تعذّر إنشاء ملف CSV. حاول مرة أخرى.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleExportToGoogleSheets = async () => {
-    const webhookUrl = googleSheetsWebhook.trim();
-    if (!webhookUrl) {
-      toast({
-        title: "Webhook غير مضبوط",
-        description: "أضف رابط Google Sheets Webhook من الإعدادات أولاً.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsExporting(true);
-    try {
-      const payload = {
-        source: "TeacherDashboard",
-        exported_at: new Date().toISOString(),
-        summary: {
-          total_students: stats.total,
-          active_this_week: stats.active,
-          average_score: stats.avgScore,
-          needs_help: stats.needsHelp,
-        },
-        students: (students || []).map((s) => ({
-          ...s,
-          group_name: getGroupName(s.group_id),
-          last_activity_relative: getTimeAgo(s.last_activity),
-        })),
-      };
-
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Webhook failed with status ${response.status}`);
-      }
-
-      toast({
-        title: "✅ تم التصدير إلى Google Sheets",
-        description: "تم إرسال بيانات الطلاب كاملةً إلى Google Sheets بنجاح.",
-      });
-    } catch (error) {
-      console.error("Google Sheets export failed", error);
-      toast({
-        title: "فشل التصدير إلى Google Sheets",
-        description: "تحقق من رابط Webhook وصلاحيات Google Apps Script ثم أعد المحاولة.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* رأس الصفحة مع الإحصائيات */}
@@ -1891,57 +1758,16 @@ function StudentsTab({ onSelectStudent }) {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <Button
-              variant="outline"
-              onClick={handleDownloadStudentsCsv}
-              disabled={isLoading || students.length === 0}
-              className="arabic-text"
-            >
-              <Download className="w-4 h-4 ml-2" />
-              تنزيل CSV
-            </Button>
-
-            <Button
-              onClick={handleExportToGoogleSheets}
-              disabled={isLoading || isExporting || students.length === 0 || !googleSheetsWebhook.trim()}
-              className="arabic-text bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
-              title={googleSheetsWebhook.trim() ? "تصدير مباشر إلى Google Sheets" : "أضف Webhook من الإعدادات لتفعيل التصدير"}
-            >
-              {isExporting ? (
-                <>
-                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
-                  جاري التصدير...
-                </>
-              ) : (
-                <>
-                  <Upload className="w-4 h-4 ml-2" />
-                  تصدير إلى Google Sheets
-                </>
-              )}
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={loadData}
-              disabled={isLoading}
-              className="arabic-text"
-            >
-              <RefreshCw className={cn("w-4 h-4 ml-2", isLoading && "animate-spin")} />
-              تحديث
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            onClick={loadData}
+            disabled={isLoading}
+            className="arabic-text"
+          >
+            <RefreshCw className={cn("w-4 h-4 ml-2", isLoading && "animate-spin")} />
+            تحديث
+          </Button>
         </div>
-
-        {!googleSheetsWebhook.trim() && (
-          <Alert className="border-amber-200 bg-amber-50">
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
-            <AlertDescription className="arabic-text text-right text-amber-900 text-xs">
-              زر Google Sheets يحتاج إعداد رابط Webhook من نافذة الإعدادات.
-              يمكنك حالياً استخدام زر تنزيل CSV مباشرة.
-            </AlertDescription>
-          </Alert>
-        )}
 
         {/* بطاقات الإحصائيات السريعة */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -4821,7 +4647,15 @@ function EmergencyDrillTab() {
 function DashboardTab() {
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [googleSheetsWebhook, setGoogleSheetsWebhook] = useState("");
+  const [dashboardData, setDashboardData] = useState({
+    students: [],
+    recordings: [],
+    exercises: [],
+  });
   const [recentActivity, setRecentActivity] = useState([]);
+  const { toast } = useToast();
 
   useEffect(() => {
     loadDashboardData();
@@ -4830,11 +4664,15 @@ function DashboardTab() {
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      const [students, recordings, exercises] = await Promise.all([
+      const [students, recordings, exercises, settings] = await Promise.all([
         Student.list("-last_activity"),
         Recording.list("-created_date"),
         Exercise.list(),
+        SystemSetting.list(),
       ]);
+      const webhookSetting = (settings || []).find((s) => s.key === "google_sheets_webhook_url");
+      setGoogleSheetsWebhook((webhookSetting?.value || "").trim());
+      setDashboardData({ students: students || [], recordings: recordings || [], exercises: exercises || [] });
 
       // حساب الإحصائيات
       const now = new Date();
@@ -4886,6 +4724,198 @@ function DashboardTab() {
     }
   };
 
+  const buildAwardEvidenceRows = () => {
+    const { students, recordings, exercises } = dashboardData;
+
+    const gradeDistribution = GRADE_LEVELS.map((grade) => ({
+      grade,
+      count: students.filter((s) => s.grade === grade).length,
+    })).filter((item) => item.count > 0);
+
+    const levelDistribution = PROFICIENCY_LEVELS.map((level) => ({
+      level,
+      count: students.filter((s) => (s.level || "مبتدئ") === level).length,
+    })).filter((item) => item.count > 0);
+
+    const rows = [
+      ["ملخص عام", "تاريخ التصدير", new Date().toISOString(), "", "", "", "", ""],
+      ["ملخص عام", "إجمالي الطلاب", stats.totalStudents, "", "", "", "", ""],
+      ["ملخص عام", "الطلاب النشطون هذا الأسبوع", stats.activeThisWeek, "", "", "", "", ""],
+      ["ملخص عام", "إجمالي التسجيلات", stats.totalRecordings, "", "", "", "", ""],
+      ["ملخص عام", "تسجيلات اليوم", stats.recordingsToday, "", "", "", "", ""],
+      ["ملخص عام", "متوسط الأداء", `${stats.avgScore}%`, "", "", "", "", ""],
+      ["ملخص عام", "تسجيلات تحتاج مراجعة", stats.needsReview, "", "", "", "", ""],
+      ["ملخص عام", "إجمالي التمارين", stats.totalExercises, "", "", "", "", ""],
+      ["ملخص عام", "التمارين النشطة", stats.activeExercises, "", "", "", "", ""],
+      [],
+    ];
+
+    gradeDistribution.forEach((item) => {
+      rows.push(["توزيع الصفوف", item.grade, item.count, "", "", "", "", ""]);
+    });
+
+    rows.push([]);
+
+    levelDistribution.forEach((item) => {
+      rows.push(["توزيع المستويات", item.level, item.count, "", "", "", "", ""]);
+    });
+
+    rows.push([]);
+
+    students.forEach((s) => {
+      rows.push([
+        "بيانات الطلاب",
+        s.name || "",
+        s.grade || "",
+        s.level || "مبتدئ",
+        s.average_score ?? "",
+        s.total_exercises ?? 0,
+        s.last_activity || "",
+        s.access_code || "",
+      ]);
+    });
+
+    rows.push([]);
+
+    recordings.forEach((r) => {
+      const student = students.find((s) => s.id === r.student_id);
+      rows.push([
+        "بيانات التسجيلات",
+        student?.name || "طالب",
+        student?.grade || "",
+        r.score ?? "",
+        r.created_date || "",
+        pickTeacherAudio(r) ? "يوجد تعليق صوتي" : "لا يوجد",
+        r.teacher_comment ? "يوجد تعليق نصي" : "لا يوجد",
+        getScoreLabel(r.score),
+      ]);
+    });
+
+    rows.push([]);
+
+    exercises.forEach((ex) => {
+      rows.push([
+        "بيانات التمارين",
+        ex.title || "",
+        ex.grade || "",
+        ex.level || "",
+        ex.stage ?? "",
+        ex.is_active ? "نشط" : "معطل",
+        ex.created_date || "",
+        "",
+      ]);
+    });
+
+    return rows;
+  };
+
+  const handleDownloadAwardEvidence = () => {
+    try {
+      const headers = [
+        "القسم",
+        "العنصر",
+        "القيمة 1",
+        "القيمة 2",
+        "القيمة 3",
+        "القيمة 4",
+        "القيمة 5",
+        "القيمة 6",
+      ];
+
+      const rows = buildAwardEvidenceRows();
+      const content = buildCsvContent(headers, rows);
+      const fileDate = new Date().toISOString().slice(0, 10);
+      downloadCsvFile(`dashboard-award-evidence-${fileDate}.csv`, content);
+
+      toast({
+        title: "✅ تم تنزيل ملف الإثباتات",
+        description: "تم تنزيل ملف شامل لإحصائيات وإنجازات لوحة التحكم.",
+      });
+    } catch (error) {
+      console.error("Failed to download dashboard evidence", error);
+      toast({
+        title: "خطأ في التصدير",
+        description: "تعذّر إنشاء ملف الإثباتات. حاول مرة أخرى.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExportAwardEvidenceToGoogleSheets = async () => {
+    const webhookUrl = googleSheetsWebhook.trim();
+    if (!webhookUrl) {
+      toast({
+        title: "Webhook غير مضبوط",
+        description: "أدخلي رابط Google Sheets Webhook من الإعدادات أولاً.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const { students, recordings, exercises } = dashboardData;
+      const payload = {
+        source: "TeacherDashboardAwardEvidence",
+        exported_at: new Date().toISOString(),
+        summary: stats,
+        recent_activity: recentActivity,
+        students: students.map((s) => ({
+          id: s.id,
+          name: s.name,
+          grade: s.grade,
+          level: s.level || "مبتدئ",
+          average_score: s.average_score ?? null,
+          total_exercises: s.total_exercises ?? 0,
+          last_activity: s.last_activity || null,
+          access_code: s.access_code || null,
+        })),
+        recordings: recordings.map((r) => ({
+          id: r.id,
+          student_id: r.student_id,
+          score: r.score ?? null,
+          created_date: r.created_date || null,
+          has_teacher_audio: !!pickTeacherAudio(r),
+          has_teacher_comment: !!r.teacher_comment,
+          score_label: getScoreLabel(r.score),
+        })),
+        exercises: exercises.map((ex) => ({
+          id: ex.id,
+          title: ex.title,
+          grade: ex.grade,
+          level: ex.level,
+          stage: ex.stage,
+          is_active: !!ex.is_active,
+          created_date: ex.created_date || null,
+        })),
+      };
+
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Webhook failed with status ${response.status}`);
+      }
+
+      toast({
+        title: "✅ تم إرسال ملف الإثباتات",
+        description: "تم تصدير معلومات لوحة التحكم والإحصائيات إلى Google Sheets.",
+      });
+    } catch (error) {
+      console.error("Failed to export dashboard evidence to Google Sheets", error);
+      toast({
+        title: "فشل التصدير إلى Google Sheets",
+        description: "تحققي من رابط Webhook وصلاحيات Apps Script ثم أعيدي المحاولة.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (isLoading) {
     return <LoadingSpinner text="جاري تحميل لوحة التحكم..." />;
   }
@@ -4911,16 +4941,57 @@ function DashboardTab() {
           </p>
         </div>
 
-        <Button
-          variant="outline"
-          onClick={loadDashboardData}
-          disabled={isLoading}
-          className="arabic-text"
-        >
-          <RefreshCw className={cn("w-4 h-4 ml-2", isLoading && "animate-spin")} />
-          تحديث البيانات
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <Button
+            variant="outline"
+            onClick={handleDownloadAwardEvidence}
+            disabled={isLoading || !stats}
+            className="arabic-text"
+          >
+            <Download className="w-4 h-4 ml-2" />
+            تنزيل ملف الإثباتات
+          </Button>
+
+          <Button
+            onClick={handleExportAwardEvidenceToGoogleSheets}
+            disabled={isLoading || isExporting || !stats || !googleSheetsWebhook.trim()}
+            className="arabic-text bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+            title={googleSheetsWebhook.trim() ? "تصدير إثباتات لوحة التحكم إلى Google Sheets" : "أدخلي Webhook من الإعدادات لتفعيل التصدير"}
+          >
+            {isExporting ? (
+              <>
+                <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                جاري التصدير...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4 ml-2" />
+                إرسال إلى Google Sheets
+              </>
+            )}
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={loadDashboardData}
+            disabled={isLoading}
+            className="arabic-text"
+          >
+            <RefreshCw className={cn("w-4 h-4 ml-2", isLoading && "animate-spin")} />
+            تحديث البيانات
+          </Button>
+        </div>
       </motion.div>
+
+      {!googleSheetsWebhook.trim() && (
+        <Alert className="border-amber-200 bg-amber-50">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="arabic-text text-right text-amber-900 text-xs">
+            لتفعيل التصدير المباشر إلى Google Sheets، أدخلي رابط Webhook من الإعدادات.
+            يمكنك حالياً تنزيل ملف الإثباتات بصيغة CSV.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* الإحصائيات الرئيسية */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -5029,59 +5100,43 @@ function DashboardTab() {
           </CardContent>
         </Card>
 
-        {/* روابط سريعة */}
+        {/* بطاقة الإثباتات */}
         <Card className="border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-purple-50">
           <CardHeader className="border-b border-indigo-100">
             <CardTitle className="arabic-text text-right text-lg flex items-center gap-2">
               <Zap className="w-5 h-5 text-indigo-600" />
-              إجراءات سريعة
+              ملف التقديم للجائزة
             </CardTitle>
           </CardHeader>
 
           <CardContent className="p-6 space-y-3">
             <Button
+              variant="outline"
+              onClick={handleDownloadAwardEvidence}
+              className="w-full arabic-text justify-end"
+              size="lg"
+            >
+              <span className="flex items-center gap-2">
+                <span>تنزيل تقرير إثباتات CSV</span>
+                <Download className="w-5 h-5" />
+              </span>
+            </Button>
+
+            <Button
+              onClick={handleExportAwardEvidenceToGoogleSheets}
+              disabled={!googleSheetsWebhook.trim() || isExporting}
               className="w-full arabic-text justify-end bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
               size="lg"
-              asChild
             >
-              <div className="flex items-center gap-2">
-                <span>إضافة تمرين جديد</span>
-                <Plus className="w-5 h-5" />
-              </div>
+              <span className="flex items-center gap-2">
+                <span>{isExporting ? "جاري الإرسال..." : "إرسال الإثباتات إلى Google Sheets"}</span>
+                {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+              </span>
             </Button>
 
-            <Button
-              className="w-full arabic-text justify-end bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-              size="lg"
-              asChild
-            >
-              <div className="flex items-center gap-2">
-                <span>توليد تمرين بالذكاء الاصطناعي</span>
-                <Sparkles className="w-5 h-5" />
-              </div>
-            </Button>
-
-            <Button
-              variant="outline"
-              className="w-full arabic-text justify-end"
-              size="lg"
-            >
-              <div className="flex items-center gap-2">
-                <span>مراجعة التسجيلات المعلقة</span>
-                <MessageSquare className="w-5 h-5" />
-              </div>
-            </Button>
-
-            <Button
-              variant="outline"
-              className="w-full arabic-text justify-end"
-              size="lg"
-            >
-              <div className="flex items-center gap-2">
-                <span>إدارة المجموعات</span>
-                <Users className="w-5 h-5" />
-              </div>
-            </Button>
+            <p className="text-xs text-slate-600 arabic-text text-right leading-6">
+              التقرير يتضمن: الإحصائيات الرئيسية، توزيع الصفوف والمستويات، بيانات الطلاب المهمة، التسجيلات، والتمارين.
+            </p>
           </CardContent>
         </Card>
       </div>
