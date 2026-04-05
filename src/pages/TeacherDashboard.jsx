@@ -462,6 +462,36 @@ const downloadCsvFile = (filename, content) => {
 };
 
 /**
+ * 📆 استخراج مفتاح الشهر من تاريخ (YYYY-MM)
+ */
+const toMonthKey = (dateStr) => {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+};
+
+/**
+ * ⏱️ استخراج مدة التسجيل بالثواني مع دعم عدة أسماء حقول
+ */
+const getRecordingDurationSeconds = (recording) => {
+  if (!recording) return 0;
+  const raw =
+    recording.duration_seconds ??
+    recording.duration ??
+    recording.audio_duration ??
+    recording.length_seconds ??
+    recording.analysis_details?.duration_seconds ??
+    recording.analysis_details?.duration ??
+    0;
+
+  const val = Number(raw);
+  return Number.isFinite(val) && val > 0 ? val : 0;
+};
+
+/**
  * 📱 كشف حجم الشاشة
  */
 const useMediaQuery = (query) => {
@@ -4724,6 +4754,137 @@ function DashboardTab() {
     }
   };
 
+  const impactAnalysis = useMemo(() => {
+    const { students, recordings, exercises } = dashboardData;
+    const normalizedRecordings = (recordings || [])
+      .filter((r) => !!r?.created_date)
+      .slice()
+      .sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
+
+    const monthMap = new Map();
+    normalizedRecordings.forEach((r) => {
+      const monthKey = toMonthKey(r.created_date);
+      if (!monthKey) return;
+      if (!monthMap.has(monthKey)) {
+        monthMap.set(monthKey, { scores: [], recordingsCount: 0, totalSeconds: 0 });
+      }
+      const bucket = monthMap.get(monthKey);
+      const scoreVal = Number(r.score);
+      if (Number.isFinite(scoreVal) && scoreVal >= 0) {
+        bucket.scores.push(scoreVal);
+      }
+      bucket.recordingsCount += 1;
+      bucket.totalSeconds += getRecordingDurationSeconds(r);
+    });
+
+    const monthlyTrend = Array.from(monthMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, data]) => ({
+        month,
+        avgScore: data.scores.length ? Math.round(data.scores.reduce((x, y) => x + y, 0) / data.scores.length) : 0,
+        recordingsCount: data.recordingsCount,
+        trainingHours: Math.round((data.totalSeconds / 3600) * 10) / 10,
+      }));
+
+    const baseline = monthlyTrend[0] || null;
+    const latest = monthlyTrend[monthlyTrend.length - 1] || null;
+    const scoreImprovementPercent = baseline && baseline.avgScore > 0 && latest
+      ? Math.round(((latest.avgScore - baseline.avgScore) / baseline.avgScore) * 100)
+      : 0;
+
+    const getStudentMonthAverages = (monthKey) => {
+      const map = new Map();
+      if (!monthKey) return map;
+      normalizedRecordings
+        .filter((r) => toMonthKey(r.created_date) === monthKey)
+        .forEach((r) => {
+          const scoreVal = Number(r.score);
+          if (!Number.isFinite(scoreVal) || scoreVal < 0) return;
+          if (!map.has(r.student_id)) map.set(r.student_id, []);
+          map.get(r.student_id).push(scoreVal);
+        });
+      const avgMap = new Map();
+      map.forEach((arr, studentId) => {
+        avgMap.set(studentId, Math.round(arr.reduce((x, y) => x + y, 0) / arr.length));
+      });
+      return avgMap;
+    };
+
+    const baselineStudentAvg = getStudentMonthAverages(baseline?.month);
+    const latestStudentAvg = getStudentMonthAverages(latest?.month);
+    const baselineNeedsSupport = Array.from(baselineStudentAvg.values()).filter((v) => v < 70).length;
+    const latestNeedsSupport = Array.from(latestStudentAvg.values()).filter((v) => v < 70).length;
+    const needsSupportReductionPercent = baselineNeedsSupport > 0
+      ? Math.round(((baselineNeedsSupport - latestNeedsSupport) / baselineNeedsSupport) * 100)
+      : 0;
+
+    const totalTrainingSeconds = normalizedRecordings.reduce((acc, r) => acc + getRecordingDurationSeconds(r), 0);
+    const totalTrainingHours = Math.round((totalTrainingSeconds / 3600) * 10) / 10;
+
+    const studentRecordingsMap = new Map();
+    normalizedRecordings.forEach((r) => {
+      if (!studentRecordingsMap.has(r.student_id)) studentRecordingsMap.set(r.student_id, []);
+      studentRecordingsMap.get(r.student_id).push(r);
+    });
+
+    const usedStudentIds = new Set();
+    const pickCategorySample = (label, predicate) => {
+      for (const [studentId, recs] of studentRecordingsMap.entries()) {
+        if (usedStudentIds.has(studentId) || recs.length < 2) continue;
+        const last = recs[recs.length - 1];
+        const lastScore = Number(last?.score ?? 0);
+        if (!predicate(lastScore)) continue;
+        const student = (students || []).find((s) => s.id === studentId);
+        usedStudentIds.add(studentId);
+        const first = recs[0];
+        return {
+          category: label,
+          student_id: studentId,
+          student_name: student?.name || "طالب",
+          grade: student?.grade || "",
+          before_date: first.created_date || "",
+          before_score: first.score ?? "",
+          after_date: last.created_date || "",
+          after_score: last.score ?? "",
+          before_audio_url: first.audio_url || "",
+          after_audio_url: last.audio_url || "",
+        };
+      }
+      return null;
+    };
+
+    const qualitativeSamples = [
+      pickCategorySample("متميز", (s) => s >= 85),
+      pickCategorySample("متوسط", (s) => s >= 70 && s < 85),
+      pickCategorySample("يحتاج دعم", (s) => s < 70),
+    ].filter(Boolean);
+
+    const feedbackEvidenceCount = normalizedRecordings.filter((r) => r.teacher_comment || pickTeacherAudio(r)).length;
+    const aiAnalyzedCount = normalizedRecordings.filter((r) => !!pickAiFeedback(r)).length;
+    const emergencyExercisesCount = (exercises || []).filter((ex) => {
+      const title = String(ex?.title || "").toLowerCase();
+      return title.includes("طارئ") || title.includes("emergency");
+    }).length;
+
+    return {
+      monthlyTrend,
+      baseline,
+      latest,
+      scoreImprovementPercent,
+      totalTrainingHours,
+      totalTrainingSeconds,
+      interactionVolume: normalizedRecordings.length,
+      baselineNeedsSupport,
+      latestNeedsSupport,
+      needsSupportReductionPercent,
+      qualitativeSamples,
+      feedbackEvidenceCount,
+      aiAnalyzedCount,
+      aiCoveragePercent: calculatePercentage(aiAnalyzedCount, normalizedRecordings.length || 1),
+      emergencyExercisesCount,
+    };
+  }, [dashboardData]);
+
   const buildAwardEvidenceRows = () => {
     const { students, recordings, exercises } = dashboardData;
 
@@ -4747,8 +4908,31 @@ function DashboardTab() {
       ["ملخص عام", "تسجيلات تحتاج مراجعة", stats.needsReview, "", "", "", "", ""],
       ["ملخص عام", "إجمالي التمارين", stats.totalExercises, "", "", "", "", ""],
       ["ملخص عام", "التمارين النشطة", stats.activeExercises, "", "", "", "", ""],
+      ["قياس الأثر", "شهر خط الأساس", impactAnalysis.baseline?.month || "غير متوفر", "", "", "", "", ""],
+      ["قياس الأثر", "شهر المقارنة", impactAnalysis.latest?.month || "غير متوفر", "", "", "", "", ""],
+      ["قياس الأثر", "تحسن متوسط القراءة", `${impactAnalysis.scoreImprovementPercent}%`, "", "", "", "", ""],
+      ["قياس الأثر", "عدد التسجيلات الكلي", impactAnalysis.interactionVolume, "", "", "", "", ""],
+      ["قياس الأثر", "ساعات التدريب", impactAnalysis.totalTrainingHours, "", "", "", "", ""],
+      ["قياس الأثر", "يحتاج دعم - قبل", impactAnalysis.baselineNeedsSupport, "", "", "", "", ""],
+      ["قياس الأثر", "يحتاج دعم - بعد", impactAnalysis.latestNeedsSupport, "", "", "", "", ""],
+      ["قياس الأثر", "نسبة تقليص فجوة يحتاج دعم", `${impactAnalysis.needsSupportReductionPercent}%`, "", "", "", "", ""],
       [],
     ];
+
+    impactAnalysis.monthlyTrend.forEach((item) => {
+      rows.push([
+        "اتجاه شهري",
+        item.month,
+        `متوسط: ${item.avgScore}%`,
+        `تسجيلات: ${item.recordingsCount}`,
+        `ساعات: ${item.trainingHours}`,
+        "",
+        "",
+        "",
+      ]);
+    });
+
+    rows.push([]);
 
     gradeDistribution.forEach((item) => {
       rows.push(["توزيع الصفوف", item.grade, item.count, "", "", "", "", ""]);
@@ -4759,6 +4943,54 @@ function DashboardTab() {
     levelDistribution.forEach((item) => {
       rows.push(["توزيع المستويات", item.level, item.count, "", "", "", "", ""]);
     });
+
+    rows.push([]);
+
+    impactAnalysis.qualitativeSamples.forEach((sample) => {
+      rows.push([
+        "عينات قبل/بعد",
+        sample.category,
+        sample.student_name,
+        sample.grade,
+        `قبل: ${sample.before_score} (${sample.before_date})`,
+        `بعد: ${sample.after_score} (${sample.after_date})`,
+        sample.before_audio_url,
+        sample.after_audio_url,
+      ]);
+    });
+
+    rows.push([]);
+
+    rows.push([
+      "الابتكار",
+      "التمارين الطارئة المولدة",
+      impactAnalysis.emergencyExercisesCount,
+      "",
+      "",
+      "",
+      "",
+      "",
+    ]);
+    rows.push([
+      "الابتكار",
+      "تغطية التحليل الآلي للتسجيلات",
+      `${impactAnalysis.aiCoveragePercent}%`,
+      `عدد التسجيلات المحللة: ${impactAnalysis.aiAnalyzedCount}`,
+      "",
+      "",
+      "",
+      "",
+    ]);
+    rows.push([
+      "الأدلة النوعية",
+      "سجلات تغذية راجعة (صوتي/نصي)",
+      impactAnalysis.feedbackEvidenceCount,
+      "",
+      "",
+      "",
+      "",
+      "",
+    ]);
 
     rows.push([]);
 
@@ -4859,6 +5091,26 @@ function DashboardTab() {
         source: "TeacherDashboardAwardEvidence",
         exported_at: new Date().toISOString(),
         summary: stats,
+        impact_analysis: {
+          baseline_month: impactAnalysis.baseline?.month || null,
+          latest_month: impactAnalysis.latest?.month || null,
+          score_improvement_percent: impactAnalysis.scoreImprovementPercent,
+          interaction_volume: impactAnalysis.interactionVolume,
+          total_training_hours: impactAnalysis.totalTrainingHours,
+          baseline_needs_support: impactAnalysis.baselineNeedsSupport,
+          latest_needs_support: impactAnalysis.latestNeedsSupport,
+          needs_support_reduction_percent: impactAnalysis.needsSupportReductionPercent,
+          monthly_trend: impactAnalysis.monthlyTrend,
+        },
+        qualitative_evidence: {
+          before_after_samples: impactAnalysis.qualitativeSamples,
+          feedback_evidence_count: impactAnalysis.feedbackEvidenceCount,
+        },
+        innovation_evidence: {
+          emergency_exercises_count: impactAnalysis.emergencyExercisesCount,
+          ai_analyzed_count: impactAnalysis.aiAnalyzedCount,
+          ai_coverage_percent: impactAnalysis.aiCoveragePercent,
+        },
         recent_activity: recentActivity,
         students: students.map((s) => ({
           id: s.id,
@@ -5026,6 +5278,74 @@ function DashboardTab() {
         />
       </div>
 
+      {/* قياس الأثر */}
+      <Card className="border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-teal-50">
+        <CardHeader className="border-b border-emerald-100">
+          <CardTitle className="arabic-text text-right text-lg flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-emerald-600" />
+            إحصائيات قياس الأثر (قبل/بعد)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 space-y-4">
+          <div className="grid md:grid-cols-3 gap-4">
+            <Card className="border border-emerald-200 bg-white/80">
+              <CardContent className="p-4 text-right">
+                <p className="text-xs text-slate-500 arabic-text">نسبة التحسن في متوسط القراءة</p>
+                <p className="text-2xl font-black text-emerald-700">{impactAnalysis.scoreImprovementPercent}%</p>
+                <p className="text-[11px] text-slate-500 arabic-text mt-1">
+                  من {impactAnalysis.baseline?.month || "—"} إلى {impactAnalysis.latest?.month || "—"}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-blue-200 bg-white/80">
+              <CardContent className="p-4 text-right">
+                <p className="text-xs text-slate-500 arabic-text">حجم التفاعل والتدريب</p>
+                <p className="text-2xl font-black text-blue-700">{impactAnalysis.interactionVolume} تسجيل</p>
+                <p className="text-[11px] text-slate-500 arabic-text mt-1">
+                  بإجمالي {impactAnalysis.totalTrainingHours} ساعة تدريب
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-amber-200 bg-white/80">
+              <CardContent className="p-4 text-right">
+                <p className="text-xs text-slate-500 arabic-text">تقليص فجوة يحتاج دعم</p>
+                <p className="text-2xl font-black text-amber-700">{impactAnalysis.needsSupportReductionPercent}%</p>
+                <p className="text-[11px] text-slate-500 arabic-text mt-1">
+                  قبل: {impactAnalysis.baselineNeedsSupport} • بعد: {impactAnalysis.latestNeedsSupport}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {impactAnalysis.monthlyTrend.length > 0 && (
+            <div className="overflow-x-auto border border-emerald-100 rounded-lg bg-white">
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="bg-emerald-50 border-b border-emerald-100">
+                    <th className="py-2 px-3 text-xs font-bold text-emerald-900 arabic-text">الشهر</th>
+                    <th className="py-2 px-3 text-xs font-bold text-emerald-900 arabic-text">متوسط القراءة</th>
+                    <th className="py-2 px-3 text-xs font-bold text-emerald-900 arabic-text">عدد التسجيلات</th>
+                    <th className="py-2 px-3 text-xs font-bold text-emerald-900 arabic-text">ساعات التدريب</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {impactAnalysis.monthlyTrend.map((item) => (
+                    <tr key={item.month} className="border-b border-emerald-50">
+                      <td className="py-2 px-3 text-xs text-slate-700">{item.month}</td>
+                      <td className="py-2 px-3 text-xs font-bold text-slate-900">{item.avgScore}%</td>
+                      <td className="py-2 px-3 text-xs text-slate-700">{item.recordingsCount}</td>
+                      <td className="py-2 px-3 text-xs text-slate-700">{item.trainingHours}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* الصف الثاني - التمارين */}
       <div className="grid md:grid-cols-2 gap-4">
         <StatCard
@@ -5135,35 +5455,58 @@ function DashboardTab() {
             </Button>
 
             <p className="text-xs text-slate-600 arabic-text text-right leading-6">
-              التقرير يتضمن: الإحصائيات الرئيسية، توزيع الصفوف والمستويات، بيانات الطلاب المهمة، التسجيلات، والتمارين.
+              التقرير يتضمن: قياس الأثر قبل/بعد، الاتجاه الشهري، ساعات التدريب، تقليص فجوة يحتاج دعم، العينات النوعية، ومؤشرات الابتكار.
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* نصائح وإرشادات */}
-      <div className="grid md:grid-cols-3 gap-4">
-        <InfoCard
-          title="💡 نصيحة اليوم"
-          description="راجع التسجيلات التي حصلت على درجات أقل من 70% وأضف تعليقات توجيهية للطلاب لمساعدتهم على التحسن."
-          icon={HelpCircle}
-          variant="info"
-        />
+      {/* الأدلة النوعية والابتكار */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card className="border-0 shadow-lg">
+          <CardHeader className="border-b border-slate-100">
+            <CardTitle className="arabic-text text-right text-base flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-indigo-600" />
+              عينات قبل وبعد (نوعية)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 space-y-3">
+            {impactAnalysis.qualitativeSamples.length === 0 ? (
+              <p className="text-xs text-slate-500 arabic-text text-right">لا توجد عينات كافية حالياً (يحتاج كل طالب تسجيلين على الأقل).</p>
+            ) : (
+              impactAnalysis.qualitativeSamples.map((sample) => (
+                <div key={`${sample.category}-${sample.student_id}`} className="border border-slate-100 rounded-lg p-3 bg-slate-50 text-right">
+                  <p className="text-sm font-bold text-slate-900 arabic-text">{sample.category} - {sample.student_name}</p>
+                  <p className="text-xs text-slate-600 arabic-text mt-1">قبل: {sample.before_score ?? "—"}% ({formatDate(sample.before_date)})</p>
+                  <p className="text-xs text-slate-600 arabic-text">بعد: {sample.after_score ?? "—"}% ({formatDate(sample.after_date)})</p>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
 
-        <InfoCard
-          title="✨ ميزة جديدة"
-          description="يمكنك الآن توليد تمارين طارئة بالذكاء الاصطناعي في ثوانٍ! جرّب التبويب 'تمرين طارئ'."
-          icon={Sparkles}
-          variant="success"
-        />
-
-        <InfoCard
-          title="⚠️ تذكير"
-          description={`لديك ${stats.needsReview} تسجيل يحتاج مراجعة. خصص بعض الوقت لمراجعتها والتعليق عليها.`}
-          icon={AlertTriangle}
-          variant="warning"
-        />
+        <Card className="border-0 shadow-lg">
+          <CardHeader className="border-b border-slate-100">
+            <CardTitle className="arabic-text text-right text-base flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-600" />
+              مؤشرات الابتكار
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 space-y-2 text-right arabic-text">
+            <p className="text-sm text-slate-700">• التمارين الطارئة المولدة: <strong>{impactAnalysis.emergencyExercisesCount}</strong></p>
+            <p className="text-sm text-slate-700">• التسجيلات المحللة آلياً: <strong>{impactAnalysis.aiAnalyzedCount}</strong></p>
+            <p className="text-sm text-slate-700">• تغطية التحليل الآلي: <strong>{impactAnalysis.aiCoveragePercent}%</strong></p>
+            <p className="text-sm text-slate-700">• سجلات التغذية الراجعة: <strong>{impactAnalysis.feedbackEvidenceCount}</strong></p>
+          </CardContent>
+        </Card>
       </div>
+
+      <InfoCard
+        title="📁 توجيه إعداد ملف الجائزة"
+        description="استخدمي زر التصدير بعد تحديث البيانات مباشرة، وأرفقي مع التقرير 3 عينات قبل/بعد (متميز، متوسط، يحتاج دعم) مع ملاحظاتك النصية والصوتية لإثبات الأثر التربوي الكامل."
+        icon={Award}
+        variant="info"
+      />
     </div>
   );
 }
