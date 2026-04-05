@@ -1,0 +1,478 @@
+// src/pages/CreateCustomExercise.jsx
+
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+
+// ✅ Supabase Entities
+import { Exercise } from "@/api/entities";
+
+// ✅ ذكاء اصطناعي عبر integrations
+import { InvokeLLM } from "@/api/integrations";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
+import {
+  ArrowLeft,
+  Sparkles,
+  Wand2,
+  FileText,
+  AlertCircle,
+  BookOpen,
+  Settings,
+  Lightbulb,
+  GraduationCap,
+  Brain,
+  Target,
+  CheckCircle2
+} from "lucide-react";
+import { motion } from "framer-motion";
+
+const TEXT_TYPES = [
+  { value: "علمي", label: "نص علمي 🔬", description: "معلومات علمية مبسطة وحقائق" },
+  { value: "أدبي", label: "نص أدبي 📚", description: "قصة قصيرة أو نص نثري جميل" },
+  { value: "وصفي", label: "نص وصفي 🎨", description: "وصف دقيق لمكان أو شيء" },
+  { value: "حواري", label: "نص حواري 💬", description: "حوار متبادل بين شخصيات" },
+  { value: "تاريخي", label: "نص تاريخي 🏛️", description: "سرد لحدث أو شخصية تاريخية" },
+  { value: "ديني", label: "نص ديني 📿", description: "حديث شريف أو قصة دينية" },
+  {
+    value: "نص خاص",
+    label: "نص من اختيارك ✍️",
+    description: "اكتب أو الصق نصك الخاص",
+  },
+];
+
+export default function CreateCustomExercisePage() {
+  const navigate = useNavigate();
+  const [textType, setTextType] = useState("");
+  const [customText, setCustomText] = useState("");
+  const [wordCount, setWordCount] = useState([80]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [error, setError] = useState(null);
+
+  // ✅ وظيفة لمراجعة وتصحيح النص
+  const reviewAndCorrectText = async (originalText) => {
+    try {
+      setIsReviewing(true);
+      const reviewPrompt = `
+أنت خبير لغوي في اللغة العربية الفصحى. قم بمراجعة وتشكيل النص التالي تشكيلاً كاملاً وتاماً (100% Fully Vowelized).
+
+النص: "${originalText}"
+
+**الشروط الصارمة جداً:**
+1. **التشكيل الكامل لكل حرف:** يجب وضع الحركات (فتحة، ضمة، كسرة، سكون) على **جميع** الحروف بلا استثناء.
+2. **الدقة النحوية والصرفية:** تأكد من صحة الإعراب وبنية الكلمات.
+3. **الشدة:** ضع الشدة مع حركتها المناسبة في موضعها الصحيح.
+
+المطلوب: أعد كتابة النص مشكولاً بالكامل (Full Tashkeel) فقط.
+      `;
+
+      const correctedText = await InvokeLLM({ prompt: reviewPrompt });
+
+      if (typeof correctedText === "string" && correctedText.trim()) {
+        return correctedText.trim();
+      } else {
+        return originalText;
+      }
+    } catch (error) {
+      console.error("Text review failed:", error);
+      return originalText;
+    } finally {
+      setIsReviewing(false);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!textType) {
+      setError("يرجى اختيار نوع النص.");
+      return;
+    }
+
+    if (textType === "نص خاص" && !customText.trim()) {
+      setError("يرجى كتابة النص الخاص بك.");
+      return;
+    }
+
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      let finalText = "";
+
+      if (textType === "نص خاص") {
+        finalText = await reviewAndCorrectText(customText.trim());
+      } else {
+        const selectedType = TEXT_TYPES.find((t) => t.value === textType);
+        let complexityInstruction = "استخدم جملاً بسيطة ومفردات سهلة.";
+        if (wordCount[0] > 150) complexityInstruction = "استخدم جملاً مركبة وتراكيب قوية.";
+        else if (wordCount[0] > 80) complexityInstruction = "استخدم جملاً متوسطة الطول.";
+
+        const prompt = `
+بصفتك خبيراً لغوياً، أنشئ نصاً ${textType}اً باللغة العربية الفُصحى.
+الطول التقريبي: ${wordCount[0]} كلمة.
+مستوى الصعوبة: ${complexityInstruction}
+**المعيار الذهبي للتشكيل:** تشكيل كامل 100% لكل حرف بدقة نحوية.
+المطلوب: النص فقط، مشكولاً بالكامل.
+        `;
+
+        try {
+          const generatedText = await InvokeLLM({ prompt });
+          if (typeof generatedText !== "string" || generatedText.trim() === "") {
+            throw new Error("فشل الذكاء الاصطناعي في إنشاء النص.");
+          }
+          finalText = await reviewAndCorrectText(generatedText.trim());
+        } catch (llmError) {
+          if (llmError.message && llmError.message.includes("limit")) {
+            throw new Error('عذراً، وصلنا للحد الأقصى. يرجى اختيار "نص خاص".');
+          }
+          throw llmError;
+        }
+      }
+
+      if (!finalText || finalText.length < 20) {
+        throw new Error("النص المُنشأ قصير جداً أو غير صالح.");
+      }
+
+      // تقدير المستوى
+      let level = "مبتدئ";
+      let stage = 1;
+      const actualWordCount = finalText.split(/\s+/).length;
+
+      if (actualWordCount >= 150) { level = "متقدم"; stage = Math.min(10, Math.floor(actualWordCount / 50)); }
+      else if (actualWordCount >= 100) { level = "متوسط"; stage = Math.min(7, Math.floor(actualWordCount / 30)); }
+      else { stage = Math.min(5, Math.floor(actualWordCount / 20)); }
+
+      const newExercise = await Exercise.create({
+        sentence: finalText,
+        level: level,
+        stage: stage,
+        category: textType === "نص خاص" ? "نص مخصص" : textType,
+        difficulty_points: Math.round(actualWordCount / 10),
+        word_count: actualWordCount,
+      });
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const studentId = urlParams.get("studentId");
+      navigate(createPageUrl(`Exercise?id=${newExercise.id}&studentId=${studentId}`));
+
+    } catch (err) {
+      console.error(err);
+      setError("حدث خطأ أثناء إنشاء التمرين. يرجى المحاولة مرة أخرى.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="min-h-screen bg-gradient-to-br from-orange-50 via-pink-50 to-purple-50 p-4 md:p-8"
+      dir="rtl"
+    >
+      <div className="max-w-7xl mx-auto w-full">
+        
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col md:flex-row md:items-center gap-4 mb-8"
+        >
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full shadow-md bg-white hover:scale-110 transition-transform"
+              onClick={() => navigate(-1)}
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-600" />
+            </Button>
+            <div>
+              <h1 className="text-3xl md:text-4xl font-black bg-gradient-to-r from-orange-600 to-pink-600 bg-clip-text text-transparent arabic-text flex items-center gap-3">
+                <Wand2 className="text-orange-600 w-8 h-8 md:w-10 md:h-10" />
+                تحدي إضافي (مخصص)
+              </h1>
+              <p className="text-gray-500 arabic-text text-base md:text-lg mt-1">
+                أنت المؤلف والقارئ! صمم تمرينك الخاص واختبر قدراتك في النطق.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Main Tool Section */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mb-16"
+        >
+          <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-orange-500 to-pink-600 text-white p-6">
+              <CardTitle className="arabic-text text-xl md:text-2xl flex items-center gap-2">
+                <Settings className="w-6 h-6" />
+                إعدادات التمرين الجديد
+              </CardTitle>
+            </CardHeader>
+            
+            <CardContent className="p-6 md:p-8">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                {/* Right Column: Text Types (5/12) */}
+                <div className="lg:col-span-5 space-y-4">
+                  <Label className="arabic-text text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
+                    <BookOpen className="w-5 h-5 text-orange-600" />
+                    1. اختر نوع النص
+                  </Label>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
+                    {TEXT_TYPES.map((type) => (
+                      <motion.div
+                        key={type.value}
+                        whileHover={{ scale: 1.01, x: -5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div
+                          className={`cursor-pointer p-4 rounded-xl border-2 transition-all duration-200 flex items-center gap-4 ${
+                            textType === type.value
+                              ? "border-orange-500 bg-orange-50 shadow-md ring-1 ring-orange-200"
+                              : "border-slate-100 hover:border-orange-200 hover:bg-slate-50"
+                          }`}
+                          onClick={() => setTextType(type.value)}
+                        >
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl ${
+                             textType === type.value ? "bg-white shadow-sm" : "bg-slate-100"
+                          }`}>
+                            {type.label.split(" ").pop()} 
+                          </div>
+                          <div>
+                            <h3 className={`font-bold arabic-text ${textType === type.value ? "text-orange-900" : "text-gray-700"}`}>
+                              {type.label.replace(/ .*/,'')} 
+                            </h3>
+                            <p className="text-xs text-gray-500 arabic-text">
+                              {type.description}
+                            </p>
+                          </div>
+                          {textType === type.value && (
+                            <div className="mr-auto text-orange-600">
+                              <span className="block w-3 h-3 bg-orange-600 rounded-full shadow-orange-300 shadow-[0_0_10px]"></span>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Vertical Divider */}
+                <div className="hidden lg:block w-px bg-slate-200 mx-auto"></div>
+
+                {/* Left Column: Settings (6/12) */}
+                <div className="lg:col-span-6 space-y-8">
+                  
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3 shadow-sm">
+                    <AlertCircle className="w-5 h-5 text-blue-600 mt-1 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-bold text-blue-900 arabic-text text-sm mb-1">
+                        ✨ ميزة المصحح التلقائي
+                      </h3>
+                      <p className="text-xs text-blue-700 arabic-text leading-relaxed opacity-90">
+                        يقوم النظام تلقائياً بضبط التشكيل ومراجعة القواعد النحوية لأي نص تختاره أو تكتبه، لضمان تجربة تعلم خالية من الأخطاء.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    {textType === "نص خاص" ? (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-3"
+                      >
+                        <Label className="arabic-text text-lg font-bold text-gray-800 flex items-center gap-2">
+                          <FileText className="w-5 h-5 text-orange-600" />
+                          2. مساحة الكتابة الحرة
+                        </Label>
+                        <Textarea
+                          placeholder="اكتب هنا النص الذي تريد التدرب عليه (مثلاً: قطعة من كتاب مدرسي، قصة مفضلة)..."
+                          value={customText}
+                          onChange={(e) => setCustomText(e.target.value)}
+                          className="arabic-text min-h-[200px] text-lg p-4 border-2 border-orange-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-100 transition-all bg-slate-50 leading-loose"
+                        />
+                      </motion.div>
+                    ) : (
+                      textType && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="space-y-6"
+                        >
+                          <Label className="arabic-text text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <Settings className="w-5 h-5 text-orange-600" />
+                            2. تخصيص الطول والمستوى
+                          </Label>
+                          
+                          <div className="bg-orange-50/50 p-6 rounded-2xl border border-orange-100">
+                            <div className="flex justify-between items-center mb-6">
+                              <span className="text-sm font-bold text-gray-600 arabic-text">عدد الكلمات التقريبي</span>
+                              <span className="font-black text-2xl text-orange-600 bg-white px-4 py-1 rounded-lg border border-orange-200 shadow-sm">
+                                {wordCount[0]} <span className="text-xs font-normal text-gray-400">كلمة</span>
+                              </span>
+                            </div>
+
+                            <Slider
+                              value={wordCount}
+                              onValueChange={setWordCount}
+                              min={30}
+                              max={200}
+                              step={10}
+                              className="w-full cursor-pointer py-4 [&>span:first-child]:h-2 [&>span:first-child]:bg-orange-200 [&>span:first-child_span]:bg-orange-600 [&>span:last-child]:bg-white [&>span:last-child]:border-4 [&>span:last-child]:border-orange-600 [&>span:last-child]:w-6 [&>span:last-child]:h-6 [&>span:last-child]:shadow-md"
+                            />
+
+                            <div className="mt-6 flex justify-between text-xs font-bold text-gray-400 arabic-text">
+                              <span>قصير (سهل)</span>
+                              <span>متوسط</span>
+                              <span>طويل (متقدم)</span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )
+                    )}
+
+                    {error && (
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-bold flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" /> {error}
+                      </motion.div>
+                    )}
+
+                    <div className="pt-4">
+                      <Button
+                        onClick={handleGenerate}
+                        disabled={isLoading || isReviewing || !textType}
+                        size="lg"
+                        className={`w-full text-xl py-8 rounded-2xl arabic-text shadow-xl transition-all duration-300 ${
+                          !textType 
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-gradient-to-r from-orange-600 to-pink-600 hover:from-orange-700 hover:to-pink-700 text-white hover:scale-[1.02] hover:shadow-2xl"
+                        }`}
+                      >
+                        {isLoading || isReviewing ? (
+                          <div className="flex items-center gap-3">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                            <span>{isReviewing ? "جاري المراجعة اللغوية..." : "جاري تأليف النص..."}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-6 h-6" />
+                            <span>{textType === "نص خاص" ? "مراجعة واعتماد النص" : "إنشاء التحدي الآن"}</span>
+                          </div>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* ✅ قسم المحتوى التعليمي الإضافي (لتحسين تجربة المستخدم و SEO) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            
+            {/* Card 1 */}
+            <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white group">
+                <CardHeader>
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <Target className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <CardTitle className="arabic-text text-lg font-bold text-slate-800">كيف تختار النص المناسب؟</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-slate-600 arabic-text text-sm leading-relaxed mb-4">
+                        اختيار النص يعتمد على هدفك التعليمي. إذا كنت مبتدئاً، ننصحك بالبدء بـ <strong>النصوص القصصية</strong> لأنها تستخدم لغة سهلة وسردية ممتعة.
+                    </p>
+                    <ul className="space-y-2">
+                        <li className="text-xs text-slate-500 flex items-center gap-2">
+                            <CheckCircle2 className="w-3 h-3 text-green-500" /> للمبتدئين: قصص، حوارات.
+                        </li>
+                        <li className="text-xs text-slate-500 flex items-center gap-2">
+                            <CheckCircle2 className="w-3 h-3 text-green-500" /> للمتوسطين: نصوص وصفية، دينية.
+                        </li>
+                        <li className="text-xs text-slate-500 flex items-center gap-2">
+                            <CheckCircle2 className="w-3 h-3 text-green-500" /> للمتقدمين: نصوص علمية، تاريخية.
+                        </li>
+                    </ul>
+                </CardContent>
+            </Card>
+
+            {/* Card 2 */}
+            <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white group">
+                <CardHeader>
+                    <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <Brain className="w-6 h-6 text-purple-600" />
+                    </div>
+                    <CardTitle className="arabic-text text-lg font-bold text-slate-800">فوائد التنويع في القراءة</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-slate-600 arabic-text text-sm leading-relaxed">
+                        لا تكتفِ بنوع واحد من النصوص! التنويع بين النصوص العلمية والأدبية يوسع مداركك اللغوية.
+                        <br/><br/>
+                        <strong>النص العلمي</strong> يعلمك الدقة والمصطلحات التقنية، بينما <strong>النص الأدبي</strong> ينمي ذائقتك البلاغية ويحسن أسلوبك في التعبير.
+                    </p>
+                </CardContent>
+            </Card>
+
+            {/* Card 3 */}
+            <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white group">
+                <CardHeader>
+                    <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <Lightbulb className="w-6 h-6 text-yellow-600" />
+                    </div>
+                    <CardTitle className="arabic-text text-lg font-bold text-slate-800">نصيحة المعلم الذكي</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-slate-600 arabic-text text-sm leading-relaxed mb-3">
+                        عند إنشاء تمرين مخصص، حاول أن تختار كلمات تحتوي على الحروف التي تواجه صعوبة في نطقها.
+                    </p>
+                    <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-xs text-yellow-800 font-medium">
+                        "التدريب المستمر على نقاط الضعف هو أسرع طريق للإتقان."
+                    </div>
+                </CardContent>
+            </Card>
+
+        </div>
+
+        {/* SEO & AdSense Content Block */}
+        <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 mb-8">
+            <h2 className="text-2xl font-bold text-slate-900 arabic-text mb-4">لماذا نستخدم الذكاء الاصطناعي في تعليم القراءة؟</h2>
+            <div className="prose prose-slate max-w-none arabic-text text-slate-600 leading-loose">
+                <p>
+                    تعتبر القراءة الجهرية من أهم المهارات التي يجب على الطالب إتقانها، ولكن المشكلة تكمن غالباً في غياب "الموجه الفوري". 
+                    هنا يأتي دور التكنولوجيا. في منصة <strong>نطق</strong>، نستخدم نماذج ذكاء اصطناعي متطورة (NLP & Speech Recognition) لتمكين الطالب من:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div className="flex gap-3">
+                        <div className="bg-green-100 w-2 h-full rounded-full"></div>
+                        <p>الحصول على تغذية راجعة فورية (Instant Feedback) بدلاً من انتظار المعلم.</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <div className="bg-green-100 w-2 h-full rounded-full"></div>
+                        <p>التدرب في بيئة آمنة وخالية من الحرج، مما يعزز الثقة بالنفس.</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <div className="bg-green-100 w-2 h-full rounded-full"></div>
+                        <p>تخصيص المحتوى التعليمي ليناسب مستوى الطالب واهتماماته الشخصية.</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <div className="bg-green-100 w-2 h-full rounded-full"></div>
+                        <p>متابعة التطور الزمني للأداء من خلال لوحات تحكم بيانية دقيقة.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}

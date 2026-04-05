@@ -1,0 +1,20 @@
+# NOTQ-Q1
+
+منصة تعليمية مبنية باستخدام **React + Vite**  
+تركّز على تدريب النطق والقراءة باللغة العربية، مع لوحات مخصصة للطالب، المعلم، وولي الأمر.
+
+## 🧩 التقنيات المستخدمة
+- React
+- Vite
+- Tailwind CSS
+- Supabase (Database & Auth)
+- Vercel (Deployment)
+
+## ▶️ التشغيل محليًا + 🏗️ بناء المشروع
+
+```bash
+npm install
+npm run dev
+
+# Production build
+npm run build

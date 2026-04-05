@@ -1,0 +1,111 @@
+/* src/App.css */
+
+/* ضبط عام للتطبيق */
+:root {
+  --primary: 99 102 241;        /* indigo-500 */
+  --primary-foreground: 255 255 255;
+  --secondary: 139 92 246;      /* violet-500 */
+  --secondary-foreground: 255 255 255;
+  --accent: 236 72 153;         /* pink-500 */
+  --accent-foreground: 255 255 255;
+  --success: 34 197 94;         /* green-500 */
+  --warning: 251 146 60;        /* orange-400 */
+}
+
+/* جسم الصفحة */
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: linear-gradient(135deg, #eef2ff, #fdf2ff);
+  color: #0f172a;
+  font-family: "Cairo", "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* نص عربي محسّن */
+.arabic-text {
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  text-rendering: optimizeLegibility;
+  line-height: 1.9;
+}
+
+/* تأثير توهّج بسيط للكروت والأزرار المهمة */
+.glow-effect {
+  box-shadow: 0 0 20px rgba(129, 140, 248, 0.25);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.glow-effect:hover {
+  box-shadow: 0 0 30px rgba(129, 140, 248, 0.4);
+}
+
+/* أنيميشن دخول عام للصفحات */
+.page-enter {
+  animation: pageFadeIn 0.5s ease-out;
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* سكرول بار أنعم (للشاشات الكبيرة) */
+@media (min-width: 768px) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(129, 140, 248, 0.7) rgba(241, 245, 249, 0.9);
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: rgba(241, 245, 249, 0.9);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #6366f1, #a855f7);
+    border-radius: 999px;
+  }
+}
+
+/* خلفية منقّطة خفيفة (مستخدمة في بعض الكروت) */
+.pattern-dots {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.5) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+/* تصغير شوية الميديا في الشاشات الصغيرة */
+audio, video {
+  max-width: 100%;
+}
+
+/* زر عام للحالات المعطّلة (لو احتجته في أي مكان) */
+button:disabled,
+button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* معالجة نصوص طويلة داخل الشارات / البادج */
+.badge,
+.badge span {
+  white-space: nowrap;
+}
+
+/* منع الاهتزاز البصري في الموبايل عند الضغط */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
