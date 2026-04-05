@@ -99,6 +99,7 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import AudioCommentModal from "../components/teacher/AudioCommentModal";
+import AssessmentManagementTab from "@/components/teacher/AssessmentManagementTab";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -2341,10 +2342,22 @@ function GroupsTab() {
 
     setIsLoading(true);
     try {
-      const g = await StudentGroup.create({
-        name: newGroupName.trim(),
-        description: newGroupDescription.trim() || null,
-      });
+      let g;
+      try {
+        g = await StudentGroup.create({
+          name: newGroupName.trim(),
+          description: newGroupDescription.trim() || null,
+        });
+      } catch (createError) {
+        // توافق مع قواعد بيانات لا تحتوي عمود description
+        if (String(createError?.code || "") === "PGRST204") {
+          g = await StudentGroup.create({
+            name: newGroupName.trim(),
+          });
+        } else {
+          throw createError;
+        }
+      }
       setGroups((prev) => [g, ...prev]);
       setNewGroupName("");
       setNewGroupDescription("");
@@ -5670,6 +5683,14 @@ export default function TeacherDashboard() {
                 </TabsTrigger>
 
                 <TabsTrigger
+                  value="assessments"
+                  className="arabic-text text-xs md:text-sm flex-1 data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white"
+                >
+                  <Award className="w-4 h-4 ml-1" />
+                  التقييم المباشر
+                </TabsTrigger>
+
+                <TabsTrigger
                   value="emergency"
                   className="arabic-text text-xs md:text-sm flex-1 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white"
                 >
@@ -5710,6 +5731,10 @@ export default function TeacherDashboard() {
 
                 <TabsContent value="recordings" className="mt-0">
                   <RecordingsTab />
+                </TabsContent>
+
+                <TabsContent value="assessments" className="mt-0">
+                  <AssessmentManagementTab />
                 </TabsContent>
 
                 <TabsContent value="emergency" className="mt-0">

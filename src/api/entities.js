@@ -154,6 +154,10 @@ export const SystemSetting = createEntity("system_settings");
 export const FamilyChallenge = createEntity("family_challenges");
 export const ClassAnnouncement = createEntity("class_announcements");
 export const Certificate = createEntity("certificates"); // ✅ الكيان الجديد
+export const LiveAssessment = createEntity("live_assessments");
+export const AssessmentQuestion = createEntity("assessment_questions");
+export const AssessmentAttempt = createEntity("assessment_attempts");
+export const AssessmentSubmission = createEntity("assessment_submissions");
 
 /* =========================================================
    👤 Auth (Supabase)
